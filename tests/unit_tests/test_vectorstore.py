@@ -12,8 +12,8 @@ from langchain_postgres.vectorstores import (
     SUPPORTED_OPERATORS,
     PGVector,
 )
-from tests.integration_tests.fake_embeddings import FakeEmbeddings
-from tests.integration_tests.fixtures.filtering_test_cases import (
+from tests.unit_tests.fake_embeddings import FakeEmbeddings
+from tests.unit_tests.fixtures.filtering_test_cases import (
     DOCUMENTS,
     TYPE_1_FILTERING_TEST_CASES,
     TYPE_2_FILTERING_TEST_CASES,

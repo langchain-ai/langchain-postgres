@@ -84,7 +84,6 @@ timeout = 5
 # Registering custom markers.
 # https://docs.pytest.org/en/7.1.x/example/markers.html#registering-markers
 markers = [
-  "compile: mark placeholder test used to compile integration tests without running them",
 ]
 asyncio_mode = "auto"
 
