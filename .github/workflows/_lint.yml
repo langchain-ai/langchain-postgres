@@ -1,8 +1,6 @@
 name: lint
 
 on:
-  pull_request:
-  push:
   workflow_call:
     inputs:
       working-directory:
