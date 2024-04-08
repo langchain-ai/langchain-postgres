@@ -19,14 +19,14 @@ concurrency:
 
 env:
   POETRY_VERSION: "1.7.1"
-  WORKDIR: "./backend"
+  WORKDIR: "."
 
 jobs:
   lint:
     uses:
       ./.github/workflows/_lint.yml
     with:
-      working-directory: ./backend
+      working-directory: .
     secrets: inherit
   test:
     timeout-minutes: 5
