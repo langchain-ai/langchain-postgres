@@ -17,23 +17,26 @@ sqlalchemy = "^2.0.29"
 pgvector = "^0.2.5"
 numpy = "^1.26.4"
 
+[tool.poetry.group.docs.dependencies]
+
+[tool.poetry.group.dev.dependencies]
+jupyterlab = "^3.6.1"
+
 [tool.poetry.group.test]
 optional = true
 
 [tool.poetry.group.test.dependencies]
 pytest = "^7.4.3"
 pytest-asyncio = "^0.23.2"
+pytest-socket = "^0.7.0"
+pytest-cov = "^5.0.0"
+pytest-timeout = "^2.3.1"
 
 [tool.poetry.group.codespell]
 optional = true
 
 [tool.poetry.group.codespell.dependencies]
 codespell = "^2.2.6"
-
-[tool.poetry.group.test_integration]
-optional = true
-
-[tool.poetry.group.test_integration.dependencies]
 
 [tool.poetry.group.lint]
 optional = true
@@ -43,11 +46,6 @@ ruff = "^0.1.8"
 
 [tool.poetry.group.typing.dependencies]
 mypy = "^1.7.1"
-
-[tool.poetry.group.dev]
-optional = true
-
-[tool.poetry.group.dev.dependencies]
 
 [tool.ruff.lint]
 select = [
@@ -80,9 +78,13 @@ build-backend = "poetry.core.masonry.api"
 # https://github.com/tophat/syrupy
 # --snapshot-warn-unused    Prints a warning on unused snapshots rather than fail the test suite.
 addopts = "--strict-markers --strict-config --durations=5"
+# Global timeout for all tests. There should be a good reason for a test to 
+# takemore than 5 seconds.
+timeout = 5
 # Registering custom markers.
 # https://docs.pytest.org/en/7.1.x/example/markers.html#registering-markers
 markers = [
   "compile: mark placeholder test used to compile integration tests without running them",
 ]
 asyncio_mode = "auto"
+
