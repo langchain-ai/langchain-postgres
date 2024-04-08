@@ -91,10 +91,14 @@ jobs:
         run: |
           echo "Running tests, installing dependencies with poetry..."
           poetry install --with test,lint,typing,docs
-
       - name: Run tests
         run: make test
-
+        env:
+          POSTGRES_DB: langchain_test
+          POSTGRES_PASSWORD: langchain
+          POSTGRES_USER: langchain
+          POSTGRES_HOST: localhost
+          POSTGRES_PORT: 5432
       - name: Ensure the tests did not create any additional files
         shell: bash
         run: |
