@@ -38,7 +38,8 @@ jobs:
       postgres:
         # ensure postgres version this stays in sync with prod database
         # and with postgres version used in docker compose
-        image: postgres:16
+        # Testing with postgres that has the pg vector extension
+        image: ankane/pgvector
         env:
           # optional (defaults to `postgres`)
           POSTGRES_DB: langchain_test
