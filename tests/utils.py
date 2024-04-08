@@ -5,19 +5,23 @@ from contextlib import asynccontextmanager, contextmanager
 import psycopg
 from typing_extensions import AsyncGenerator, Generator
 
-PG_USER = os.environ.get("PG_USER", "langchain")
-PG_HOST = os.environ.get("PG_HOST", "localhost")
-PG_PASSWORD = os.environ.get("PG_PASSWORD", "langchain")
-PG_DATABASE = os.environ.get("PG_DATABASE", "langchain")
+POSTGRES_USER = os.environ.get("POSTGRES_USER", "langchain")
+POSTGRES_HOST = os.environ.get("POSTGRES_HOST", "localhost")
+POSTGRES_PASSWORD = os.environ.get("POSTGRES_PASSWORD", "langchain")
+POSTGRES_DATABASE = os.environ.get("POSTGRES_DATABASE", "langchain")
+
 
 # Using a different port for testing than the default 5432
 # to avoid conflicts with a running PostgreSQL instance
 # This port matches the convention in langchain/docker/docker-compose.yml
 # To spin up a PostgreSQL instance for testing, run:
 # docker-compose -f docker/docker-compose.yml up -d postgres
-PG_PORT = os.environ.get("PG_PORT", "6023")
+POSTGRES_PORT = os.environ.get("POSTGRES_PORT", "6023")
 
-DSN = f"postgresql://{PG_USER}:{PG_PASSWORD}@{PG_HOST}:{PG_PORT}/{PG_DATABASE}"
+DSN = (
+    f"postgresql://{POSTGRES_USER}:{POSTGRES_PASSWORD}@{POSTGRES_HOST}"
+    f":{POSTGRES_PORT}/{POSTGRES_DATABASE}"
+)
 
 
 @asynccontextmanager
