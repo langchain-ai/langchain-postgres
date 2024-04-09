@@ -245,7 +245,7 @@ class PGVector(VectorStore):
         *,
         connection: Optional[sqlalchemy.engine.Connection] = None,
         engine_args: Optional[dict[str, Any]] = None,
-        use_jsonb: bool = False,
+        use_jsonb: bool = True,
         create_extension: bool = True,
     ) -> None:
         """Initialize the PGVector store.
@@ -439,7 +439,7 @@ class PGVector(VectorStore):
         connection_string: Optional[str] = None,
         pre_delete_collection: bool = False,
         *,
-        use_jsonb: bool = False,
+        use_jsonb: bool = True,
         **kwargs: Any,
     ) -> PGVector:
         if ids is None:
@@ -969,7 +969,7 @@ class PGVector(VectorStore):
         ids: Optional[List[str]] = None,
         pre_delete_collection: bool = False,
         *,
-        use_jsonb: bool = False,
+        use_jsonb: bool = True,
         **kwargs: Any,
     ) -> PGVector:
         """
@@ -1092,7 +1092,7 @@ class PGVector(VectorStore):
         ids: Optional[List[str]] = None,
         pre_delete_collection: bool = False,
         *,
-        use_jsonb: bool = False,
+        use_jsonb: bool = True,
         **kwargs: Any,
     ) -> PGVector:
         """

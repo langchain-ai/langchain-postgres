@@ -1,6 +1,7 @@
 from importlib import metadata
 
 from langchain_postgres.chat_message_histories import PostgresChatMessageHistory
+from langchain_postgres.vectorstores import PGVector
 from langchain_postgres.checkpoint import (
     CheckpointSerializer,
     PickleCheckpointSerializer,
@@ -19,4 +20,5 @@ __all__ = [
     "PostgresChatMessageHistory",
     "PostgresCheckpoint",
     "PickleCheckpointSerializer",
+    "PGVector",
 ]
