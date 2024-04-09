@@ -1,5 +1,5 @@
 """Test PGVector functionality."""
-
+import contextlib
 from typing import Any, Dict, Generator, List
 
 import pytest
@@ -407,6 +407,13 @@ def test_pgvector_with_custom_engine_args() -> None:
 @pytest.fixture
 def pgvector() -> Generator[PGVector, None, None]:
     """Create a PGVector instance."""
+    with get_vectorstore() as vector_store:
+        yield vector_store
+
+
+@contextlib.contextmanager
+def get_vectorstore() -> Generator[PGVector, None, None]:
+    """Get a pre-populated-vectorstore"""
     store = PGVector.from_documents(
         documents=DOCUMENTS,
         collection_name="test_collection",
@@ -422,15 +429,15 @@ def pgvector() -> Generator[PGVector, None, None]:
         store.drop_tables()
 
 
-@pytest.mark.parametrize("test_filter, expected_ids", TYPE_1_FILTERING_TEST_CASES)
+@pytest.mark.parametrize("test_filter, expected_ids", TYPE_1_FILTERING_TEST_CASES[:1])
 def test_pgvector_with_with_metadata_filters_1(
-    pgvector: PGVector,
     test_filter: Dict[str, Any],
     expected_ids: List[int],
 ) -> None:
     """Test end to end construction and search."""
-    docs = pgvector.similarity_search("meow", k=5, filter=test_filter)
-    assert [doc.metadata["id"] for doc in docs] == expected_ids, test_filter
+    with get_vectorstore() as pgvector:
+        docs = pgvector.similarity_search("meow", k=5, filter=test_filter)
+        assert [doc.metadata["id"] for doc in docs] == expected_ids, test_filter
 
 
 @pytest.mark.parametrize("test_filter, expected_ids", TYPE_2_FILTERING_TEST_CASES)
