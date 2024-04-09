@@ -1,5 +1,5 @@
 """Test PGVector functionality."""
-
+import contextlib
 from typing import Any, Dict, Generator, List
 
 import pytest
@@ -18,9 +18,8 @@ from tests.unit_tests.fixtures.filtering_test_cases import (
     TYPE_4_FILTERING_TEST_CASES,
     TYPE_5_FILTERING_TEST_CASES,
 )
-from tests.utils import VECTORSTORE_CONNECTION_STRING
+from tests.utils import VECTORSTORE_CONNECTION_STRING as CONNECTION_STRING
 
-CONNECTION_STRING = VECTORSTORE_CONNECTION_STRING
 ADA_TOKEN_COUNT = 1536
 
 
@@ -159,7 +158,7 @@ def test_pgvector_collection_with_metadata() -> None:
         connection=CONNECTION_STRING,
         pre_delete_collection=True,
     )
-    with pgvector._make_session() as session:
+    with pgvector._session_maker() as session:
         collection = pgvector.get_collection(session)
         if collection is None:
             assert False, "Expected a CollectionStore object but received None"
@@ -182,14 +181,14 @@ def test_pgvector_delete_docs() -> None:
         pre_delete_collection=True,
     )
     vectorstore.delete(["1", "2"])
-    with vectorstore._make_session() as session:
+    with vectorstore._session_maker() as session:
         records = list(session.query(vectorstore.EmbeddingStore).all())
         # ignoring type error since mypy cannot determine whether
         # the list is sortable
         assert sorted(record.id for record in records) == ["3"]  # type: ignore
 
     vectorstore.delete(["2", "3"])  # Should not raise on missing ids
-    with vectorstore._make_session() as session:
+    with vectorstore._session_maker() as session:
         records = list(session.query(vectorstore.EmbeddingStore).all())
         # ignoring type error since mypy cannot determine whether
         # the list is sortable
@@ -229,7 +228,7 @@ def test_pgvector_index_documents() -> None:
         connection=CONNECTION_STRING,
         pre_delete_collection=True,
     )
-    with vectorstore._make_session() as session:
+    with vectorstore._session_maker() as session:
         records = list(session.query(vectorstore.EmbeddingStore).all())
         # ignoring type error since mypy cannot determine whether
         # the list is sortable
@@ -251,7 +250,7 @@ def test_pgvector_index_documents() -> None:
 
     vectorstore.add_documents(documents, ids=[doc.metadata["id"] for doc in documents])
 
-    with vectorstore._make_session() as session:
+    with vectorstore._session_maker() as session:
         records = list(session.query(vectorstore.EmbeddingStore).all())
         ordered_records = sorted(records, key=lambda x: x.id)
         # ignoring type error since mypy cannot determine whether
@@ -408,6 +407,13 @@ def test_pgvector_with_custom_engine_args() -> None:
 @pytest.fixture
 def pgvector() -> Generator[PGVector, None, None]:
     """Create a PGVector instance."""
+    with get_vectorstore() as vector_store:
+        yield vector_store
+
+
+@contextlib.contextmanager
+def get_vectorstore() -> Generator[PGVector, None, None]:
+    """Get a pre-populated-vectorstore"""
     store = PGVector.from_documents(
         documents=DOCUMENTS,
         collection_name="test_collection",
@@ -419,20 +425,19 @@ def pgvector() -> Generator[PGVector, None, None]:
     )
     try:
         yield store
-    # Do clean up
     finally:
         store.drop_tables()
 
 
 @pytest.mark.parametrize("test_filter, expected_ids", TYPE_1_FILTERING_TEST_CASES)
 def test_pgvector_with_with_metadata_filters_1(
-    pgvector: PGVector,
     test_filter: Dict[str, Any],
     expected_ids: List[int],
 ) -> None:
     """Test end to end construction and search."""
-    docs = pgvector.similarity_search("meow", k=5, filter=test_filter)
-    assert [doc.metadata["id"] for doc in docs] == expected_ids, test_filter
+    with get_vectorstore() as pgvector:
+        docs = pgvector.similarity_search("meow", k=5, filter=test_filter)
+        assert [doc.metadata["id"] for doc in docs] == expected_ids, test_filter
 
 
 @pytest.mark.parametrize("test_filter, expected_ids", TYPE_2_FILTERING_TEST_CASES)

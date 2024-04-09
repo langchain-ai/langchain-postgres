@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import contextlib
 import enum
 import logging
 import uuid
@@ -8,7 +7,6 @@ from typing import (
     Any,
     Callable,
     Dict,
-    Generator,
     Iterable,
     List,
     Optional,
@@ -21,7 +19,7 @@ import numpy as np
 import sqlalchemy
 from sqlalchemy import SQLColumnExpression, cast, delete, func
 from sqlalchemy.dialects.postgresql import JSON, JSONB, JSONPATH, UUID, insert
-from sqlalchemy.orm import Session, relationship
+from sqlalchemy.orm import Session, relationship, sessionmaker
 
 try:
     from sqlalchemy.orm import declarative_base
@@ -288,14 +286,18 @@ class PGVector(VectorStore):
         self.override_relevance_score_fn = relevance_score_fn
 
         if isinstance(connection, str):
-            self._bind = sqlalchemy.create_engine(url=connection, **(engine_args or {}))
+            self._engine = sqlalchemy.create_engine(
+                url=connection, **(engine_args or {})
+            )
         elif isinstance(connection, sqlalchemy.engine.Engine):
-            self._bind = connection
+            self._engine = connection
         else:
             raise ValueError(
                 "connection should be a connection string or an instance of "
                 "sqlalchemy.engine.Engine"
             )
+
+        self._session_maker = sessionmaker(bind=self._engine)
 
         self.use_jsonb = use_jsonb
         self.create_extension = create_extension
@@ -321,8 +323,8 @@ class PGVector(VectorStore):
         self.create_collection()
 
     def __del__(self) -> None:
-        if isinstance(self._bind, sqlalchemy.engine.Connection):
-            self._bind.close()
+        if isinstance(self._engine, sqlalchemy.engine.Connection):
+            self._engine.close()
 
     @property
     def embeddings(self) -> Embeddings:
@@ -330,7 +332,7 @@ class PGVector(VectorStore):
 
     def create_vector_extension(self) -> None:
         try:
-            with Session(self._bind) as session:  # type: ignore[arg-type]
+            with self._session_maker() as session:  # type: ignore[arg-type]
                 # The advisor lock fixes issue arising from concurrent
                 # creation of the vector extension.
                 # https://github.com/langchain-ai/langchain/issues/12933
@@ -348,35 +350,30 @@ class PGVector(VectorStore):
             raise Exception(f"Failed to create vector extension: {e}") from e
 
     def create_tables_if_not_exists(self) -> None:
-        with Session(self._bind) as session, session.begin():  # type: ignore[arg-type]
+        with self._session_maker() as session:
             Base.metadata.create_all(session.get_bind())
 
     def drop_tables(self) -> None:
-        with Session(self._bind) as session, session.begin():  # type: ignore[arg-type]
+        with self._session_maker() as session:
             Base.metadata.drop_all(session.get_bind())
 
     def create_collection(self) -> None:
         if self.pre_delete_collection:
             self.delete_collection()
-        with Session(self._bind) as session:  # type: ignore[arg-type]
+        with self._session_maker() as session:  # type: ignore[arg-type]
             self.CollectionStore.get_or_create(
                 session, self.collection_name, cmetadata=self.collection_metadata
             )
 
     def delete_collection(self) -> None:
         self.logger.debug("Trying to delete collection")
-        with Session(self._bind) as session:  # type: ignore[arg-type]
+        with self._session_maker() as session:  # type: ignore[arg-type]
             collection = self.get_collection(session)
             if not collection:
                 self.logger.warning("Collection not found")
                 return
             session.delete(collection)
             session.commit()
-
-    @contextlib.contextmanager
-    def _make_session(self) -> Generator[Session, None, None]:
-        """Create a context manager for the session, bind to _conn string."""
-        yield Session(self._bind)  # type: ignore[arg-type]
 
     def delete(
         self,
@@ -390,7 +387,7 @@ class PGVector(VectorStore):
             ids: List of ids to delete.
             collection_only: Only delete ids in the collection.
         """
-        with Session(self._bind) as session:  # type: ignore[arg-type]
+        with self._session_maker() as session:
             if ids is not None:
                 self.logger.debug(
                     "Trying to delete vectors by ids (represented by the model "
@@ -476,7 +473,7 @@ class PGVector(VectorStore):
         if not metadatas:
             metadatas = [{} for _ in texts]
 
-        with Session(self._bind) as session:  # type: ignore[arg-type]
+        with self._session_maker() as session:  # type: ignore[arg-type]
             collection = self.get_collection(session)
             if not collection:
                 raise ValueError("Collection not found")
@@ -901,7 +898,7 @@ class PGVector(VectorStore):
         filter: Optional[Dict[str, str]] = None,
     ) -> List[Any]:
         """Query the collection."""
-        with Session(self._bind) as session:  # type: ignore[arg-type]
+        with self._session_maker() as session:  # type: ignore[arg-type]
             collection = self.get_collection(session)
             if not collection:
                 raise ValueError("Collection not found")
@@ -1066,6 +1063,7 @@ class PGVector(VectorStore):
             embeddings=embedding,
             distance_strategy=distance_strategy,
             pre_delete_collection=pre_delete_collection,
+            **kwargs,
         )
 
         return store
