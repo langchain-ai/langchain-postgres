@@ -99,7 +99,7 @@ def _get_embedding_collection_store(vector_dimension: Optional[int] = None) -> A
         uuid = sqlalchemy.Column(
             UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
         )
-        name = sqlalchemy.Column(sqlalchemy.String)
+        name = sqlalchemy.Column(sqlalchemy.String, nullable=False, unique=True)
         cmetadata = sqlalchemy.Column(JSON)
 
         embeddings = relationship(
@@ -178,14 +178,43 @@ def _results_to_docs(docs_and_scores: Any) -> List[Document]:
 
 
 class PGVector(VectorStore):
-    """`Postgres`/`PGVector` vector store.
+    """Vectorstore implementation using Postgres as the backend.
 
     This code has been ported over from langchain_community with minimal changes
     to allow users to easily transition from langchain_community to langchain_postgres.
 
-    To use, you need to have a Postgres database running and the `vector` extension
-    installed. The `vector` extension is a Postgres extension that provides
-    vector similarity search capabilities.
+    This vectorstore is in **beta** and **not** recommended for production
+    usage at enterprise level.
+
+    It should be fine to use it for smaller datasets and/or for prototyping workflows.
+
+    The main issue with the existing implementation is:
+
+    1) Handling of connections
+    2) Lack of support for schema migrations
+
+    If you're OK with these limitations (and know how to create migrations
+    for the table) or are fine re-creating the collection and embeddings if
+    the schema changes, then feel free to use this implementation.
+
+    Some changes had to be made to address issues with the community implementation:
+    * langchain_postgres now works with psycopg3. Please update your
+      connection strings from `postgresql+psycopg2://...` to
+      `postgresql+psycopg://langchain:langchain@...`
+      (yes, the driver name is `psycopg` not `psycopg3`)
+    * The schema of the embedding store and collection have been changed to make
+      add_documents work correctly with user specified ids, specifically
+      when overwriting existing documents.
+      You will need to recreate the tables if you are using an existing database.
+
+    To use this vectorstore you need to have the `vector` extension installed.
+    The `vector` extension is a Postgres extension that provides vector
+    similarity search capabilities.
+
+    ```sh
+    docker run --name pgvector-container -e POSTGRES_PASSWORD=...
+        -d pgvector/pgvector:pg16
+    ```
 
     Example:
         .. code-block:: python
@@ -193,7 +222,7 @@ class PGVector(VectorStore):
             from langchain_postgres.vectorstores import PGVector
             from langchain_openai.embeddings import OpenAIEmbeddings
 
-            connection_string = "postgresql+psycopg://hwc@localhost:5432/test3"
+            connection_string = "postgresql+psycopg://..."
             collection_name = "state_of_the_union_test"
             embeddings = OpenAIEmbeddings()
             vectorstore = PGVector.from_documents(
