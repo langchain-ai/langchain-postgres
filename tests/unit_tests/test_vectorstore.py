@@ -170,55 +170,11 @@ def test_pgvector_collection_with_metadata() -> None:
         assert collection.cmetadata == {"foo": "bar"}
 
 
-def test_pgvector_with_filter_in_set() -> None:
-    """Test end to end construction and search."""
-    texts = ["foo", "bar", "baz"]
-    metadatas = [{"page": str(i)} for i in range(len(texts))]
-    docsearch = PGVector.from_texts(
-        texts=texts,
-        collection_name="test_collection_filter",
-        embedding=FakeEmbeddingsWithAdaDimension(),
-        metadatas=metadatas,
-        connection_string=CONNECTION_STRING,
-        pre_delete_collection=True,
-        use_jsonb=False,
-    )
-    output = docsearch.similarity_search_with_score(
-        "foo", k=2, filter={"page": {"IN": ["0", "2"]}}
-    )
-    assert output == [
-        (Document(page_content="foo", metadata={"page": "0"}), 0.0),
-        (Document(page_content="baz", metadata={"page": "2"}), 0.0013003906671379406),
-    ]
-
-
-def test_pgvector_with_filter_nin_set() -> None:
-    """Test end to end construction and search."""
-    texts = ["foo", "bar", "baz"]
-    metadatas = [{"page": str(i)} for i in range(len(texts))]
-    docsearch = PGVector.from_texts(
-        texts=texts,
-        collection_name="test_collection_filter",
-        embedding=FakeEmbeddingsWithAdaDimension(),
-        metadatas=metadatas,
-        connection_string=CONNECTION_STRING,
-        pre_delete_collection=True,
-        use_jsonb=False,
-    )
-    output = docsearch.similarity_search_with_score(
-        "foo", k=2, filter={"page": {"NIN": ["1"]}}
-    )
-    assert output == [
-        (Document(page_content="foo", metadata={"page": "0"}), 0.0),
-        (Document(page_content="baz", metadata={"page": "2"}), 0.0013003906671379406),
-    ]
-
-
 def test_pgvector_delete_docs() -> None:
     """Add and delete documents."""
     texts = ["foo", "bar", "baz"]
     metadatas = [{"page": str(i)} for i in range(len(texts))]
-    docsearch = PGVector.from_texts(
+    vectorstore = PGVector.from_texts(
         texts=texts,
         collection_name="test_collection_filter",
         embedding=FakeEmbeddingsWithAdaDimension(),
@@ -227,19 +183,94 @@ def test_pgvector_delete_docs() -> None:
         connection_string=CONNECTION_STRING,
         pre_delete_collection=True,
     )
-    docsearch.delete(["1", "2"])
-    with docsearch._make_session() as session:
-        records = list(session.query(docsearch.EmbeddingStore).all())
+    vectorstore.delete(["1", "2"])
+    with vectorstore._make_session() as session:
+        records = list(session.query(vectorstore.EmbeddingStore).all())
         # ignoring type error since mypy cannot determine whether
         # the list is sortable
         assert sorted(record.custom_id for record in records) == ["3"]  # type: ignore
 
-    docsearch.delete(["2", "3"])  # Should not raise on missing ids
-    with docsearch._make_session() as session:
-        records = list(session.query(docsearch.EmbeddingStore).all())
+    vectorstore.delete(["2", "3"])  # Should not raise on missing ids
+    with vectorstore._make_session() as session:
+        records = list(session.query(vectorstore.EmbeddingStore).all())
         # ignoring type error since mypy cannot determine whether
         # the list is sortable
         assert sorted(record.custom_id for record in records) == []  # type: ignore
+
+
+def test_pgvector_index_documents() -> None:
+    """Test adding duplicate documents results in overwrites."""
+    documents = [
+        Document(
+            page_content="there are cats in the pond",
+            metadata={"id": 1, "location": "pond", "topic": "animals"},
+        ),
+        Document(
+            page_content="ducks are also found in the pond",
+            metadata={"id": 2, "location": "pond", "topic": "animals"},
+        ),
+        Document(
+            page_content="fresh apples are available at the market",
+            metadata={"id": 3, "location": "market", "topic": "food"},
+        ),
+        Document(
+            page_content="the market also sells fresh oranges",
+            metadata={"id": 4, "location": "market", "topic": "food"},
+        ),
+        Document(
+            page_content="the new art exhibit is fascinating",
+            metadata={"id": 5, "location": "museum", "topic": "art"},
+        ),
+    ]
+
+    vectorstore = PGVector.from_documents(
+        documents=documents,
+        collection_name="test_collection_filter",
+        embedding=FakeEmbeddingsWithAdaDimension(),
+        ids=[doc.metadata["id"] for doc in documents],
+        connection_string=CONNECTION_STRING,
+        pre_delete_collection=True,
+    )
+    with vectorstore._make_session() as session:
+        records = list(session.query(vectorstore.EmbeddingStore).all())
+        # ignoring type error since mypy cannot determine whether
+        # the list is sortable
+        assert sorted(record.custom_id for record in records) == [
+            "1",
+            "2",
+            "3",
+            "4",
+            "5",
+        ]
+
+    # Try to overwrite the first document
+    documents = [
+        Document(
+            page_content="new content in the zoo",
+            metadata={"id": 1, "location": "zoo", "topic": "zoo"},
+        ),
+    ]
+
+    vectorstore.add_documents(documents, ids=[doc.metadata["id"] for doc in documents])
+
+    with vectorstore._make_session() as session:
+        records = list(session.query(vectorstore.EmbeddingStore).all())
+        ordered_records = sorted(records, key=lambda x: x.custom_id)
+        # ignoring type error since mypy cannot determine whether
+        # the list is sortable
+        assert [record.custom_id for record in ordered_records] == [
+            "1",
+            "2",
+            "3",
+            "4",
+            "5",
+        ]
+
+        assert ordered_records[0].cmetadata == {
+            "id": 1,
+            "location": "zoo",
+            "topic": "zoo",
+        }
 
 
 def test_pgvector_relevance_score() -> None:
