@@ -11,7 +11,7 @@ def test_sync_chat_history() -> None:
     session_id = str(uuid.UUID(int=123))
     with syncpg_client() as sync_connection:
         PostgresChatMessageHistory.drop_table(sync_connection, table_name)
-        PostgresChatMessageHistory.create_schema(sync_connection, table_name)
+        PostgresChatMessageHistory.create_tables(sync_connection, table_name)
 
         chat_history = PostgresChatMessageHistory(
             table_name, session_id, sync_connection=sync_connection
@@ -72,7 +72,7 @@ async def test_async_chat_history() -> None:
         table_name = "chat_history"
         session_id = str(uuid.UUID(int=125))
         await PostgresChatMessageHistory.adrop_table(async_connection, table_name)
-        await PostgresChatMessageHistory.acreate_schema(async_connection, table_name)
+        await PostgresChatMessageHistory.acreate_tables(async_connection, table_name)
 
         chat_history = PostgresChatMessageHistory(
             table_name, session_id, async_connection=async_connection

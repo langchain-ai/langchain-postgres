@@ -134,7 +134,7 @@ class PostgresChatMessageHistory(BaseChatMessageHistory):
             async_connection: An existing psycopg async connection instance
 
         Usage:
-            - Use the create_tables or acreate_schema method to set up the table
+            - Use the create_tables or acreate_tables method to set up the table
               schema in the database.
             - Initialize the class with the appropriate session ID, table name,
               and database connection.

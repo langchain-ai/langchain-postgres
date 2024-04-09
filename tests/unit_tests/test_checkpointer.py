@@ -10,8 +10,8 @@ from tests.utils import asyncpg_client, syncpg_client
 async def test_async_checkpoint() -> None:
     """Test the async chat history."""
     async with asyncpg_client() as async_connection:
-        await PostgresCheckpoint.adrop_schema(async_connection)
-        await PostgresCheckpoint.acreate_schema(async_connection)
+        await PostgresCheckpoint.adrop_tables(async_connection)
+        await PostgresCheckpoint.acreate_tables(async_connection)
         checkpoint_saver = PostgresCheckpoint(
             async_connection=async_connection, serializer=PickleCheckpointSerializer()
         )
@@ -146,8 +146,8 @@ async def test_async_checkpoint() -> None:
 def test_sync_checkpoint() -> None:
     """Test the sync check point implementation."""
     with syncpg_client() as sync_connection:
-        PostgresCheckpoint.drop_schema(sync_connection)
-        PostgresCheckpoint.create_schema(sync_connection)
+        PostgresCheckpoint.drop_tables(sync_connection)
+        PostgresCheckpoint.create_tables(sync_connection)
         checkpoint_saver = PostgresCheckpoint(
             sync_connection=sync_connection, serializer=PickleCheckpointSerializer()
         )
@@ -256,8 +256,8 @@ def test_sync_checkpoint() -> None:
 
 async def test_on_conflict_aput() -> None:
     async with asyncpg_client() as async_connection:
-        await PostgresCheckpoint.adrop_schema(async_connection)
-        await PostgresCheckpoint.acreate_schema(async_connection)
+        await PostgresCheckpoint.adrop_tables(async_connection)
+        await PostgresCheckpoint.acreate_tables(async_connection)
         checkpoint_saver = PostgresCheckpoint(
             async_connection=async_connection, serializer=PickleCheckpointSerializer()
         )
