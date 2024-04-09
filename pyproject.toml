@@ -80,10 +80,9 @@ build-backend = "poetry.core.masonry.api"
 addopts = "--strict-markers --strict-config --durations=5"
 # Global timeout for all tests. There should be a good reason for a test to 
 # takemore than 30 seconds.
-timeout = 30
+#timeout = 30
 # Registering custom markers.
 # https://docs.pytest.org/en/7.1.x/example/markers.html#registering-markers
-markers = [
-]
+markers = []
 asyncio_mode = "auto"
 
