@@ -972,12 +972,7 @@ class PGVector(VectorStore):
         use_jsonb: bool = True,
         **kwargs: Any,
     ) -> PGVector:
-        """
-        Return VectorStore initialized from texts and embeddings.
-        Postgres connection string is required
-        "Either pass it as a parameter
-        or set the PGVECTOR_CONNECTION_STRING environment variable.
-        """
+        """Return VectorStore initialized from documents and embeddings."""
         embeddings = embedding.embed_documents(list(texts))
 
         return cls.__from(
@@ -1106,12 +1101,7 @@ class PGVector(VectorStore):
         use_jsonb: bool = True,
         **kwargs: Any,
     ) -> PGVector:
-        """
-        Return VectorStore initialized from documents and embeddings.
-        Postgres connection string is required
-        "Either pass it as a parameter
-        or set the PGVECTOR_CONNECTION_STRING environment variable.
-        """
+        """Return VectorStore initialized from documents and embeddings."""
 
         texts = [d.page_content for d in documents]
         metadatas = [d.metadata for d in documents]
