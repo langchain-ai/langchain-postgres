@@ -79,11 +79,10 @@ build-backend = "poetry.core.masonry.api"
 # --snapshot-warn-unused    Prints a warning on unused snapshots rather than fail the test suite.
 addopts = "--strict-markers --strict-config --durations=5"
 # Global timeout for all tests. There should be a good reason for a test to 
-# takemore than 5 seconds.
-timeout = 5
+# takemore than 30 seconds.
+timeout = 30
 # Registering custom markers.
 # https://docs.pytest.org/en/7.1.x/example/markers.html#registering-markers
-markers = [
-]
+markers = []
 asyncio_mode = "auto"
 

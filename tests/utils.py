@@ -5,21 +5,30 @@ from contextlib import asynccontextmanager, contextmanager
 import psycopg
 from typing_extensions import AsyncGenerator, Generator
 
+# Env variables match the default settings in the docker-compose file
+# located in the root of the repository: [root]/docker-compose.yml
+# Non-standard ports are used to avoid conflicts with other local postgres
+# instances.
+# To spint up the postgres service for testing, run:
+# cd [root]/docker-compose.yml
+# docker-compose up pgvector
 POSTGRES_USER = os.environ.get("POSTGRES_USER", "langchain")
 POSTGRES_HOST = os.environ.get("POSTGRES_HOST", "localhost")
 POSTGRES_PASSWORD = os.environ.get("POSTGRES_PASSWORD", "langchain")
 POSTGRES_DB = os.environ.get("POSTGRES_DB", "langchain")
 
-
-# Using a different port for testing than the default 5432
-# to avoid conflicts with a running PostgreSQL instance
-# This port matches the convention in langchain/docker/docker-compose.yml
-# To spin up a PostgreSQL instance for testing, run:
-# docker-compose -f docker/docker-compose.yml up -d postgres
-POSTGRES_PORT = os.environ.get("POSTGRES_PORT", "6023")
+POSTGRES_PORT = os.environ.get("POSTGRES_PORT", "6024")
 
 DSN = (
     f"postgresql://{POSTGRES_USER}:{POSTGRES_PASSWORD}@{POSTGRES_HOST}"
+    f":{POSTGRES_PORT}/{POSTGRES_DB}"
+)
+
+# Connection string used primarily by the vectorstores tests
+# it's written to work with SQLAlchemy (takes a driver name)
+# It is also running on a postgres instance that has the pgvector extension
+VECTORSTORE_CONNECTION_STRING = (
+    f"postgresql+psycopg://{POSTGRES_USER}:{POSTGRES_PASSWORD}@{POSTGRES_HOST}"
     f":{POSTGRES_PORT}/{POSTGRES_DB}"
 )
 
