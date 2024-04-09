@@ -157,3 +157,7 @@ chat_history.add_messages([
 print(chat_history.messages)
 ```
 
+
+### Vectorstore
+
+See example for the [PGVector vectorstore here](https://github.com/langchain-ai/langchain-postgres/blob/main/examples/vectorstore.ipynb)
