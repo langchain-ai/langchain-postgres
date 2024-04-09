@@ -3,6 +3,7 @@ from langchain_postgres import __all__
 EXPECTED_ALL = [
     "__version__",
     "CheckpointSerializer",
+    "PGVector",
     "PostgresChatMessageHistory",
     "PostgresCheckpoint",
     "PickleCheckpointSerializer",

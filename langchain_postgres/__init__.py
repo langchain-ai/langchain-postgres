@@ -1,12 +1,12 @@
 from importlib import metadata
 
 from langchain_postgres.chat_message_histories import PostgresChatMessageHistory
-from langchain_postgres.vectorstores import PGVector
 from langchain_postgres.checkpoint import (
     CheckpointSerializer,
     PickleCheckpointSerializer,
     PostgresCheckpoint,
 )
+from langchain_postgres.vectorstores import PGVector
 
 try:
     __version__ = metadata.version(__package__)
