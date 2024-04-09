@@ -181,7 +181,7 @@ def test_pgvector_with_filter_in_set() -> None:
         metadatas=metadatas,
         connection_string=CONNECTION_STRING,
         pre_delete_collection=True,
-        use_jsonb=False
+        use_jsonb=False,
     )
     output = docsearch.similarity_search_with_score(
         "foo", k=2, filter={"page": {"IN": ["0", "2"]}}

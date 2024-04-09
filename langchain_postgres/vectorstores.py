@@ -211,6 +211,9 @@ def _results_to_docs(docs_and_scores: Any) -> List[Document]:
 class PGVector(VectorStore):
     """`Postgres`/`PGVector` vector store.
 
+    This code has been ported over from langchain_community with minimal changes
+    to allow users to easily transition from langchain_community to langchain_postgres.
+
     To use, you need to have a Postgres database running and the `vector` extension
     installed. The `vector` extension is a Postgres extension that provides
     vector similarity search capabilities.
@@ -224,7 +227,7 @@ class PGVector(VectorStore):
             CONNECTION_STRING = "postgresql+psycopg2://hwc@localhost:5432/test3"
             COLLECTION_NAME = "state_of_the_union_test"
             embeddings = OpenAIEmbeddings()
-            vectorestore = PGVector.from_documents(
+            vectorstore = PGVector.from_documents(
                 embedding=embeddings,
                 documents=docs,
                 collection_name=COLLECTION_NAME,
