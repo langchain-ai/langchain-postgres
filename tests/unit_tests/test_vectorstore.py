@@ -3,9 +3,7 @@
 from typing import Any, Dict, Generator, List
 
 import pytest
-import sqlalchemy
 from langchain_core.documents import Document
-from sqlalchemy.orm import Session
 
 from langchain_postgres.vectorstores import (
     SUPPORTED_OPERATORS,
@@ -47,7 +45,7 @@ def test_pgvector(pgvector: PGVector) -> None:
         texts=texts,
         collection_name="test_collection",
         embedding=FakeEmbeddingsWithAdaDimension(),
-        connection_string=CONNECTION_STRING,
+        connection=CONNECTION_STRING,
         pre_delete_collection=True,
     )
     output = docsearch.similarity_search("foo", k=1)
@@ -63,7 +61,7 @@ def test_pgvector_embeddings() -> None:
         text_embeddings=text_embedding_pairs,
         collection_name="test_collection",
         embedding=FakeEmbeddingsWithAdaDimension(),
-        connection_string=CONNECTION_STRING,
+        connection=CONNECTION_STRING,
         pre_delete_collection=True,
     )
     output = docsearch.similarity_search("foo", k=1)
@@ -79,7 +77,7 @@ def test_pgvector_with_metadatas() -> None:
         collection_name="test_collection",
         embedding=FakeEmbeddingsWithAdaDimension(),
         metadatas=metadatas,
-        connection_string=CONNECTION_STRING,
+        connection=CONNECTION_STRING,
         pre_delete_collection=True,
     )
     output = docsearch.similarity_search("foo", k=1)
@@ -95,7 +93,7 @@ def test_pgvector_with_metadatas_with_scores() -> None:
         collection_name="test_collection",
         embedding=FakeEmbeddingsWithAdaDimension(),
         metadatas=metadatas,
-        connection_string=CONNECTION_STRING,
+        connection=CONNECTION_STRING,
         pre_delete_collection=True,
     )
     output = docsearch.similarity_search_with_score("foo", k=1)
@@ -111,7 +109,7 @@ def test_pgvector_with_filter_match() -> None:
         collection_name="test_collection_filter",
         embedding=FakeEmbeddingsWithAdaDimension(),
         metadatas=metadatas,
-        connection_string=CONNECTION_STRING,
+        connection=CONNECTION_STRING,
         pre_delete_collection=True,
     )
     output = docsearch.similarity_search_with_score("foo", k=1, filter={"page": "0"})
@@ -127,7 +125,7 @@ def test_pgvector_with_filter_distant_match() -> None:
         collection_name="test_collection_filter",
         embedding=FakeEmbeddingsWithAdaDimension(),
         metadatas=metadatas,
-        connection_string=CONNECTION_STRING,
+        connection=CONNECTION_STRING,
         pre_delete_collection=True,
     )
     output = docsearch.similarity_search_with_score("foo", k=1, filter={"page": "2"})
@@ -145,7 +143,7 @@ def test_pgvector_with_filter_no_match() -> None:
         collection_name="test_collection_filter",
         embedding=FakeEmbeddingsWithAdaDimension(),
         metadatas=metadatas,
-        connection_string=CONNECTION_STRING,
+        connection=CONNECTION_STRING,
         pre_delete_collection=True,
     )
     output = docsearch.similarity_search_with_score("foo", k=1, filter={"page": "5"})
@@ -158,16 +156,16 @@ def test_pgvector_collection_with_metadata() -> None:
         collection_name="test_collection",
         collection_metadata={"foo": "bar"},
         embedding_function=FakeEmbeddingsWithAdaDimension(),
-        connection_string=CONNECTION_STRING,
+        connection=CONNECTION_STRING,
         pre_delete_collection=True,
     )
-    session = Session(pgvector._create_engine())
-    collection = pgvector.get_collection(session)
-    if collection is None:
-        assert False, "Expected a CollectionStore object but received None"
-    else:
-        assert collection.name == "test_collection"
-        assert collection.cmetadata == {"foo": "bar"}
+    with pgvector._make_session() as session:
+        collection = pgvector.get_collection(session)
+        if collection is None:
+            assert False, "Expected a CollectionStore object but received None"
+        else:
+            assert collection.name == "test_collection"
+            assert collection.cmetadata == {"foo": "bar"}
 
 
 def test_pgvector_delete_docs() -> None:
@@ -180,7 +178,7 @@ def test_pgvector_delete_docs() -> None:
         embedding=FakeEmbeddingsWithAdaDimension(),
         metadatas=metadatas,
         ids=["1", "2", "3"],
-        connection_string=CONNECTION_STRING,
+        connection=CONNECTION_STRING,
         pre_delete_collection=True,
     )
     vectorstore.delete(["1", "2"])
@@ -228,7 +226,7 @@ def test_pgvector_index_documents() -> None:
         collection_name="test_collection_filter",
         embedding=FakeEmbeddingsWithAdaDimension(),
         ids=[doc.metadata["id"] for doc in documents],
-        connection_string=CONNECTION_STRING,
+        connection=CONNECTION_STRING,
         pre_delete_collection=True,
     )
     with vectorstore._make_session() as session:
@@ -282,7 +280,7 @@ def test_pgvector_relevance_score() -> None:
         collection_name="test_collection",
         embedding=FakeEmbeddingsWithAdaDimension(),
         metadatas=metadatas,
-        connection_string=CONNECTION_STRING,
+        connection=CONNECTION_STRING,
         pre_delete_collection=True,
     )
 
@@ -303,7 +301,7 @@ def test_pgvector_retriever_search_threshold() -> None:
         collection_name="test_collection",
         embedding=FakeEmbeddingsWithAdaDimension(),
         metadatas=metadatas,
-        connection_string=CONNECTION_STRING,
+        connection=CONNECTION_STRING,
         pre_delete_collection=True,
     )
 
@@ -327,7 +325,7 @@ def test_pgvector_retriever_search_threshold_custom_normalization_fn() -> None:
         collection_name="test_collection",
         embedding=FakeEmbeddingsWithAdaDimension(),
         metadatas=metadatas,
-        connection_string=CONNECTION_STRING,
+        connection=CONNECTION_STRING,
         pre_delete_collection=True,
         relevance_score_fn=lambda d: d * 0,
     )
@@ -347,7 +345,7 @@ def test_pgvector_max_marginal_relevance_search() -> None:
         texts=texts,
         collection_name="test_collection",
         embedding=FakeEmbeddingsWithAdaDimension(),
-        connection_string=CONNECTION_STRING,
+        connection=CONNECTION_STRING,
         pre_delete_collection=True,
     )
     output = docsearch.max_marginal_relevance_search("foo", k=1, fetch_k=3)
@@ -361,7 +359,7 @@ def test_pgvector_max_marginal_relevance_search_with_score() -> None:
         texts=texts,
         collection_name="test_collection",
         embedding=FakeEmbeddingsWithAdaDimension(),
-        connection_string=CONNECTION_STRING,
+        connection=CONNECTION_STRING,
         pre_delete_collection=True,
     )
     output = docsearch.max_marginal_relevance_search_with_score("foo", k=1, fetch_k=3)
@@ -371,18 +369,15 @@ def test_pgvector_max_marginal_relevance_search_with_score() -> None:
 def test_pgvector_with_custom_connection() -> None:
     """Test construction using a custom connection."""
     texts = ["foo", "bar", "baz"]
-    engine = sqlalchemy.create_engine(CONNECTION_STRING)
-    with engine.connect() as connection:
-        docsearch = PGVector.from_texts(
-            texts=texts,
-            collection_name="test_collection",
-            embedding=FakeEmbeddingsWithAdaDimension(),
-            connection_string=CONNECTION_STRING,
-            pre_delete_collection=True,
-            connection=connection,
-        )
-        output = docsearch.similarity_search("foo", k=1)
-        assert output == [Document(page_content="foo")]
+    docsearch = PGVector.from_texts(
+        texts=texts,
+        collection_name="test_collection",
+        embedding=FakeEmbeddingsWithAdaDimension(),
+        connection=CONNECTION_STRING,
+        pre_delete_collection=True,
+    )
+    output = docsearch.similarity_search("foo", k=1)
+    assert output == [Document(page_content="foo")]
 
 
 def test_pgvector_with_custom_engine_args() -> None:
@@ -400,7 +395,7 @@ def test_pgvector_with_custom_engine_args() -> None:
         texts=texts,
         collection_name="test_collection",
         embedding=FakeEmbeddingsWithAdaDimension(),
-        connection_string=CONNECTION_STRING,
+        connection=CONNECTION_STRING,
         pre_delete_collection=True,
         engine_args=engine_args,
     )
@@ -417,7 +412,7 @@ def pgvector() -> Generator[PGVector, None, None]:
         documents=DOCUMENTS,
         collection_name="test_collection",
         embedding=FakeEmbeddingsWithAdaDimension(),
-        connection_string=CONNECTION_STRING,
+        connection=CONNECTION_STRING,
         pre_delete_collection=True,
         relevance_score_fn=lambda d: d * 0,
         use_jsonb=True,

@@ -14,6 +14,7 @@ from typing import (
     Optional,
     Tuple,
     Type,
+    Union,
 )
 
 import numpy as np
@@ -177,35 +178,19 @@ def _results_to_docs(docs_and_scores: Any) -> List[Document]:
     return [doc for doc, _ in docs_and_scores]
 
 
+Connection = Union[sqlalchemy.engine.Engine, str]
+
+
 class PGVector(VectorStore):
     """Vectorstore implementation using Postgres as the backend.
 
-    This code has been ported over from langchain_community with minimal changes
-    to allow users to easily transition from langchain_community to langchain_postgres.
+    Currently, there is no mechanism for supporting data migration.
 
-    This vectorstore is in **beta** and **not** recommended for production
-    usage at enterprise level.
+    So breaking changes in the vectorstore schema will require the user to recreate
+    the tables and re-add the documents.
 
-    It should be fine to use it for smaller datasets and/or for prototyping workflows.
-
-    The main issue with the existing implementation is:
-
-    1) Handling of connections
-    2) Lack of support for schema migrations
-
-    If you're OK with these limitations (and know how to create migrations
-    for the table) or are fine re-creating the collection and embeddings if
-    the schema changes, then feel free to use this implementation.
-
-    Some changes had to be made to address issues with the community implementation:
-    * langchain_postgres now works with psycopg3. Please update your
-      connection strings from `postgresql+psycopg2://...` to
-      `postgresql+psycopg://langchain:langchain@...`
-      (yes, the driver name is `psycopg` not `psycopg3`)
-    * The schema of the embedding store and collection have been changed to make
-      add_documents work correctly with user specified ids, specifically
-      when overwriting existing documents.
-      You will need to recreate the tables if you are using an existing database.
+    If this is a concern, please use a different vectorstore. If
+    not, this implementation should be fine for your use case.
 
     To use this vectorstore you need to have the `vector` extension installed.
     The `vector` extension is a Postgres extension that provides vector
@@ -228,17 +213,33 @@ class PGVector(VectorStore):
             vectorstore = PGVector.from_documents(
                 embedding=embeddings,
                 documents=docs,
+                connection=connection_string,
                 collection_name=collection_name,
-                connection_string=connection_string,
                 use_jsonb=True,
             )
+
+
+    This code has been ported over from langchain_community with minimal changes
+    to allow users to easily transition from langchain_community to langchain_postgres.
+
+    Some changes had to be made to address issues with the community implementation:
+    * langchain_postgres now works with psycopg3. Please update your
+      connection strings from `postgresql+psycopg2://...` to
+      `postgresql+psycopg://langchain:langchain@...`
+      (yes, the driver name is `psycopg` not `psycopg3`)
+    * The schema of the embedding store and collection have been changed to make
+      add_documents work correctly with user specified ids, specifically
+      when overwriting existing documents.
+      You will need to recreate the tables if you are using an existing database.
+    * A Connection object has to be provided explicitly. Connections will not be
+      picked up automatically based on env variables.
     """
 
     def __init__(
         self,
-        connection_string: str,
         embedding_function: Embeddings,
         *,
+        connection: Optional[Connection] = None,
         embedding_length: Optional[int] = None,
         collection_name: str = _LANGCHAIN_DEFAULT_COLLECTION_NAME,
         collection_metadata: Optional[dict] = None,
@@ -246,7 +247,6 @@ class PGVector(VectorStore):
         pre_delete_collection: bool = False,
         logger: Optional[logging.Logger] = None,
         relevance_score_fn: Optional[Callable[[float], float]] = None,
-        connection: Optional[sqlalchemy.engine.Connection] = None,
         engine_args: Optional[dict[str, Any]] = None,
         use_jsonb: bool = True,
         create_extension: bool = True,
@@ -254,7 +254,7 @@ class PGVector(VectorStore):
         """Initialize the PGVector store.
 
         Args:
-            connection_string: Postgres connection string.
+            connection: Postgres connection string.
             embedding_function: Any embedding function implementing
                 `langchain.embeddings.base.Embeddings` interface.
             embedding_length: The length of the embedding vector. (default: None)
@@ -278,7 +278,6 @@ class PGVector(VectorStore):
                 doesn't exist. disabling creation is useful when using ReadOnly
                 Databases.
         """
-        self.connection_string = connection_string
         self.embedding_function = embedding_function
         self._embedding_length = embedding_length
         self.collection_name = collection_name
@@ -287,8 +286,17 @@ class PGVector(VectorStore):
         self.pre_delete_collection = pre_delete_collection
         self.logger = logger or logging.getLogger(__name__)
         self.override_relevance_score_fn = relevance_score_fn
-        self.engine_args = engine_args or {}
-        self._bind = connection if connection else self._create_engine()
+
+        if isinstance(connection, str):
+            self._bind = sqlalchemy.create_engine(url=connection, **(engine_args or {}))
+        elif isinstance(connection, sqlalchemy.engine.Engine):
+            self._bind = connection
+        else:
+            raise ValueError(
+                "connection should be a connection string or an instance of "
+                "sqlalchemy.engine.Engine"
+            )
+
         self.use_jsonb = use_jsonb
         self.create_extension = create_extension
 
@@ -319,9 +327,6 @@ class PGVector(VectorStore):
     @property
     def embeddings(self) -> Embeddings:
         return self.embedding_function
-
-    def _create_engine(self) -> sqlalchemy.engine.Engine:
-        return sqlalchemy.create_engine(url=self.connection_string, **self.engine_args)
 
     def create_vector_extension(self) -> None:
         try:
@@ -421,7 +426,7 @@ class PGVector(VectorStore):
         ids: Optional[List[str]] = None,
         collection_name: str = _LANGCHAIN_DEFAULT_COLLECTION_NAME,
         distance_strategy: DistanceStrategy = DEFAULT_DISTANCE_STRATEGY,
-        connection_string: Optional[str] = None,
+        connection: Optional[str] = None,
         pre_delete_collection: bool = False,
         *,
         use_jsonb: bool = True,
@@ -432,11 +437,9 @@ class PGVector(VectorStore):
 
         if not metadatas:
             metadatas = [{} for _ in texts]
-        if connection_string is None:
-            connection_string = cls.get_connection_string(kwargs)
 
         store = cls(
-            connection_string=connection_string,
+            connection=connection,
             collection_name=collection_name,
             embedding_function=embedding,
             distance_strategy=distance_strategy,
@@ -1054,6 +1057,7 @@ class PGVector(VectorStore):
         collection_name: str = _LANGCHAIN_DEFAULT_COLLECTION_NAME,
         distance_strategy: DistanceStrategy = DEFAULT_DISTANCE_STRATEGY,
         pre_delete_collection: bool = False,
+        connection: Optional[Connection] = None,
         **kwargs: Any,
     ) -> PGVector:
         """
@@ -1061,11 +1065,8 @@ class PGVector(VectorStore):
         return the instance of the store without inserting any new
         embeddings
         """
-
-        connection_string = cls.get_connection_string(kwargs)
-
         store = cls(
-            connection_string=connection_string,
+            connection=connection,
             collection_name=collection_name,
             embedding_function=embedding,
             distance_strategy=distance_strategy,
@@ -1097,6 +1098,7 @@ class PGVector(VectorStore):
         documents: List[Document],
         embedding: Embeddings,
         *,
+        connection: Optional[Connection] = None,
         collection_name: str = _LANGCHAIN_DEFAULT_COLLECTION_NAME,
         distance_strategy: DistanceStrategy = DEFAULT_DISTANCE_STRATEGY,
         ids: Optional[List[str]] = None,
@@ -1113,9 +1115,6 @@ class PGVector(VectorStore):
 
         texts = [d.page_content for d in documents]
         metadatas = [d.metadata for d in documents]
-        connection_string = cls.get_connection_string(kwargs)
-
-        kwargs["connection_string"] = connection_string
 
         return cls.from_texts(
             texts=texts,
@@ -1123,6 +1122,7 @@ class PGVector(VectorStore):
             embedding=embedding,
             distance_strategy=distance_strategy,
             metadatas=metadatas,
+            connection=connection,
             ids=ids,
             collection_name=collection_name,
             use_jsonb=use_jsonb,
@@ -1140,6 +1140,8 @@ class PGVector(VectorStore):
         password: str,
     ) -> str:
         """Return connection string from database parameters."""
+        if driver != "psycopg":
+            raise NotImplementedError("Only psycopg3 driver is supported")
         return f"postgresql+{driver}://{user}:{password}@{host}:{port}/{database}"
 
     def _select_relevance_score_fn(self) -> Callable[[float], float]:
