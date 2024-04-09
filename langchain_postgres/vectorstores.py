@@ -348,11 +348,11 @@ class PGVector(VectorStore):
             raise Exception(f"Failed to create vector extension: {e}") from e
 
     def create_tables_if_not_exists(self) -> None:
-        with Session(self._bind) as session, session.begin():  # type: ignore[arg-type]
+        with Session(self._bind) as session:
             Base.metadata.create_all(session.get_bind())
 
     def drop_tables(self) -> None:
-        with Session(self._bind) as session, session.begin():  # type: ignore[arg-type]
+        with Session(self._bind) as session:
             Base.metadata.drop_all(session.get_bind())
 
     def create_collection(self) -> None:

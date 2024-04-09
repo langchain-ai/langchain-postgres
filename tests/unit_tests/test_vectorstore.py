@@ -18,9 +18,8 @@ from tests.unit_tests.fixtures.filtering_test_cases import (
     TYPE_4_FILTERING_TEST_CASES,
     TYPE_5_FILTERING_TEST_CASES,
 )
-from tests.utils import VECTORSTORE_CONNECTION_STRING
+from tests.utils import VECTORSTORE_CONNECTION_STRING as CONNECTION_STRING
 
-CONNECTION_STRING = VECTORSTORE_CONNECTION_STRING
 ADA_TOKEN_COUNT = 1536
 
 
@@ -419,7 +418,6 @@ def pgvector() -> Generator[PGVector, None, None]:
     )
     try:
         yield store
-    # Do clean up
     finally:
         store.drop_tables()
 
