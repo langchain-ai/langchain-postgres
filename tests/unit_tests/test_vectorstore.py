@@ -155,7 +155,7 @@ def test_pgvector_collection_with_metadata() -> None:
     pgvector = PGVector(
         collection_name="test_collection",
         collection_metadata={"foo": "bar"},
-        embedding_function=FakeEmbeddingsWithAdaDimension(),
+        embeddings=FakeEmbeddingsWithAdaDimension(),
         connection=CONNECTION_STRING,
         pre_delete_collection=True,
     )
