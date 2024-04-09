@@ -48,7 +48,7 @@ class PickleCheckpointSerializer(CheckpointSerializer):
 
 @contextmanager
 def _get_sync_connection(
-    connection: Union[psycopg.Connection, ConnectionPool],
+    connection: Union[psycopg.Connection, ConnectionPool, None],
 ) -> Generator[psycopg.Connection, None, None]:
     """Get the connection to the Postgres database."""
     if isinstance(connection, psycopg.Connection):
@@ -66,7 +66,7 @@ def _get_sync_connection(
 
 @asynccontextmanager
 async def _get_async_connection(
-    connection: Union[psycopg.AsyncConnection, AsyncConnectionPool],
+    connection: Union[psycopg.AsyncConnection, AsyncConnectionPool, None],
 ) -> AsyncGenerator[psycopg.AsyncConnection, None]:
     """Get the connection to the Postgres database."""
     if isinstance(connection, psycopg.AsyncConnection):
@@ -255,7 +255,7 @@ class PostgresCheckpoint(BaseCheckpointSaver):
 
     @staticmethod
     async def acreate_tables(
-        connection: Union[psycopg.AsyncConnection, ConnectionPool], /
+        connection: Union[psycopg.AsyncConnection, AsyncConnectionPool], /
     ) -> None:
         """Create the schema for the checkpoint saver."""
         async with _get_async_connection(connection) as conn:
