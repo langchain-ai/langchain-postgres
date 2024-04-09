@@ -5,7 +5,7 @@ EXPECTED_ALL = [
     "CheckpointSerializer",
     "PGVector",
     "PostgresChatMessageHistory",
-    "PostgresCheckpoint",
+    "PostgresSaver",
     "PickleCheckpointSerializer",
 ]
 
