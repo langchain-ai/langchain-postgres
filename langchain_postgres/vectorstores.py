@@ -52,13 +52,6 @@ Base = declarative_base()  # type: Any
 _LANGCHAIN_DEFAULT_COLLECTION_NAME = "langchain"
 
 
-class BaseModel(Base):
-    """Base model for the SQL stores."""
-
-    __abstract__ = True
-    uuid = sqlalchemy.Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-
-
 _classes: Any = None
 
 COMPARISONS_TO_NATIVE = {
@@ -98,11 +91,14 @@ def _get_embedding_collection_store(vector_dimension: Optional[int] = None) -> A
 
     from pgvector.sqlalchemy import Vector  # type: ignore
 
-    class CollectionStore(BaseModel):
+    class CollectionStore(Base):
         """Collection store."""
 
         __tablename__ = "langchain_pg_collection"
 
+        uuid = sqlalchemy.Column(
+            UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+        )
         name = sqlalchemy.Column(sqlalchemy.String)
         cmetadata = sqlalchemy.Column(JSON)
 
@@ -140,10 +136,14 @@ def _get_embedding_collection_store(vector_dimension: Optional[int] = None) -> A
             created = True
             return collection, created
 
-    class EmbeddingStore(BaseModel):
+    class EmbeddingStore(Base):
         """Embedding store."""
 
         __tablename__ = "langchain_pg_embedding"
+
+        id = sqlalchemy.Column(
+            sqlalchemy.String, nullable=True, primary_key=True, index=True, unique=True
+        )
 
         collection_id = sqlalchemy.Column(
             UUID(as_uuid=True),
@@ -157,10 +157,6 @@ def _get_embedding_collection_store(vector_dimension: Optional[int] = None) -> A
         embedding: Vector = sqlalchemy.Column(Vector(vector_dimension))
         document = sqlalchemy.Column(sqlalchemy.String, nullable=True)
         cmetadata = sqlalchemy.Column(JSONB, nullable=True)
-
-        custom_id = sqlalchemy.Column(
-            sqlalchemy.String, nullable=True, primary_key=True, index=True, unique=True
-        )
 
         __table_args__ = (
             sqlalchemy.Index(
@@ -379,7 +375,7 @@ class PGVector(VectorStore):
                         self.EmbeddingStore.collection_id == collection.uuid
                     )
 
-                stmt = stmt.where(self.EmbeddingStore.custom_id.in_(ids))
+                stmt = stmt.where(self.EmbeddingStore.id.in_(ids))
                 session.execute(stmt)
             session.commit()
 
@@ -454,7 +450,7 @@ class PGVector(VectorStore):
                 raise ValueError("Collection not found")
             data = [
                 {
-                    "custom_id": id,
+                    "id": id,
                     "collection_id": collection.uuid,
                     "embedding": embedding,
                     "document": text,
@@ -466,7 +462,7 @@ class PGVector(VectorStore):
             ]
             stmt = insert(self.EmbeddingStore).values(data)
             on_conflict_stmt = stmt.on_conflict_do_update(
-                index_elements=["custom_id"],
+                index_elements=["id"],
                 # Conflict detection based on these columns
                 set_={
                     "embedding": stmt.excluded.embedding,

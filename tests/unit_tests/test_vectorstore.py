@@ -188,14 +188,14 @@ def test_pgvector_delete_docs() -> None:
         records = list(session.query(vectorstore.EmbeddingStore).all())
         # ignoring type error since mypy cannot determine whether
         # the list is sortable
-        assert sorted(record.custom_id for record in records) == ["3"]  # type: ignore
+        assert sorted(record.id for record in records) == ["3"]  # type: ignore
 
     vectorstore.delete(["2", "3"])  # Should not raise on missing ids
     with vectorstore._make_session() as session:
         records = list(session.query(vectorstore.EmbeddingStore).all())
         # ignoring type error since mypy cannot determine whether
         # the list is sortable
-        assert sorted(record.custom_id for record in records) == []  # type: ignore
+        assert sorted(record.id for record in records) == []  # type: ignore
 
 
 def test_pgvector_index_documents() -> None:
@@ -235,7 +235,7 @@ def test_pgvector_index_documents() -> None:
         records = list(session.query(vectorstore.EmbeddingStore).all())
         # ignoring type error since mypy cannot determine whether
         # the list is sortable
-        assert sorted(record.custom_id for record in records) == [
+        assert sorted(record.id for record in records) == [
             "1",
             "2",
             "3",
@@ -255,10 +255,10 @@ def test_pgvector_index_documents() -> None:
 
     with vectorstore._make_session() as session:
         records = list(session.query(vectorstore.EmbeddingStore).all())
-        ordered_records = sorted(records, key=lambda x: x.custom_id)
+        ordered_records = sorted(records, key=lambda x: x.id)
         # ignoring type error since mypy cannot determine whether
         # the list is sortable
-        assert [record.custom_id for record in ordered_records] == [
+        assert [record.id for record in ordered_records] == [
             "1",
             "2",
             "3",
