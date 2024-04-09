@@ -134,7 +134,7 @@ class PostgresChatMessageHistory(BaseChatMessageHistory):
             async_connection: An existing psycopg async connection instance
 
         Usage:
-            - Use the create_schema or acreate_schema method to set up the table
+            - Use the create_tables or acreate_tables method to set up the table
               schema in the database.
             - Initialize the class with the appropriate session ID, table name,
               and database connection.
@@ -161,7 +161,7 @@ class PostgresChatMessageHistory(BaseChatMessageHistory):
 
             # Create the table schema (only needs to be done once)
             table_name = "chat_history"
-            PostgresChatMessageHistory.create_schema(sync_connection, table_name)
+            PostgresChatMessageHistory.create_tables(sync_connection, table_name)
 
             session_id = str(uuid.uuid4())
 
@@ -205,7 +205,7 @@ class PostgresChatMessageHistory(BaseChatMessageHistory):
         self._table_name = table_name
 
     @staticmethod
-    def create_schema(
+    def create_tables(
         connection: psycopg.Connection,
         table_name: str,
         /,
@@ -219,7 +219,7 @@ class PostgresChatMessageHistory(BaseChatMessageHistory):
         connection.commit()
 
     @staticmethod
-    async def acreate_schema(
+    async def acreate_tables(
         connection: psycopg.AsyncConnection, table_name: str, /
     ) -> None:
         """Create the table schema in the database and create relevant indexes."""
