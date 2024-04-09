@@ -211,18 +211,23 @@ def _results_to_docs(docs_and_scores: Any) -> List[Document]:
 class PGVector(VectorStore):
     """`Postgres`/`PGVector` vector store.
 
-    To use, you should have the ``pgvector`` python package installed.
+    This code has been ported over from langchain_community with minimal changes
+    to allow users to easily transition from langchain_community to langchain_postgres.
+
+    To use, you need to have a Postgres database running and the `vector` extension
+    installed. The `vector` extension is a Postgres extension that provides
+    vector similarity search capabilities.
 
     Example:
         .. code-block:: python
 
             from langchain_postgres.vectorstores import PGVector
-            from langchain_community.embeddings.openai import OpenAIEmbeddings
+            from langchain_openai.embeddings import OpenAIEmbeddings
 
             CONNECTION_STRING = "postgresql+psycopg2://hwc@localhost:5432/test3"
             COLLECTION_NAME = "state_of_the_union_test"
             embeddings = OpenAIEmbeddings()
-            vectorestore = PGVector.from_documents(
+            vectorstore = PGVector.from_documents(
                 embedding=embeddings,
                 documents=docs,
                 collection_name=COLLECTION_NAME,
@@ -245,7 +250,7 @@ class PGVector(VectorStore):
         *,
         connection: Optional[sqlalchemy.engine.Connection] = None,
         engine_args: Optional[dict[str, Any]] = None,
-        use_jsonb: bool = False,
+        use_jsonb: bool = True,
         create_extension: bool = True,
     ) -> None:
         """Initialize the PGVector store.
@@ -439,7 +444,7 @@ class PGVector(VectorStore):
         connection_string: Optional[str] = None,
         pre_delete_collection: bool = False,
         *,
-        use_jsonb: bool = False,
+        use_jsonb: bool = True,
         **kwargs: Any,
     ) -> PGVector:
         if ids is None:
@@ -969,7 +974,7 @@ class PGVector(VectorStore):
         ids: Optional[List[str]] = None,
         pre_delete_collection: bool = False,
         *,
-        use_jsonb: bool = False,
+        use_jsonb: bool = True,
         **kwargs: Any,
     ) -> PGVector:
         """
@@ -1005,23 +1010,33 @@ class PGVector(VectorStore):
         pre_delete_collection: bool = False,
         **kwargs: Any,
     ) -> PGVector:
-        """Construct PGVector wrapper from raw documents and pre-
-        generated embeddings.
+        """Construct PGVector wrapper from raw documents and embeddings.
 
-        Return VectorStore initialized from documents and embeddings.
-        Postgres connection string is required
-        "Either pass it as a parameter
-        or set the PGVECTOR_CONNECTION_STRING environment variable.
+        Args:
+            text_embeddings: List of tuples of text and embeddings.
+            embedding: Embeddings object.
+            metadatas: Optional list of metadatas associated with the texts.
+            collection_name: Name of the collection.
+            distance_strategy: Distance strategy to use.
+            ids: Optional list of ids for the documents.
+            pre_delete_collection: If True, will delete the collection if it exists.
+                **Attention**: This will delete all the documents in the existing
+                collection.
+            kwargs: Additional arguments.
+
+        Returns:
+            PGVector: PGVector instance.
 
         Example:
             .. code-block:: python
 
-                from langchain_community.vectorstores import PGVector
-                from langchain_community.embeddings import OpenAIEmbeddings
+                from langchain_postgres.vectorstores import PGVector
+                from langchain_openai.embeddings import OpenAIEmbeddings
+
                 embeddings = OpenAIEmbeddings()
                 text_embeddings = embeddings.embed_documents(texts)
                 text_embedding_pairs = list(zip(texts, text_embeddings))
-                faiss = PGVector.from_embeddings(text_embedding_pairs, embeddings)
+                vectorstore = PGVector.from_embeddings(text_embedding_pairs, embeddings)
         """
         texts = [t[0] for t in text_embeddings]
         embeddings = [t[1] for t in text_embeddings]
@@ -1092,7 +1107,7 @@ class PGVector(VectorStore):
         ids: Optional[List[str]] = None,
         pre_delete_collection: bool = False,
         *,
-        use_jsonb: bool = False,
+        use_jsonb: bool = True,
         **kwargs: Any,
     ) -> PGVector:
         """

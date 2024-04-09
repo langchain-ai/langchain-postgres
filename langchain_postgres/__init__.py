@@ -6,6 +6,7 @@ from langchain_postgres.checkpoint import (
     PickleCheckpointSerializer,
     PostgresCheckpoint,
 )
+from langchain_postgres.vectorstores import PGVector
 
 try:
     __version__ = metadata.version(__package__)
@@ -19,4 +20,5 @@ __all__ = [
     "PostgresChatMessageHistory",
     "PostgresCheckpoint",
     "PickleCheckpointSerializer",
+    "PGVector",
 ]
