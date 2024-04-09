@@ -396,7 +396,7 @@ def pgvector() -> Generator[PGVector, None, None]:
         store.drop_tables()
 
 
-@pytest.mark.parametrize("test_filter, expected_ids", TYPE_1_FILTERING_TEST_CASES[:1])
+@pytest.mark.parametrize("test_filter, expected_ids", TYPE_1_FILTERING_TEST_CASES)
 def test_pgvector_with_with_metadata_filters_1(
     pgvector: PGVector,
     test_filter: Dict[str, Any],
