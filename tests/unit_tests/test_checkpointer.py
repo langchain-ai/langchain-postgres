@@ -3,16 +3,16 @@ from collections import defaultdict
 from langgraph.checkpoint import Checkpoint
 from langgraph.checkpoint.base import CheckpointTuple
 
-from langchain_postgres.checkpoint import PickleCheckpointSerializer, PostgresCheckpoint
+from langchain_postgres.checkpoint import PickleCheckpointSerializer, PostgresSaver
 from tests.utils import asyncpg_client, syncpg_client
 
 
 async def test_async_checkpoint() -> None:
     """Test the async chat history."""
     async with asyncpg_client() as async_connection:
-        await PostgresCheckpoint.adrop_schema(async_connection)
-        await PostgresCheckpoint.acreate_schema(async_connection)
-        checkpoint_saver = PostgresCheckpoint(
+        await PostgresSaver.adrop_schema(async_connection)
+        await PostgresSaver.acreate_schema(async_connection)
+        checkpoint_saver = PostgresSaver(
             async_connection=async_connection, serializer=PickleCheckpointSerializer()
         )
         checkpoint_tuple = [
@@ -146,9 +146,9 @@ async def test_async_checkpoint() -> None:
 def test_sync_checkpoint() -> None:
     """Test the sync check point implementation."""
     with syncpg_client() as sync_connection:
-        PostgresCheckpoint.drop_schema(sync_connection)
-        PostgresCheckpoint.create_schema(sync_connection)
-        checkpoint_saver = PostgresCheckpoint(
+        PostgresSaver.drop_schema(sync_connection)
+        PostgresSaver.create_schema(sync_connection)
+        checkpoint_saver = PostgresSaver(
             sync_connection=sync_connection, serializer=PickleCheckpointSerializer()
         )
         checkpoint_tuple = [
@@ -256,9 +256,9 @@ def test_sync_checkpoint() -> None:
 
 async def test_on_conflict_aput() -> None:
     async with asyncpg_client() as async_connection:
-        await PostgresCheckpoint.adrop_schema(async_connection)
-        await PostgresCheckpoint.acreate_schema(async_connection)
-        checkpoint_saver = PostgresCheckpoint(
+        await PostgresSaver.adrop_schema(async_connection)
+        await PostgresSaver.acreate_schema(async_connection)
+        checkpoint_saver = PostgresSaver(
             async_connection=async_connection, serializer=PickleCheckpointSerializer()
         )
 

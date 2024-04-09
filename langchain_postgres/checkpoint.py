@@ -46,7 +46,7 @@ class PickleCheckpointSerializer(CheckpointSerializer):
         return cast(Checkpoint, pickle.loads(data))
 
 
-class PostgresCheckpoint(BaseCheckpointSaver):
+class PostgresSaver(BaseCheckpointSaver):
     """LangGraph checkpoint saver for Postgres.
 
     This implementation of a checkpoint saver uses a Postgres database to save
