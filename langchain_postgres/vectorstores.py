@@ -712,99 +712,6 @@ class PGVector(VectorStore):
         else:
             raise NotImplementedError()
 
-    def _create_filter_clause_deprecated(self, key, value):  # type: ignore[no-untyped-def]
-        """Deprecated functionality.
-
-        This is for backwards compatibility with the JSON based schema for metadata.
-        It uses incorrect operator syntax (operators are not prefixed with $).
-
-        This implementation is not efficient, and has bugs associated with
-        the way that it handles numeric filter clauses.
-        """
-        IN, NIN, BETWEEN, GT, LT, NE = "in", "nin", "between", "gt", "lt", "ne"
-        EQ, LIKE, CONTAINS, OR, AND = "eq", "like", "contains", "or", "and"
-
-        value_case_insensitive = {k.lower(): v for k, v in value.items()}
-        if IN in map(str.lower, value):
-            filter_by_metadata = self.EmbeddingStore.cmetadata[key].astext.in_(
-                value_case_insensitive[IN]
-            )
-        elif NIN in map(str.lower, value):
-            filter_by_metadata = self.EmbeddingStore.cmetadata[key].astext.not_in(
-                value_case_insensitive[NIN]
-            )
-        elif BETWEEN in map(str.lower, value):
-            filter_by_metadata = self.EmbeddingStore.cmetadata[key].astext.between(
-                str(value_case_insensitive[BETWEEN][0]),
-                str(value_case_insensitive[BETWEEN][1]),
-            )
-        elif GT in map(str.lower, value):
-            filter_by_metadata = self.EmbeddingStore.cmetadata[key].astext > str(
-                value_case_insensitive[GT]
-            )
-        elif LT in map(str.lower, value):
-            filter_by_metadata = self.EmbeddingStore.cmetadata[key].astext < str(
-                value_case_insensitive[LT]
-            )
-        elif NE in map(str.lower, value):
-            filter_by_metadata = self.EmbeddingStore.cmetadata[key].astext != str(
-                value_case_insensitive[NE]
-            )
-        elif EQ in map(str.lower, value):
-            filter_by_metadata = self.EmbeddingStore.cmetadata[key].astext == str(
-                value_case_insensitive[EQ]
-            )
-        elif LIKE in map(str.lower, value):
-            filter_by_metadata = self.EmbeddingStore.cmetadata[key].astext.like(
-                value_case_insensitive[LIKE]
-            )
-        elif CONTAINS in map(str.lower, value):
-            filter_by_metadata = self.EmbeddingStore.cmetadata[key].astext.contains(
-                value_case_insensitive[CONTAINS]
-            )
-        elif OR in map(str.lower, value):
-            or_clauses = [
-                self._create_filter_clause(key, sub_value)
-                for sub_value in value_case_insensitive[OR]
-            ]
-            filter_by_metadata = sqlalchemy.or_(*or_clauses)
-        elif AND in map(str.lower, value):
-            and_clauses = [
-                self._create_filter_clause(key, sub_value)
-                for sub_value in value_case_insensitive[AND]
-            ]
-            filter_by_metadata = sqlalchemy.and_(*and_clauses)
-
-        else:
-            filter_by_metadata = None
-
-        return filter_by_metadata
-
-    def _create_filter_clause_json_deprecated(
-        self, filter: Any
-    ) -> List[SQLColumnExpression]:
-        """Convert filters from IR to SQL clauses.
-
-        **DEPRECATED** This functionality will be deprecated in the future.
-
-        It implements translation of filters for a schema that uses JSON
-        for metadata rather than the JSONB field which is more efficient
-        for querying.
-        """
-        filter_clauses = []
-        for key, value in filter.items():
-            if isinstance(value, dict):
-                filter_by_metadata = self._create_filter_clause_deprecated(key, value)
-
-                if filter_by_metadata is not None:
-                    filter_clauses.append(filter_by_metadata)
-            else:
-                filter_by_metadata = self.EmbeddingStore.cmetadata[key].astext == str(
-                    value
-                )
-                filter_clauses.append(filter_by_metadata)
-        return filter_clauses
-
     def _create_filter_clause(self, filters: Any) -> Any:
         """Convert LangChain IR filter representation to matching SQLAlchemy clauses.
 
@@ -905,14 +812,9 @@ class PGVector(VectorStore):
 
             filter_by = [self.EmbeddingStore.collection_id == collection.uuid]
             if filter:
-                if self.use_jsonb:
-                    filter_clauses = self._create_filter_clause(filter)
-                    if filter_clauses is not None:
-                        filter_by.append(filter_clauses)
-                else:
-                    # Old way of doing things
-                    filter_clauses = self._create_filter_clause_json_deprecated(filter)
-                    filter_by.extend(filter_clauses)
+                filter_clauses = self._create_filter_clause(filter)
+                if filter_clauses is not None:
+                    filter_by.append(filter_clauses)
 
             _type = self.EmbeddingStore
 
