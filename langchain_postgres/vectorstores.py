@@ -237,7 +237,7 @@ class PGVector(VectorStore):
 
     def __init__(
         self,
-        embedding_function: Embeddings,
+        embeddings: Embeddings,
         *,
         connection: Optional[Connection] = None,
         embedding_length: Optional[int] = None,
@@ -255,7 +255,7 @@ class PGVector(VectorStore):
 
         Args:
             connection: Postgres connection string.
-            embedding_function: Any embedding function implementing
+            embeddings: Any embedding function implementing
                 `langchain.embeddings.base.Embeddings` interface.
             embedding_length: The length of the embedding vector. (default: None)
                 NOTE: This is not mandatory. Defining it will prevent vectors of
@@ -278,7 +278,7 @@ class PGVector(VectorStore):
                 doesn't exist. disabling creation is useful when using ReadOnly
                 Databases.
         """
-        self.embedding_function = embedding_function
+        self.embedding_function = embeddings
         self._embedding_length = embedding_length
         self.collection_name = collection_name
         self.collection_metadata = collection_metadata
@@ -441,7 +441,7 @@ class PGVector(VectorStore):
         store = cls(
             connection=connection,
             collection_name=collection_name,
-            embedding_function=embedding,
+            embeddings=embedding,
             distance_strategy=distance_strategy,
             pre_delete_collection=pre_delete_collection,
             use_jsonb=use_jsonb,
@@ -1068,7 +1068,7 @@ class PGVector(VectorStore):
         store = cls(
             connection=connection,
             collection_name=collection_name,
-            embedding_function=embedding,
+            embeddings=embedding,
             distance_strategy=distance_strategy,
             pre_delete_collection=pre_delete_collection,
         )
