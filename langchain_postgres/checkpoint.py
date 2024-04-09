@@ -59,8 +59,8 @@ class PostgresSaver(BaseCheckpointSaver):
 
     Usage:
 
-    1. First time use: create schema in the database using the `create_schema` method or
-       the async version `acreate_schema` method.
+    1. First time use: create schema in the database using the `create_tables` method or
+       the async version `acreate_tables` method.
     2. Create a PostgresCheckpoint object with a serializer and an appropriate
        connection object.
        It's recommended to use a connection pool object for the connection.
@@ -219,7 +219,7 @@ class PostgresSaver(BaseCheckpointSaver):
             )
 
     @staticmethod
-    def create_schema(connection: psycopg.Connection, /) -> None:
+    def create_tables(connection: psycopg.Connection, /) -> None:
         """Create the schema for the checkpoint saver."""
         with connection.cursor() as cur:
             cur.execute(
@@ -235,7 +235,7 @@ class PostgresSaver(BaseCheckpointSaver):
             )
 
     @staticmethod
-    async def acreate_schema(connection: psycopg.AsyncConnection, /) -> None:
+    async def acreate_tables(connection: psycopg.AsyncConnection, /) -> None:
         """Create the schema for the checkpoint saver."""
         async with connection.cursor() as cur:
             await cur.execute(
@@ -251,13 +251,13 @@ class PostgresSaver(BaseCheckpointSaver):
             )
 
     @staticmethod
-    def drop_schema(connection: psycopg.Connection, /) -> None:
+    def drop_tables(connection: psycopg.Connection, /) -> None:
         """Drop the table for the checkpoint saver."""
         with connection.cursor() as cur:
             cur.execute("DROP TABLE IF EXISTS checkpoints;")
 
     @staticmethod
-    async def adrop_schema(connection: psycopg.AsyncConnection, /) -> None:
+    async def adrop_tables(connection: psycopg.AsyncConnection, /) -> None:
         """Drop the table for the checkpoint saver."""
         async with connection.cursor() as cur:
             await cur.execute("DROP TABLE IF EXISTS checkpoints;")

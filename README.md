@@ -45,7 +45,7 @@ sync_connection = psycopg.connect(conn_info)
 
 # Create the table schema (only needs to be done once)
 table_name = "chat_history"
-PostgresChatMessageHistory.create_schema(sync_connection, table_name)
+PostgresChatMessageHistory.create_tables(sync_connection, table_name)
 
 session_id = str(uuid.uuid4())
 
