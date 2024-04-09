@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import contextlib
 import enum
 import logging
 import uuid
@@ -8,7 +7,6 @@ from typing import (
     Any,
     Callable,
     Dict,
-    Generator,
     Iterable,
     List,
     Optional,
