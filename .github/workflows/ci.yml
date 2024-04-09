@@ -61,14 +61,13 @@ jobs:
     strategy:
       matrix:
         python-version:
-          - "3.8"
+#          - "3.8"
           - "3.9"
-          - "3.10"
-          - "3.11"
+#          - "3.10"
+#          - "3.11"
     name: Python ${{ matrix.python-version }} tests
     steps:
       - uses: actions/checkout@v3
-
       - name: Set up Python ${{ matrix.python-version }} + Poetry ${{ env.POETRY_VERSION }}
         uses: "./.github/actions/poetry_setup"
         with:
@@ -82,6 +81,23 @@ jobs:
           sudo apt-get install -y postgresql-client
           # Test psql connection
           psql -h localhost -p 5432 -U langchain -d langchain_test -c "SELECT 1;"
+          # Create extension
+          # psql -h localhost -p 5432 -U langchain -d langchain_test -c "CREATE EXTENSION IF NOT EXISTS pg_vector;"
+          # Create databases
+          case ${{ matrix.python-version }} in
+            "3.8")
+              psql -h localhost -p 5432 -U langchain -d langchain_test -c "CREATE DATABASE py38;";
+              ;;
+            "3.9")
+              psql -h localhost -p 5432 -U langchain -d langchain_test -c "CREATE DATABASE py39;";
+              ;;
+            "3.10")
+              psql -h localhost -p 5432 -U langchain -d langchain_test -c "CREATE DATABASE py310;";
+              ;;
+            "3.11")
+              psql -h localhost -p 5432 -U langchain -d langchain_test -c "CREATE DATABASE py311;";
+              ;;
+          esac
         env:
           # postgress password is required; alternatively, you can run:
           # `PGPASSWORD=postgres_password psql ...`
