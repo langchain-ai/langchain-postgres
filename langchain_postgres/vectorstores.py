@@ -18,9 +18,8 @@ from typing import (
 
 import numpy as np
 import sqlalchemy
-from langchain_core._api import warn_deprecated
 from sqlalchemy import SQLColumnExpression, cast, delete, func
-from sqlalchemy.dialects.postgresql import JSON, JSONB, JSONPATH, UUID
+from sqlalchemy.dialects.postgresql import JSON, JSONB, JSONPATH, UUID, insert
 from sqlalchemy.orm import Session, relationship
 
 try:
@@ -51,13 +50,6 @@ Base = declarative_base()  # type: Any
 
 
 _LANGCHAIN_DEFAULT_COLLECTION_NAME = "langchain"
-
-
-class BaseModel(Base):
-    """Base model for the SQL stores."""
-
-    __abstract__ = True
-    uuid = sqlalchemy.Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
 
 
 _classes: Any = None
@@ -92,21 +84,22 @@ SUPPORTED_OPERATORS = (
 )
 
 
-def _get_embedding_collection_store(
-    vector_dimension: Optional[int] = None, *, use_jsonb: bool = True
-) -> Any:
+def _get_embedding_collection_store(vector_dimension: Optional[int] = None) -> Any:
     global _classes
     if _classes is not None:
         return _classes
 
     from pgvector.sqlalchemy import Vector  # type: ignore
 
-    class CollectionStore(BaseModel):
+    class CollectionStore(Base):
         """Collection store."""
 
         __tablename__ = "langchain_pg_collection"
 
-        name = sqlalchemy.Column(sqlalchemy.String)
+        uuid = sqlalchemy.Column(
+            UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+        )
+        name = sqlalchemy.Column(sqlalchemy.String, nullable=False, unique=True)
         cmetadata = sqlalchemy.Column(JSON)
 
         embeddings = relationship(
@@ -128,9 +121,9 @@ def _get_embedding_collection_store(
             name: str,
             cmetadata: Optional[dict] = None,
         ) -> Tuple["CollectionStore", bool]:
-            """
-            Get or create a collection.
-            Returns [Collection, bool] where the bool is True if the collection was created.
+            """Get or create a collection.
+            Returns:
+                 Where the bool is True if the collection was created.
             """  # noqa: E501
             created = False
             collection = cls.get_by_name(session, name)
@@ -143,60 +136,36 @@ def _get_embedding_collection_store(
             created = True
             return collection, created
 
-    if use_jsonb:
-        # TODO(PRIOR TO LANDING): Create a gin index on the cmetadata field
-        class EmbeddingStore(BaseModel):
-            """Embedding store."""
+    class EmbeddingStore(Base):
+        """Embedding store."""
 
-            __tablename__ = "langchain_pg_embedding"
+        __tablename__ = "langchain_pg_embedding"
 
-            collection_id = sqlalchemy.Column(
-                UUID(as_uuid=True),
-                sqlalchemy.ForeignKey(
-                    f"{CollectionStore.__tablename__}.uuid",
-                    ondelete="CASCADE",
-                ),
-            )
-            collection = relationship(CollectionStore, back_populates="embeddings")
+        id = sqlalchemy.Column(
+            sqlalchemy.String, nullable=True, primary_key=True, index=True, unique=True
+        )
 
-            embedding: Vector = sqlalchemy.Column(Vector(vector_dimension))
-            document = sqlalchemy.Column(sqlalchemy.String, nullable=True)
-            cmetadata = sqlalchemy.Column(JSONB, nullable=True)
+        collection_id = sqlalchemy.Column(
+            UUID(as_uuid=True),
+            sqlalchemy.ForeignKey(
+                f"{CollectionStore.__tablename__}.uuid",
+                ondelete="CASCADE",
+            ),
+        )
+        collection = relationship(CollectionStore, back_populates="embeddings")
 
-            # custom_id : any user defined id
-            custom_id = sqlalchemy.Column(sqlalchemy.String, nullable=True)
+        embedding: Vector = sqlalchemy.Column(Vector(vector_dimension))
+        document = sqlalchemy.Column(sqlalchemy.String, nullable=True)
+        cmetadata = sqlalchemy.Column(JSONB, nullable=True)
 
-            __table_args__ = (
-                sqlalchemy.Index(
-                    "ix_cmetadata_gin",
-                    "cmetadata",
-                    postgresql_using="gin",
-                    postgresql_ops={"cmetadata": "jsonb_path_ops"},
-                ),
-            )
-    else:
-        # For backwards comaptibilty with older versions of pgvector
-        # This should be removed in the future (remove during migration)
-        class EmbeddingStore(BaseModel):  # type: ignore[no-redef]
-            """Embedding store."""
-
-            __tablename__ = "langchain_pg_embedding"
-
-            collection_id = sqlalchemy.Column(
-                UUID(as_uuid=True),
-                sqlalchemy.ForeignKey(
-                    f"{CollectionStore.__tablename__}.uuid",
-                    ondelete="CASCADE",
-                ),
-            )
-            collection = relationship(CollectionStore, back_populates="embeddings")
-
-            embedding: Vector = sqlalchemy.Column(Vector(vector_dimension))
-            document = sqlalchemy.Column(sqlalchemy.String, nullable=True)
-            cmetadata = sqlalchemy.Column(JSON, nullable=True)
-
-            # custom_id : any user defined id
-            custom_id = sqlalchemy.Column(sqlalchemy.String, nullable=True)
+        __table_args__ = (
+            sqlalchemy.Index(
+                "ix_cmetadata_gin",
+                "cmetadata",
+                postgresql_using="gin",
+                postgresql_ops={"cmetadata": "jsonb_path_ops"},
+            ),
+        )
 
     _classes = (EmbeddingStore, CollectionStore)
 
@@ -209,14 +178,43 @@ def _results_to_docs(docs_and_scores: Any) -> List[Document]:
 
 
 class PGVector(VectorStore):
-    """`Postgres`/`PGVector` vector store.
+    """Vectorstore implementation using Postgres as the backend.
 
     This code has been ported over from langchain_community with minimal changes
     to allow users to easily transition from langchain_community to langchain_postgres.
 
-    To use, you need to have a Postgres database running and the `vector` extension
-    installed. The `vector` extension is a Postgres extension that provides
-    vector similarity search capabilities.
+    This vectorstore is in **beta** and **not** recommended for production
+    usage at enterprise level.
+
+    It should be fine to use it for smaller datasets and/or for prototyping workflows.
+
+    The main issue with the existing implementation is:
+
+    1) Handling of connections
+    2) Lack of support for schema migrations
+
+    If you're OK with these limitations (and know how to create migrations
+    for the table) or are fine re-creating the collection and embeddings if
+    the schema changes, then feel free to use this implementation.
+
+    Some changes had to be made to address issues with the community implementation:
+    * langchain_postgres now works with psycopg3. Please update your
+      connection strings from `postgresql+psycopg2://...` to
+      `postgresql+psycopg://langchain:langchain@...`
+      (yes, the driver name is `psycopg` not `psycopg3`)
+    * The schema of the embedding store and collection have been changed to make
+      add_documents work correctly with user specified ids, specifically
+      when overwriting existing documents.
+      You will need to recreate the tables if you are using an existing database.
+
+    To use this vectorstore you need to have the `vector` extension installed.
+    The `vector` extension is a Postgres extension that provides vector
+    similarity search capabilities.
+
+    ```sh
+    docker run --name pgvector-container -e POSTGRES_PASSWORD=...
+        -d pgvector/pgvector:pg16
+    ```
 
     Example:
         .. code-block:: python
@@ -224,14 +222,14 @@ class PGVector(VectorStore):
             from langchain_postgres.vectorstores import PGVector
             from langchain_openai.embeddings import OpenAIEmbeddings
 
-            CONNECTION_STRING = "postgresql+psycopg2://hwc@localhost:5432/test3"
-            COLLECTION_NAME = "state_of_the_union_test"
+            connection_string = "postgresql+psycopg://..."
+            collection_name = "state_of_the_union_test"
             embeddings = OpenAIEmbeddings()
             vectorstore = PGVector.from_documents(
                 embedding=embeddings,
                 documents=docs,
-                collection_name=COLLECTION_NAME,
-                connection_string=CONNECTION_STRING,
+                collection_name=collection_name,
+                connection_string=connection_string,
                 use_jsonb=True,
             )
     """
@@ -296,25 +294,7 @@ class PGVector(VectorStore):
 
         if not use_jsonb:
             # Replace with a deprecation warning.
-            warn_deprecated(
-                "0.0.29",
-                pending=True,
-                message=(
-                    "Please use JSONB instead of JSON for metadata. "
-                    "This change will allow for more efficient querying that "
-                    "involves filtering based on metadata."
-                    "Please note that filtering operators have been changed "
-                    "when using JSOB metadata to be prefixed with a $ sign "
-                    "to avoid name collisions with columns. "
-                    "If you're using an existing database, you will need to create a"
-                    "db migration for your metadata column to be JSONB and update your "
-                    "queries to use the new operators. "
-                ),
-                alternative=(
-                    "Instantiate with use_jsonb=True to use JSONB instead "
-                    "of JSON for metadata."
-                ),
-            )
+            raise NotImplementedError("use_jsonb=False is no longer supported.")
         self.__post_init__()
 
     def __post_init__(
@@ -325,7 +305,7 @@ class PGVector(VectorStore):
             self.create_vector_extension()
 
         EmbeddingStore, CollectionStore = _get_embedding_collection_store(
-            self._embedding_length, use_jsonb=self.use_jsonb
+            self._embedding_length
         )
         self.CollectionStore = CollectionStore
         self.EmbeddingStore = EmbeddingStore
@@ -424,7 +404,7 @@ class PGVector(VectorStore):
                         self.EmbeddingStore.collection_id == collection.uuid
                     )
 
-                stmt = stmt.where(self.EmbeddingStore.custom_id.in_(ids))
+                stmt = stmt.where(self.EmbeddingStore.id.in_(ids))
                 session.execute(stmt)
             session.commit()
 
@@ -497,17 +477,29 @@ class PGVector(VectorStore):
             collection = self.get_collection(session)
             if not collection:
                 raise ValueError("Collection not found")
-            documents = []
-            for text, metadata, embedding, id in zip(texts, metadatas, embeddings, ids):
-                embedding_store = self.EmbeddingStore(
-                    embedding=embedding,
-                    document=text,
-                    cmetadata=metadata,
-                    custom_id=id,
-                    collection_id=collection.uuid,
+            data = [
+                {
+                    "id": id,
+                    "collection_id": collection.uuid,
+                    "embedding": embedding,
+                    "document": text,
+                    "cmetadata": metadata or {},
+                }
+                for text, metadata, embedding, id in zip(
+                    texts, metadatas, embeddings, ids
                 )
-                documents.append(embedding_store)
-            session.bulk_save_objects(documents)
+            ]
+            stmt = insert(self.EmbeddingStore).values(data)
+            on_conflict_stmt = stmt.on_conflict_do_update(
+                index_elements=["id"],
+                # Conflict detection based on these columns
+                set_={
+                    "embedding": stmt.excluded.embedding,
+                    "document": stmt.excluded.document,
+                    "cmetadata": stmt.excluded.cmetadata,
+                },
+            )
+            session.execute(on_conflict_stmt)
             session.commit()
 
         return ids
