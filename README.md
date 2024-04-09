@@ -72,12 +72,12 @@ print(chat_history.messages)
 An implementation of the `Checkpoint` abstraction in LangGraph using Postgres.
 
 
-Async Usage: 
+Async Usage:
 
 ```python
 from psycopg_pool import AsyncConnectionPool
 from langchain_postgres import (
-    PostgresCheckpoint, PickleCheckpointSerializer
+    PostgresSaver, PickleCheckpointSerializer
 )
 
 pool = AsyncConnectionPool(
@@ -90,7 +90,7 @@ pool = AsyncConnectionPool(
 # Make sure that you're only de-serializing trusted data
 # (e.g., payloads that you have serialized yourself).
 # Or implement a custom serializer.
-checkpoint = PostgresCheckpoint(
+checkpoint = PostgresSaver(
     serializer=PickleCheckpointSerializer(),
     async_connection=pool,
 )
@@ -103,7 +103,7 @@ Sync Usage:
 ```python
 from psycopg_pool import ConnectionPool
 from langchain_postgres import (
-    PostgresCheckpoint, PickleCheckpointSerializer
+    PostgresSaver, PickleCheckpointSerializer
 )
 
 pool = ConnectionPool(
@@ -116,7 +116,7 @@ pool = ConnectionPool(
 # Make sure that you're only de-serializing trusted data
 # (e.g., payloads that you have serialized yourself).
 # Or implement a custom serializer.
-checkpoint = PostgresCheckpoint(
+checkpoint = PostgresSaver(
     serializer=PickleCheckpointSerializer(),
     sync_connection=pool,
 )
