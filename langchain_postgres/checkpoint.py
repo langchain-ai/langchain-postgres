@@ -46,6 +46,42 @@ class PickleCheckpointSerializer(CheckpointSerializer):
         return cast(Checkpoint, pickle.loads(data))
 
 
+@contextmanager
+def _get_sync_connection(
+    connection: Union[psycopg.Connection, ConnectionPool, None],
+) -> Generator[psycopg.Connection, None, None]:
+    """Get the connection to the Postgres database."""
+    if isinstance(connection, psycopg.Connection):
+        yield connection
+    elif isinstance(connection, ConnectionPool):
+        with connection.connection() as conn:
+            yield conn
+    else:
+        raise ValueError(
+            "Invalid sync connection object. Please initialize the check pointer "
+            f"with an appropriate sync connection object. "
+            f"Got {type(connection)}."
+        )
+
+
+@asynccontextmanager
+async def _get_async_connection(
+    connection: Union[psycopg.AsyncConnection, AsyncConnectionPool, None],
+) -> AsyncGenerator[psycopg.AsyncConnection, None]:
+    """Get the connection to the Postgres database."""
+    if isinstance(connection, psycopg.AsyncConnection):
+        yield connection
+    elif isinstance(connection, AsyncConnectionPool):
+        async with connection.connection() as conn:
+            yield conn
+    else:
+        raise ValueError(
+            "Invalid async connection object. Please initialize the check pointer "
+            f"with an appropriate async connection object. "
+            f"Got {type(connection)}."
+        )
+
+
 class PostgresSaver(BaseCheckpointSaver):
     """LangGraph checkpoint saver for Postgres.
 
@@ -189,66 +225,52 @@ class PostgresSaver(BaseCheckpointSaver):
     @contextmanager
     def _get_sync_connection(self) -> Generator[psycopg.Connection, None, None]:
         """Get the connection to the Postgres database."""
-        if isinstance(self.sync_connection, psycopg.Connection):
-            yield self.sync_connection
-        elif isinstance(self.sync_connection, ConnectionPool):
-            with self.sync_connection.connection() as conn:
-                yield conn
-        else:
-            raise ValueError(
-                "Invalid sync connection object. Please initialize the check pointer "
-                f"with an appropriate sync connection object. "
-                f"Got {type(self.sync_connection)}."
-            )
+        with _get_sync_connection(self.sync_connection) as connection:
+            yield connection
 
     @asynccontextmanager
     async def _get_async_connection(
         self,
     ) -> AsyncGenerator[psycopg.AsyncConnection, None]:
         """Get the connection to the Postgres database."""
-        if isinstance(self.async_connection, psycopg.AsyncConnection):
-            yield self.async_connection
-        elif isinstance(self.async_connection, AsyncConnectionPool):
-            async with self.async_connection.connection() as conn:
-                yield conn
-        else:
-            raise ValueError(
-                "Invalid async connection object. Please initialize the check pointer "
-                f"with an appropriate async connection object. "
-                f"Got {type(self.async_connection)}."
-            )
+        async with _get_async_connection(self.async_connection) as connection:
+            yield connection
 
     @staticmethod
-    def create_tables(connection: psycopg.Connection, /) -> None:
+    def create_tables(connection: Union[psycopg.Connection, ConnectionPool], /) -> None:
         """Create the schema for the checkpoint saver."""
-        with connection.cursor() as cur:
-            cur.execute(
-                """
-                CREATE TABLE IF NOT EXISTS checkpoints (
-                    thread_id TEXT NOT NULL,
-                    checkpoint BYTEA NOT NULL,
-                    thread_ts TIMESTAMPTZ NOT NULL,
-                    parent_ts TIMESTAMPTZ,
-                    PRIMARY KEY (thread_id, thread_ts)
-                );
-                """
-            )
+        with _get_sync_connection(connection) as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS checkpoints (
+                        thread_id TEXT NOT NULL,
+                        checkpoint BYTEA NOT NULL,
+                        thread_ts TIMESTAMPTZ NOT NULL,
+                        parent_ts TIMESTAMPTZ,
+                        PRIMARY KEY (thread_id, thread_ts)
+                    );
+                    """
+                )
 
     @staticmethod
-    async def acreate_tables(connection: psycopg.AsyncConnection, /) -> None:
+    async def acreate_tables(
+        connection: Union[psycopg.AsyncConnection, AsyncConnectionPool], /
+    ) -> None:
         """Create the schema for the checkpoint saver."""
-        async with connection.cursor() as cur:
-            await cur.execute(
-                """
-                CREATE TABLE IF NOT EXISTS checkpoints (
-                    thread_id TEXT NOT NULL,
-                    checkpoint BYTEA NOT NULL,
-                    thread_ts TIMESTAMPTZ NOT NULL,
-                    parent_ts TIMESTAMPTZ,
-                    PRIMARY KEY (thread_id, thread_ts)
-                );
-                """
-            )
+        async with _get_async_connection(connection) as conn:
+            async with conn.cursor() as cur:
+                await cur.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS checkpoints (
+                        thread_id TEXT NOT NULL,
+                        checkpoint BYTEA NOT NULL,
+                        thread_ts TIMESTAMPTZ NOT NULL,
+                        parent_ts TIMESTAMPTZ,
+                        PRIMARY KEY (thread_id, thread_ts)
+                    );
+                    """
+                )
 
     @staticmethod
     def drop_tables(connection: psycopg.Connection, /) -> None:
