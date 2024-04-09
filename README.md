@@ -6,14 +6,9 @@ The package is released under the MIT license.
 
 Feel free to use the abstraction as provided or else modify them / extend them as appropriate for your own application.
 
-
 ## Requirements
 
 The package currently only supports the [psycogp3](https://www.psycopg.org/psycopg3/) driver.
-
-## Contributing
-
-Feel free to suggest or help migrate `postgres` related integrations from `langchain-community` to this package.
 
 ## Installation
 
