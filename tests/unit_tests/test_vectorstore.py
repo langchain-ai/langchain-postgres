@@ -5,7 +5,7 @@ from typing import Any, Dict, Generator, List
 import pytest
 from langchain_core.documents import Document
 
-from langchain_postgres.vectorstores import (
+from langchain_postgres.vectorstores_ppr import (
     SUPPORTED_OPERATORS,
     PGVector,
 )
