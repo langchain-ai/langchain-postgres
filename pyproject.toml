@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "langchain-postgres"
-version = "0.0.1"
+version = "0.0.2"
 description = "An integration package connecting Postgres and LangChain"
 authors = []
 readme = "README.md"
