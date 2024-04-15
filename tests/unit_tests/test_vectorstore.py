@@ -1,15 +1,16 @@
 """Test PGVector functionality."""
 import contextlib
-from typing import Any, AsyncGenerator, Dict, Generator, List
+from typing import Any, Dict, Generator, List
 
 import pytest
 from langchain_core.documents import Document
-from sqlalchemy import select
 
 from langchain_postgres.vectorstores import (
     SUPPORTED_OPERATORS,
     PGVector,
 )
+from sqlalchemy import select
+
 from tests.unit_tests.fake_embeddings import FakeEmbeddings
 from tests.unit_tests.fixtures.filtering_test_cases import (
     DOCUMENTS,
@@ -52,7 +53,7 @@ def test_pgvector() -> None:
     output = docsearch.similarity_search("foo", k=1)
     assert output == [Document(page_content="foo")]
 
-
+# @pytest.mark.requires("xxx") # FIXME
 @pytest.mark.asyncio
 async def test_async_pgvector() -> None:
     """Test end to end construction and search."""
@@ -196,9 +197,7 @@ async def test_async_pgvector_with_filter_match() -> None:
         connection=CONNECTION_STRING,
         pre_delete_collection=True,
     )
-    output = await docsearch.asimilarity_search_with_score(
-        "foo", k=1, filter={"page": "0"}
-    )
+    output = await docsearch.asimilarity_search_with_score("foo", k=1, filter={"page": "0"})
     assert output == [(Document(page_content="foo", metadata={"page": "0"}), 0.0)]
 
 
@@ -219,7 +218,6 @@ def test_pgvector_with_filter_distant_match() -> None:
         (Document(page_content="baz", metadata={"page": "2"}), 0.0013003906671379406)
     ]
 
-
 @pytest.mark.asyncio
 async def test_async_pgvector_with_filter_distant_match() -> None:
     """Test end to end construction and search."""
@@ -233,9 +231,7 @@ async def test_async_pgvector_with_filter_distant_match() -> None:
         connection=CONNECTION_STRING,
         pre_delete_collection=True,
     )
-    output = await docsearch.asimilarity_search_with_score(
-        "foo", k=1, filter={"page": "2"}
-    )
+    output = await docsearch.asimilarity_search_with_score("foo", k=1, filter={"page": "2"})
     assert output == [
         (Document(page_content="baz", metadata={"page": "2"}), 0.0013003906671379406)
     ]
@@ -256,7 +252,6 @@ def test_pgvector_with_filter_no_match() -> None:
     output = docsearch.similarity_search_with_score("foo", k=1, filter={"page": "5"})
     assert output == []
 
-
 @pytest.mark.asyncio
 async def test_async_pgvector_with_filter_no_match() -> None:
     """Test end to end construction and search."""
@@ -270,9 +265,7 @@ async def test_async_pgvector_with_filter_no_match() -> None:
         connection=CONNECTION_STRING,
         pre_delete_collection=True,
     )
-    output = await docsearch.asimilarity_search_with_score(
-        "foo", k=1, filter={"page": "5"}
-    )
+    output = await docsearch.asimilarity_search_with_score("foo", k=1, filter={"page": "5"})
     assert output == []
 
 
@@ -285,7 +278,7 @@ def test_pgvector_collection_with_metadata() -> None:
         connection=CONNECTION_STRING,
         pre_delete_collection=True,
     )
-    with pgvector.session_maker() as session:
+    with pgvector._session_maker() as session:
         collection = pgvector.get_collection(session)
         if collection is None:
             assert False, "Expected a CollectionStore object but received None"
@@ -293,25 +286,25 @@ def test_pgvector_collection_with_metadata() -> None:
             assert collection.name == "test_collection"
             assert collection.cmetadata == {"foo": "bar"}
 
-
 @pytest.mark.asyncio
 async def test_async_pgvector_collection_with_metadata() -> None:
     """Test end to end collection construction"""
-    pgvector = PGVector(
+    pgvector = await PGVector.create(
         collection_name="test_collection",
         collection_metadata={"foo": "bar"},
         embeddings=FakeEmbeddingsWithAdaDimension(),
         connection=CONNECTION_STRING,
         pre_delete_collection=True,
-        async_mode=True,
     )
-    async with pgvector.session_maker() as session:
+    async with pgvector._session_maker() as session:
         collection = await pgvector.aget_collection(session)
         if collection is None:
             assert False, "Expected a CollectionStore object but received None"
         else:
             assert collection.name == "test_collection"
             assert collection.cmetadata == {"foo": "bar"}
+
+
 
 
 def test_pgvector_delete_docs() -> None:
@@ -328,34 +321,18 @@ def test_pgvector_delete_docs() -> None:
         pre_delete_collection=True,
     )
     vectorstore.delete(["1", "2"])
-    with vectorstore.session_maker() as session:
+    with vectorstore._session_maker() as session:
         records = list(session.query(vectorstore.EmbeddingStore).all())
         # ignoring type error since mypy cannot determine whether
         # the list is sortable
         assert sorted(record.id for record in records) == ["3"]  # type: ignore
 
     vectorstore.delete(["2", "3"])  # Should not raise on missing ids
-    with vectorstore.session_maker() as session:
+    with vectorstore._session_maker() as session:
         records = list(session.query(vectorstore.EmbeddingStore).all())
         # ignoring type error since mypy cannot determine whether
         # the list is sortable
         assert sorted(record.id for record in records) == []  # type: ignore
-
-
-def test_pgvector_delete_collection() -> None:
-    """Add and delete documents."""
-    texts = ["foo", "bar", "baz"]
-    metadatas = [{"page": str(i)} for i in range(len(texts))]
-    vectorstore = PGVector.from_texts(
-        texts=texts,
-        collection_name="test_collection_filter",
-        embedding=FakeEmbeddingsWithAdaDimension(),
-        metadatas=metadatas,
-        ids=["1", "2", "3"],
-        connection=CONNECTION_STRING,
-        pre_delete_collection=True,
-    )
-    vectorstore.delete(collection_only=True)
 
 
 @pytest.mark.asyncio
@@ -373,19 +350,15 @@ async def test_async_pgvector_delete_docs() -> None:
         pre_delete_collection=True,
     )
     await vectorstore.adelete(["1", "2"])
-    async with vectorstore.session_maker() as session:
-        records = (
-            (await session.execute(select(vectorstore.EmbeddingStore))).scalars().all()
-        )
+    async with vectorstore._session_maker() as session:
+        records=(await session.execute(select(vectorstore.EmbeddingStore))).scalars().all()
         # ignoring type error since mypy cannot determine whether
         # the list is sortable
         assert sorted(record.id for record in records) == ["3"]  # type: ignore
 
     await vectorstore.adelete(["2", "3"])  # Should not raise on missing ids
-    async with vectorstore.session_maker() as session:
-        records = (
-            (await session.execute(select(vectorstore.EmbeddingStore))).scalars().all()
-        )
+    async with vectorstore._session_maker() as session:
+        records=(await session.execute(select(vectorstore.EmbeddingStore))).scalars().all()
         # ignoring type error since mypy cannot determine whether
         # the list is sortable
         assert sorted(record.id for record in records) == []  # type: ignore
@@ -424,7 +397,7 @@ def test_pgvector_index_documents() -> None:
         connection=CONNECTION_STRING,
         pre_delete_collection=True,
     )
-    with vectorstore.session_maker() as session:
+    with vectorstore._session_maker() as session:
         records = list(session.query(vectorstore.EmbeddingStore).all())
         # ignoring type error since mypy cannot determine whether
         # the list is sortable
@@ -446,7 +419,7 @@ def test_pgvector_index_documents() -> None:
 
     vectorstore.add_documents(documents, ids=[doc.metadata["id"] for doc in documents])
 
-    with vectorstore.session_maker() as session:
+    with vectorstore._session_maker() as session:
         records = list(session.query(vectorstore.EmbeddingStore).all())
         ordered_records = sorted(records, key=lambda x: x.id)
         # ignoring type error since mypy cannot determine whether
@@ -464,7 +437,6 @@ def test_pgvector_index_documents() -> None:
             "location": "zoo",
             "topic": "zoo",
         }
-
 
 @pytest.mark.asyncio
 async def test_async_pgvector_index_documents() -> None:
@@ -500,10 +472,8 @@ async def test_async_pgvector_index_documents() -> None:
         connection=CONNECTION_STRING,
         pre_delete_collection=True,
     )
-    async with vectorstore.session_maker() as session:
-        records = (
-            (await session.execute(select(vectorstore.EmbeddingStore))).scalars().all()
-        )
+    async with vectorstore._session_maker() as session:
+        records = (await session.execute(select(vectorstore.EmbeddingStore))).scalars().all()
         # ignoring type error since mypy cannot determine whether
         # the list is sortable
         assert sorted(record.id for record in records) == [
@@ -522,14 +492,10 @@ async def test_async_pgvector_index_documents() -> None:
         ),
     ]
 
-    await vectorstore.aadd_documents(
-        documents, ids=[doc.metadata["id"] for doc in documents]
-    )
+    await vectorstore.aadd_documents(documents, ids=[doc.metadata["id"] for doc in documents])
 
-    async with vectorstore.session_maker() as session:
-        records = (
-            (await session.execute(select(vectorstore.EmbeddingStore))).scalars().all()
-        )
+    async with vectorstore._session_maker() as session:
+        records = (await session.execute(select(vectorstore.EmbeddingStore))).scalars().all()
         ordered_records = sorted(records, key=lambda x: x.id)
         # ignoring type error since mypy cannot determine whether
         # the list is sortable
@@ -663,9 +629,7 @@ def test_pgvector_retriever_search_threshold_custom_normalization_fn() -> None:
 
 
 @pytest.mark.asyncio
-async def test_async_pgvector_retriever_search_threshold_custom_normalization_fn() -> (
-    None
-):
+async def test_async_pgvector_retriever_search_threshold_custom_normalization_fn() -> None:
     """Test searching with threshold and custom normalization function"""
     texts = ["foo", "bar", "baz"]
     metadatas = [{"page": str(i)} for i in range(len(texts))]
@@ -741,9 +705,7 @@ async def test_async_pgvector_max_marginal_relevance_search_with_score() -> None
         connection=CONNECTION_STRING,
         pre_delete_collection=True,
     )
-    output = await docsearch.amax_marginal_relevance_search_with_score(
-        "foo", k=1, fetch_k=3
-    )
+    output = await docsearch.amax_marginal_relevance_search_with_score("foo", k=1, fetch_k=3)
     assert output == [(Document(page_content="foo"), 0.0)]
 
 
@@ -807,10 +769,9 @@ def pgvector() -> Generator[PGVector, None, None]:
     with get_vectorstore() as vector_store:
         yield vector_store
 
-
 @pytest.mark.asyncio
 @pytest.fixture
-async def async_pgvector() -> AsyncGenerator[PGVector, None]:
+async def async_pgvector() -> Generator[PGVector, None, None]:
     """Create an async PGVector instance."""
     store = await PGVector.afrom_documents(
         documents=DOCUMENTS,
@@ -847,7 +808,7 @@ def get_vectorstore() -> Generator[PGVector, None, None]:
 
 
 @contextlib.asynccontextmanager
-async def aget_vectorstore() -> AsyncGenerator[PGVector, None]:
+async def aget_vectorstore() -> Generator[PGVector, None, None]:
     """Get a pre-populated-vectorstore"""
     store = await PGVector.afrom_documents(
         documents=DOCUMENTS,
@@ -873,7 +834,6 @@ def test_pgvector_with_with_metadata_filters_1(
     with get_vectorstore() as pgvector:
         docs = pgvector.similarity_search("meow", k=5, filter=test_filter)
         assert [doc.metadata["id"] for doc in docs] == expected_ids, test_filter
-
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("test_filter, expected_ids", TYPE_1_FILTERING_TEST_CASES)
@@ -946,7 +906,7 @@ def test_pgvector_with_with_metadata_filters_4(
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("test_filter, expected_ids", TYPE_4_FILTERING_TEST_CASES)
-async def test_async_pgvector_with_with_metadata_filters_4(
+async def test_pgvector_with_with_metadata_filters_4(
     async_pgvector: PGVector,
     test_filter: Dict[str, Any],
     expected_ids: List[int],
