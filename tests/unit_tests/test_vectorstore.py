@@ -285,7 +285,7 @@ def test_pgvector_collection_with_metadata() -> None:
         connection=CONNECTION_STRING,
         pre_delete_collection=True,
     )
-    with pgvector._session_maker() as session:
+    with pgvector.session_maker() as session:
         collection = pgvector.get_collection(session)
         if collection is None:
             assert False, "Expected a CollectionStore object but received None"
@@ -297,14 +297,15 @@ def test_pgvector_collection_with_metadata() -> None:
 @pytest.mark.asyncio
 async def test_async_pgvector_collection_with_metadata() -> None:
     """Test end to end collection construction"""
-    pgvector = await PGVector.acreate(
+    pgvector = PGVector(
         collection_name="test_collection",
         collection_metadata={"foo": "bar"},
         embeddings=FakeEmbeddingsWithAdaDimension(),
         connection=CONNECTION_STRING,
         pre_delete_collection=True,
+        async_mode=True,
     )
-    async with pgvector._session_maker() as session:
+    async with pgvector.session_maker() as session:
         collection = await pgvector.aget_collection(session)
         if collection is None:
             assert False, "Expected a CollectionStore object but received None"
@@ -327,14 +328,14 @@ def test_pgvector_delete_docs() -> None:
         pre_delete_collection=True,
     )
     vectorstore.delete(["1", "2"])
-    with vectorstore._session_maker() as session:
+    with vectorstore.session_maker() as session:
         records = list(session.query(vectorstore.EmbeddingStore).all())
         # ignoring type error since mypy cannot determine whether
         # the list is sortable
         assert sorted(record.id for record in records) == ["3"]  # type: ignore
 
     vectorstore.delete(["2", "3"])  # Should not raise on missing ids
-    with vectorstore._session_maker() as session:
+    with vectorstore.session_maker() as session:
         records = list(session.query(vectorstore.EmbeddingStore).all())
         # ignoring type error since mypy cannot determine whether
         # the list is sortable
@@ -372,7 +373,7 @@ async def test_async_pgvector_delete_docs() -> None:
         pre_delete_collection=True,
     )
     await vectorstore.adelete(["1", "2"])
-    async with vectorstore._session_maker() as session:
+    async with vectorstore.session_maker() as session:
         records = (
             (await session.execute(select(vectorstore.EmbeddingStore))).scalars().all()
         )
@@ -381,7 +382,7 @@ async def test_async_pgvector_delete_docs() -> None:
         assert sorted(record.id for record in records) == ["3"]  # type: ignore
 
     await vectorstore.adelete(["2", "3"])  # Should not raise on missing ids
-    async with vectorstore._session_maker() as session:
+    async with vectorstore.session_maker() as session:
         records = (
             (await session.execute(select(vectorstore.EmbeddingStore))).scalars().all()
         )
@@ -423,7 +424,7 @@ def test_pgvector_index_documents() -> None:
         connection=CONNECTION_STRING,
         pre_delete_collection=True,
     )
-    with vectorstore._session_maker() as session:
+    with vectorstore.session_maker() as session:
         records = list(session.query(vectorstore.EmbeddingStore).all())
         # ignoring type error since mypy cannot determine whether
         # the list is sortable
@@ -445,7 +446,7 @@ def test_pgvector_index_documents() -> None:
 
     vectorstore.add_documents(documents, ids=[doc.metadata["id"] for doc in documents])
 
-    with vectorstore._session_maker() as session:
+    with vectorstore.session_maker() as session:
         records = list(session.query(vectorstore.EmbeddingStore).all())
         ordered_records = sorted(records, key=lambda x: x.id)
         # ignoring type error since mypy cannot determine whether
@@ -499,7 +500,7 @@ async def test_async_pgvector_index_documents() -> None:
         connection=CONNECTION_STRING,
         pre_delete_collection=True,
     )
-    async with vectorstore._session_maker() as session:
+    async with vectorstore.session_maker() as session:
         records = (
             (await session.execute(select(vectorstore.EmbeddingStore))).scalars().all()
         )
@@ -525,7 +526,7 @@ async def test_async_pgvector_index_documents() -> None:
         documents, ids=[doc.metadata["id"] for doc in documents]
     )
 
-    async with vectorstore._session_maker() as session:
+    async with vectorstore.session_maker() as session:
         records = (
             (await session.execute(select(vectorstore.EmbeddingStore))).scalars().all()
         )
