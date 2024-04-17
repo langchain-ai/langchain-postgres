@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import asyncio
 import enum
 import logging
+import threading
 import uuid
 from typing import (
     Any,
@@ -426,7 +428,6 @@ class PGVector(VectorStore):
 
     async def acreate_vector_extension(self) -> None:
         assert self.async_mode,"This method must be called with async_mode"
-        await self.__apost_init__() # Lazy async init
 
         try:
             async with self.session_maker() as session:
@@ -937,7 +938,7 @@ class PGVector(VectorStore):
             List of Documents most similar to the query and score for each.
         """
         assert self._async_engine, "This method must be called with async_mode"
-        await self.__apost_init__() # Lazy async init
+        await self.__apost_init__()  # Lazy async init
         embedding = self.embedding_function.embed_query(query)
         docs = await self.asimilarity_search_with_score_by_vector(
             embedding=embedding, k=k, filter=filter
