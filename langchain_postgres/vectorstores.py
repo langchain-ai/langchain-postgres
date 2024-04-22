@@ -232,14 +232,11 @@ def _results_to_docs(docs_and_scores: Any) -> List[Document]:
 
 def _create_vector_extension(conn: Connection) -> None:
     statement = sqlalchemy.text(
-        "BEGIN;"
         "SELECT pg_advisory_xact_lock(1573678846307946496);"
         "CREATE EXTENSION IF NOT EXISTS vector;"
-        "COMMIT;"
     )
     conn.execute(statement)
     conn.commit()
-
 
 DBConnection = Union[sqlalchemy.engine.Engine, str]
 
