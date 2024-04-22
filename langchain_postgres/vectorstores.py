@@ -58,7 +58,9 @@ DEFAULT_DISTANCE_STRATEGY = DistanceStrategy.COSINE
 
 Base = declarative_base()  # type: Any
 
+
 _LANGCHAIN_DEFAULT_COLLECTION_NAME = "langchain"
+
 
 _classes: Any = None
 
