@@ -1,9 +1,8 @@
+# pylint: disable=too-many-lines
 from __future__ import annotations
 
-import asyncio
 import enum
 import logging
-import threading
 import uuid
 from typing import (
     Any,
@@ -17,21 +16,18 @@ from typing import (
     Type,
     Union,
 )
+from typing import (
+    cast as typing_cast,
+)
 
 import numpy as np
 import sqlalchemy
-
-# try:
-#     from sqlalchemy.orm import declarative_base
-# except ImportError:
-#     from sqlalchemy.ext.declarative import declarative_base
 from langchain_core.documents import Document
 from langchain_core.embeddings import Embeddings
 from langchain_core.utils import get_from_dict_or_env
 from langchain_core.vectorstores import VectorStore
 from sqlalchemy import SQLColumnExpression, cast, create_engine, delete, func, select
 from sqlalchemy.dialects.postgresql import JSON, JSONB, JSONPATH, UUID, insert
-from sqlalchemy.orm import scoped_session
 from sqlalchemy.engine import Engine
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
@@ -43,6 +39,7 @@ from sqlalchemy.orm import (
     Session,
     declarative_base,
     relationship,
+    scoped_session,
     sessionmaker,
 )
 
@@ -124,14 +121,24 @@ def _get_embedding_collection_store(vector_dimension: Optional[int] = None) -> A
         def get_by_name(
             cls, session: Session, name: str
         ) -> Optional["CollectionStore"]:
-            return session.query(cls).filter(cls.name == name).first()  # type: ignore
+            return (
+                session.query(cls)
+                .filter(typing_cast(sqlalchemy.Column, cls.name) == name)
+                .first()
+            )
 
         @classmethod
         async def aget_by_name(
             cls, session: AsyncSession, name: str
         ) -> Optional["CollectionStore"]:
             return (
-                (await session.execute(select(CollectionStore).where(cls.name == name)))
+                (
+                    await session.execute(
+                        select(CollectionStore).where(
+                            typing_cast(sqlalchemy.Column, cls.name) == name
+                        )
+                    )
+                )
                 .scalars()
                 .first()
             )
@@ -259,6 +266,7 @@ class PGVector(VectorStore):
                 connection=connection_string,
                 collection_name=collection_name,
                 use_jsonb=True,
+                async_mode=False,
             )
 
 
@@ -276,6 +284,9 @@ class PGVector(VectorStore):
       You will need to recreate the tables if you are using an existing database.
     * A Connection object has to be provided explicitly. Connections will not be
       picked up automatically based on env variables.
+    * langchain_postgres now accept async connections. If you want to use the async
+        version, you need to set `async_mode=True` when initializing the store or
+        use an async engine.
     """
 
     def __init__(
@@ -299,7 +310,7 @@ class PGVector(VectorStore):
         For an async version, use `PGVector.acreate()` instead.
 
         Args:
-            connection: Postgres connection string.
+            connection: Postgres connection string or (async)engine.
             embeddings: Any embedding function implementing
                 `langchain.embeddings.base.Embeddings` interface.
             embedding_length: The length of the embedding vector. (default: None)
@@ -334,7 +345,7 @@ class PGVector(VectorStore):
         self.override_relevance_score_fn = relevance_score_fn
         self._engine: Optional[Engine] = None
         self._async_engine: Optional[AsyncEngine] = None
-        self._async_init=False
+        self._async_init = False
 
         if isinstance(connection, str):
             if async_mode:
@@ -344,6 +355,7 @@ class PGVector(VectorStore):
             else:
                 self._engine = create_engine(url=connection, **(engine_args or {}))
         elif isinstance(connection, Engine):
+            self.async_mode = False
             self._engine = connection
         elif isinstance(connection, AsyncEngine):
             self.async_mode = True
@@ -353,7 +365,7 @@ class PGVector(VectorStore):
                 "connection should be a connection string or an instance of "
                 "sqlalchemy.engine.Engine or sqlalchemy.ext.asyncio.engine.AsyncEngine"
             )
-        self._session_maker: Union[sessionmaker, async_sessionmaker]
+        self.session_maker: Union[scoped_session, async_sessionmaker]
         if self.async_mode:
             self.session_maker = async_sessionmaker(bind=self._async_engine)
         else:
@@ -365,7 +377,7 @@ class PGVector(VectorStore):
         if not use_jsonb:
             # Replace with a deprecation warning.
             raise NotImplementedError("use_jsonb=False is no longer supported.")
-        if not async_mode:
+        if not self.async_mode:
             self.__post_init__()
 
     def __post_init__(
@@ -386,7 +398,7 @@ class PGVector(VectorStore):
     async def __apost_init__(
         self,
     ) -> None:
-        """Async initialize the store."""
+        """Async initialize the store (use lazy approach)."""
         if self._async_init:
             return
         self._async_init = True
@@ -427,7 +439,7 @@ class PGVector(VectorStore):
             raise Exception(f"Failed to create vector extension: {e}") from e
 
     async def acreate_vector_extension(self) -> None:
-        assert self.async_mode,"This method must be called with async_mode"
+        assert self.async_mode, "This method must be called with async_mode"
 
         try:
             async with self.session_maker() as session:
@@ -452,7 +464,7 @@ class PGVector(VectorStore):
 
     async def acreate_tables_if_not_exists(self) -> None:
         assert self._async_engine, "This method must be called with async_mode"
-        await self.__apost_init__() # Lazy async init
+        await self.__apost_init__()  # Lazy async init
         async with self._async_engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
 
@@ -463,7 +475,7 @@ class PGVector(VectorStore):
 
     async def adrop_tables(self) -> None:
         assert self._async_engine, "This method must be called with async_mode"
-        await self.__apost_init__() # Lazy async init
+        await self.__apost_init__()  # Lazy async init
         async with self._async_engine.begin() as conn:
             await conn.run_sync(Base.metadata.drop_all)
 
@@ -478,7 +490,7 @@ class PGVector(VectorStore):
 
     async def acreate_collection(self) -> None:
         assert self._async_engine, "This method must be called with async_mode"
-        await self.__apost_init__() # Lazy async init
+        await self.__apost_init__()  # Lazy async init
         async with self.session_maker() as session:
             if self.pre_delete_collection:
                 await self._adelete_collection(session)
@@ -515,7 +527,7 @@ class PGVector(VectorStore):
 
     async def adelete_collection(self) -> None:
         assert self._async_engine, "This method must be called with async_mode"
-        await self.__apost_init__() # Lazy async init
+        await self.__apost_init__()  # Lazy async init
         async with self.session_maker() as session:  # type: ignore[arg-type]
             collection = await self.aget_collection(session)
             if not collection:
@@ -573,7 +585,7 @@ class PGVector(VectorStore):
             collection_only: Only delete ids in the collection.
         """
         assert self._async_engine, "This method must be called with async_mode"
-        await self.__apost_init__() # Lazy async init
+        await self.__apost_init__()  # Lazy async init
         async with self.session_maker() as session:
             if ids is not None:
                 self.logger.debug(
@@ -603,7 +615,7 @@ class PGVector(VectorStore):
 
     async def aget_collection(self, session: AsyncSession) -> Any:
         assert self._async_engine, "This method must be called with async_mode"
-        await self.__apost_init__() # Lazy async init
+        await self.__apost_init__()  # Lazy async init
         return await self.CollectionStore.aget_by_name(session, self.collection_name)
 
     @classmethod
@@ -758,7 +770,7 @@ class PGVector(VectorStore):
             kwargs: vectorstore specific parameters
         """
         assert self._async_engine, "This method must be called with async_mode"
-        await self.__apost_init__() # Lazy async init
+        await self.__apost_init__()  # Lazy async init
         if ids is None:
             ids = [str(uuid.uuid1()) for _ in texts]
 
@@ -841,7 +853,7 @@ class PGVector(VectorStore):
             List of ids from adding the texts into the vectorstore.
         """
         assert self._async_engine, "This method must be called with async_mode"
-        await self.__apost_init__() # Lazy async init
+        await self.__apost_init__()  # Lazy async init
         embeddings = await self.embedding_function.aembed_documents(list(texts))
         return await self.aadd_embeddings(
             texts=texts, embeddings=embeddings, metadatas=metadatas, ids=ids, **kwargs
@@ -890,7 +902,7 @@ class PGVector(VectorStore):
             List of Documents most similar to the query.
         """
         assert self._async_engine, "This method must be called with async_mode"
-        await self.__apost_init__() # Lazy async init
+        await self.__apost_init__()  # Lazy async init
         embedding = self.embedding_function.embed_query(text=query)
         return await self.asimilarity_search_by_vector(
             embedding=embedding,
@@ -977,7 +989,7 @@ class PGVector(VectorStore):
         filter: Optional[dict] = None,
     ) -> List[Tuple[Document, float]]:
         assert self._async_engine, "This method must be called with async_mode"
-        await self.__apost_init__() # Lazy async init
+        await self.__apost_init__()  # Lazy async init
         async with self.session_maker() as session:  # type: ignore[arg-type]
             results = await self.__aquery_collection(
                 session=session, embedding=embedding, k=k, filter=filter
@@ -1418,7 +1430,7 @@ class PGVector(VectorStore):
             List of Documents most similar to the query vector.
         """
         assert self._async_engine, "This method must be called with async_mode"
-        await self.__apost_init__() # Lazy async init
+        await self.__apost_init__()  # Lazy async init
         docs_and_scores = await self.asimilarity_search_with_score_by_vector(
             embedding=embedding, k=k, filter=filter
         )
@@ -1628,12 +1640,13 @@ class PGVector(VectorStore):
         return the instance of the store without inserting any new
         embeddings
         """
-        store = await PGVector(
+        store = PGVector(
             connection=connection,
             collection_name=collection_name,
             embeddings=embedding,
             distance_strategy=distance_strategy,
             pre_delete_collection=pre_delete_collection,
+            async_mode=True,
             **kwargs,
         )
 
@@ -1845,7 +1858,7 @@ class PGVector(VectorStore):
                 relevance to the query and score for each.
         """
         assert self._async_engine, "This method must be called with async_mode"
-        await self.__apost_init__() # Lazy async init
+        await self.__apost_init__()  # Lazy async init
         async with self.session_maker() as session:
             results = await self.__aquery_collection(
                 session=session, embedding=embedding, k=fetch_k, filter=filter
@@ -1932,7 +1945,7 @@ class PGVector(VectorStore):
             List[Document]: List of Documents selected by maximal marginal relevance.
         """
         assert self._async_engine, "This method must be called with async_mode"
-        await self.__apost_init__() # Lazy async init
+        await self.__apost_init__()  # Lazy async init
         embedding = self.embedding_function.embed_query(query)
         return await self.amax_marginal_relevance_search_by_vector(
             embedding,
@@ -2014,7 +2027,7 @@ class PGVector(VectorStore):
                 relevance to the query and score for each.
         """
         assert self._async_engine, "This method must be called with async_mode"
-        await self.__apost_init__() # Lazy async init
+        await self.__apost_init__()  # Lazy async init
         embedding = self.embedding_function.embed_query(query)
         docs = await self.amax_marginal_relevance_search_with_score_by_vector(
             embedding=embedding,
@@ -2097,7 +2110,7 @@ class PGVector(VectorStore):
             List[Document]: List of Documents selected by maximal marginal relevance.
         """
         assert self._async_engine, "This method must be called with async_mode"
-        await self.__apost_init__() # Lazy async init
+        await self.__apost_init__()  # Lazy async init
         docs_and_scores = (
             await self.amax_marginal_relevance_search_with_score_by_vector(
                 embedding,
