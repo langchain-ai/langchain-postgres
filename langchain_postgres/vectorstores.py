@@ -28,7 +28,7 @@ from langchain_core.utils import get_from_dict_or_env
 from langchain_core.vectorstores import VectorStore
 from sqlalchemy import SQLColumnExpression, cast, create_engine, delete, func, select
 from sqlalchemy.dialects.postgresql import JSON, JSONB, JSONPATH, UUID, insert
-from sqlalchemy.engine import Engine
+from sqlalchemy.engine import Engine, Connection
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -230,7 +230,18 @@ def _results_to_docs(docs_and_scores: Any) -> List[Document]:
     return [doc for doc, _ in docs_and_scores]
 
 
-Connection = Union[sqlalchemy.engine.Engine, str]
+def _create_vector_extension(conn: Connection) -> None:
+    statement = sqlalchemy.text(
+        "BEGIN;"
+        "SELECT pg_advisory_xact_lock(1573678846307946496);"
+        "CREATE EXTENSION IF NOT EXISTS vector;"
+        "COMMIT;"
+    )
+    conn.execute(statement)
+    conn.commit()
+
+
+DBConnection = Union[sqlalchemy.engine.Engine, str]
 
 
 class PGVector(VectorStore):
@@ -295,7 +306,7 @@ class PGVector(VectorStore):
         self,
         embeddings: Embeddings,
         *,
-        connection: Union[None, Connection, Engine, AsyncEngine, str] = None,
+        connection: Union[None, DBConnection, Engine, AsyncEngine, str] = None,
         embedding_length: Optional[int] = None,
         collection_name: str = _LANGCHAIN_DEFAULT_COLLECTION_NAME,
         collection_metadata: Optional[dict] = None,
@@ -401,7 +412,7 @@ class PGVector(VectorStore):
         self,
     ) -> None:
         """Async initialize the store (use lazy approach)."""
-        if self._async_init:
+        if self._async_init:  # Warning: possible race condition
             return
         self._async_init = True
 
@@ -423,50 +434,25 @@ class PGVector(VectorStore):
     def create_vector_extension(self) -> None:
         assert not self._async_engine, "This method must be called without async_mode"
         try:
-            with self.session_maker() as session:  # type: ignore[arg-type]
-                # The advisor lock fixes issue arising from concurrent
-                # creation of the vector extension.
-                # https://github.com/langchain-ai/langchain/issues/12933
-                # For more information see:
-                # https://www.postgresql.org/docs/16/explicit-locking.html#ADVISORY-LOCKS
-                statement = sqlalchemy.text(
-                    "BEGIN;"
-                    "SELECT pg_advisory_xact_lock(1573678846307946496);"
-                    "CREATE EXTENSION IF NOT EXISTS vector;"
-                    "COMMIT;"
-                )
-                session.execute(statement)
-                session.commit()
+            with self._engine.connect() as conn:
+                _create_vector_extension(conn)
         except Exception as e:
             raise Exception(f"Failed to create vector extension: {e}") from e
 
     async def acreate_vector_extension(self) -> None:
         assert self.async_mode, "This method must be called with async_mode"
 
-        try:
-            async with self.session_maker() as session:
-                # The advisor lock fixes issue arising from concurrent
-                # creation of the vector extension.
-                # https://github.com/langchain-ai/langchain/issues/12933
-                # For more information see:
-                # https://www.postgresql.org/docs/16/explicit-locking.html#ADVISORY-LOCKS
-                await session.execute(
-                    sqlalchemy.text("SELECT pg_advisory_xact_lock(1573678846307946496)")
-                )
-                await session.execute(
-                    sqlalchemy.text("CREATE EXTENSION IF NOT EXISTS vector")
-                )
-        except Exception as e:
-            raise Exception(f"Failed to create vector extension: {e}") from e
+        async with self._async_engine.begin() as conn:
+            await conn.run_sync(_create_vector_extension)
 
     def create_tables_if_not_exists(self) -> None:
         assert not self._async_engine, "This method must be called without async_mode"
         with self.session_maker() as session:
             Base.metadata.create_all(session.get_bind())
+            session.commit()
 
     async def acreate_tables_if_not_exists(self) -> None:
         assert self._async_engine, "This method must be called with async_mode"
-        await self.__apost_init__()  # Lazy async init
         async with self._async_engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
 
@@ -474,6 +460,7 @@ class PGVector(VectorStore):
         assert not self._async_engine, "This method must be called without async_mode"
         with self.session_maker() as session:
             Base.metadata.drop_all(session.get_bind())
+            session.commit()
 
     async def adrop_tables(self) -> None:
         assert self._async_engine, "This method must be called with async_mode"
@@ -489,6 +476,7 @@ class PGVector(VectorStore):
             self.CollectionStore.get_or_create(
                 session, self.collection_name, cmetadata=self.collection_metadata
             )
+            session.commit()
 
     async def acreate_collection(self) -> None:
         assert self._async_engine, "This method must be called with async_mode"
@@ -499,6 +487,7 @@ class PGVector(VectorStore):
             await self.CollectionStore.aget_or_create(
                 session, self.collection_name, cmetadata=self.collection_metadata
             )
+            await session.commit()
 
     def _delete_collection(self, session: Session) -> None:
         self.logger.debug("Trying to delete collection")
@@ -1607,7 +1596,7 @@ class PGVector(VectorStore):
         collection_name: str = _LANGCHAIN_DEFAULT_COLLECTION_NAME,
         distance_strategy: DistanceStrategy = DEFAULT_DISTANCE_STRATEGY,
         pre_delete_collection: bool = False,
-        connection: Optional[Connection] = None,
+        connection: Optional[DBConnection] = None,
         **kwargs: Any,
     ) -> PGVector:
         """
@@ -1634,7 +1623,7 @@ class PGVector(VectorStore):
         collection_name: str = _LANGCHAIN_DEFAULT_COLLECTION_NAME,
         distance_strategy: DistanceStrategy = DEFAULT_DISTANCE_STRATEGY,
         pre_delete_collection: bool = False,
-        connection: Optional[Connection] = None,
+        connection: Optional[DBConnection] = None,
         **kwargs: Any,
     ) -> PGVector:
         """
@@ -1677,7 +1666,7 @@ class PGVector(VectorStore):
         documents: List[Document],
         embedding: Embeddings,
         *,
-        connection: Optional[Connection] = None,
+        connection: Optional[DBConnection] = None,
         collection_name: str = _LANGCHAIN_DEFAULT_COLLECTION_NAME,
         distance_strategy: DistanceStrategy = DEFAULT_DISTANCE_STRATEGY,
         ids: Optional[List[str]] = None,
