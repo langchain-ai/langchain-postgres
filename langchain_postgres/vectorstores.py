@@ -413,14 +413,14 @@ class PGVector(VectorStore):
             return
         self._async_init = True
 
-        if self.create_extension:
-            await self.acreate_vector_extension()
-
         EmbeddingStore, CollectionStore = _get_embedding_collection_store(
             self._embedding_length
         )
         self.CollectionStore = CollectionStore
         self.EmbeddingStore = EmbeddingStore
+        if self.create_extension:
+            await self.acreate_vector_extension()
+
         await self.acreate_tables_if_not_exists()
         await self.acreate_collection()
 
