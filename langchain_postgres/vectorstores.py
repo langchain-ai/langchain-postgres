@@ -66,6 +66,7 @@ SPECIAL_CASED_OPERATORS = {
     "$in",
     "$nin",
     "$between",
+    "$null",
 }
 
 TEXT_OPERATORS = {
@@ -702,13 +703,24 @@ class PGVector(VectorStore):
             if operator in {"$in"}:
                 return queried_field.in_([str(val) for val in filter_value])
             elif operator in {"$nin"}:
-                return queried_field.nin_([str(val) for val in filter_value])
+                return ~queried_field.in_([str(val) for val in filter_value])
             elif operator in {"$like"}:
                 return queried_field.like(filter_value)
             elif operator in {"$ilike"}:
                 return queried_field.ilike(filter_value)
             else:
                 raise NotImplementedError()
+        elif operator == "$null":
+            if not isinstance(filter_value, bool):
+                raise ValueError(
+                    "Expected a boolean value for $null "
+                    f"operator, but got: {filter_value}"
+                )
+            condition = func.jsonb_exists(
+                self.EmbeddingStore.cmetadata,
+                field,
+            )
+            return ~condition if filter_value else condition
         else:
             raise NotImplementedError()
 

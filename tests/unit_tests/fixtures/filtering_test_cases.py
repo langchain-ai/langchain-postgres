@@ -198,9 +198,15 @@ TYPE_4_FILTERING_TEST_CASES = [
         {"id": {"$between": (1, 1)}},
         [1],
     ),
+    # Test in
     (
         {"name": {"$in": ["adam", "bob"]}},
         [1, 2],
+    ),
+    # Test nin
+    (
+        {"name": {"$nin": ["adam", "bob"]}},
+        [3],
     ),
 ]
 
@@ -214,5 +220,25 @@ TYPE_5_FILTERING_TEST_CASES = [
     (
         {"name": {"$like": "%a%"}},  # adam and jane
         [1, 3],
+    ),
+]
+
+TYPE_6_FILTERING_TEST_CASES = [
+    # These involve the special operator $null
+    (
+        {"happiness": {"$null": True}},
+        [],
+    ),
+    (
+        {"happiness": {"$null": False}},
+        [1, 2, 3],
+    ),
+    (
+        {"sadness": {"$null": True}},
+        [3],
+    ),
+    (
+        {"sadness": {"$null": False}},
+        [1, 2],
     ),
 ]
