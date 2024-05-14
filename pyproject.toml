@@ -9,7 +9,7 @@ license = "MIT"
 
 [tool.poetry.dependencies]
 python = "^3.9"
-langchain-core = "^0.1"
+langchain-core = ">=0.1.50,<0.3"
 psycopg = "^3"
 langgraph = "^0.0.32"
 psycopg-pool = "^3.2.1"
