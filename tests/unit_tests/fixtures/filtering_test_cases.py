@@ -226,19 +226,19 @@ TYPE_5_FILTERING_TEST_CASES = [
 TYPE_6_FILTERING_TEST_CASES = [
     # These involve the special operator $null
     (
-        {"happiness": {"$null": True}},
+        {"happiness": {"$exists": True}},
         [],
     ),
     (
-        {"happiness": {"$null": False}},
+        {"happiness": {"$exists": False}},
         [1, 2, 3],
     ),
     (
-        {"sadness": {"$null": True}},
+        {"sadness": {"$exists": True}},
         [3],
     ),
     (
-        {"sadness": {"$null": False}},
+        {"sadness": {"$exists": False}},
         [1, 2],
     ),
 ]

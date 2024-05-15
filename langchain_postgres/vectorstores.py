@@ -66,7 +66,7 @@ SPECIAL_CASED_OPERATORS = {
     "$in",
     "$nin",
     "$between",
-    "$null",
+    "$exists",
 }
 
 TEXT_OPERATORS = {
@@ -710,10 +710,10 @@ class PGVector(VectorStore):
                 return queried_field.ilike(filter_value)
             else:
                 raise NotImplementedError()
-        elif operator == "$null":
+        elif operator == "$exists":
             if not isinstance(filter_value, bool):
                 raise ValueError(
-                    "Expected a boolean value for $null "
+                    "Expected a boolean value for $exists "
                     f"operator, but got: {filter_value}"
                 )
             condition = func.jsonb_exists(

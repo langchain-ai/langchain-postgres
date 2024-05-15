@@ -508,8 +508,8 @@ def test_pgvector_with_with_metadata_filters_6(
         {"$and": {}},
         {"$between": {}},
         {"$eq": {}},
-        {"$null": {}},
-        {"$null": 1},
+        {"$exists": {}},
+        {"$exists": 1},
     ],
 )
 def test_invalid_filters(pgvector: PGVector, invalid_filter: Any) -> None:
@@ -524,6 +524,7 @@ def test_validate_operators() -> None:
         "$and",
         "$between",
         "$eq",
+        "$exists",
         "$gt",
         "$gte",
         "$ilike",
@@ -533,6 +534,5 @@ def test_validate_operators() -> None:
         "$lte",
         "$ne",
         "$nin",
-        "$null",
         "$or",
     ]
