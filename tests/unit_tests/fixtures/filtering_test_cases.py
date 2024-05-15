@@ -224,7 +224,7 @@ TYPE_5_FILTERING_TEST_CASES = [
 ]
 
 TYPE_6_FILTERING_TEST_CASES = [
-    # These involve the special operator $null
+    # These involve the special operator $exists
     (
         {"happiness": {"$exists": True}},
         [],
