@@ -17,6 +17,7 @@ from tests.unit_tests.fixtures.filtering_test_cases import (
     TYPE_3_FILTERING_TEST_CASES,
     TYPE_4_FILTERING_TEST_CASES,
     TYPE_5_FILTERING_TEST_CASES,
+    TYPE_6_FILTERING_TEST_CASES,
 )
 from tests.utils import VECTORSTORE_CONNECTION_STRING as CONNECTION_STRING
 
@@ -484,6 +485,17 @@ def test_pgvector_with_with_metadata_filters_5(
     assert [doc.metadata["id"] for doc in docs] == expected_ids, test_filter
 
 
+@pytest.mark.parametrize("test_filter, expected_ids", TYPE_6_FILTERING_TEST_CASES)
+def test_pgvector_with_with_metadata_filters_6(
+    pgvector: PGVector,
+    test_filter: Dict[str, Any],
+    expected_ids: List[int],
+) -> None:
+    """Test end to end construction and search."""
+    docs = pgvector.similarity_search("meow", k=5, filter=test_filter)
+    assert [doc.metadata["id"] for doc in docs] == expected_ids, test_filter
+
+
 @pytest.mark.parametrize(
     "invalid_filter",
     [
@@ -496,6 +508,8 @@ def test_pgvector_with_with_metadata_filters_5(
         {"$and": {}},
         {"$between": {}},
         {"$eq": {}},
+        {"$exists": {}},
+        {"$exists": 1},
     ],
 )
 def test_invalid_filters(pgvector: PGVector, invalid_filter: Any) -> None:
@@ -510,6 +524,7 @@ def test_validate_operators() -> None:
         "$and",
         "$between",
         "$eq",
+        "$exists",
         "$gt",
         "$gte",
         "$ilike",
