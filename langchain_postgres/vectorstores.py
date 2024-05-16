@@ -431,6 +431,7 @@ class PGVector(VectorStore):
 
     def create_vector_extension(self) -> None:
         assert not self._async_engine, "This method must be called without async_mode"
+        assert self._engine, "engine not found"
         try:
             with self._engine.connect() as conn:
                 _create_vector_extension(conn)
@@ -439,6 +440,7 @@ class PGVector(VectorStore):
 
     async def acreate_vector_extension(self) -> None:
         assert self.async_mode, "This method must be called with async_mode"
+        assert self._async_engine, "_async_engine not found"
 
         async with self._async_engine.begin() as conn:
             await conn.run_sync(_create_vector_extension)
