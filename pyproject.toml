@@ -16,6 +16,8 @@ sqlalchemy = "^2"
 pgvector = "^0.2.5"
 numpy = "^1"
 
+[tool.poetry.group.docs.dependencies]
+
 [tool.poetry.group.dev.dependencies]
 jupyterlab = "^3.6.1"
 
