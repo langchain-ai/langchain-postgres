@@ -23,6 +23,12 @@ The package currently only supports the [psycogp3](https://www.psycopg.org/psyco
 pip install -U langchain-postgres
 ```
 
+## Change Log
+
+0.0.6: 
+- Remove langgraph as a dependency as it was causing dependency conflicts.
+- Base interface for checkpointer changed in langgraph, so existing implementation would've broken regardless.
+
 ## Usage
 
 ### ChatMessageHistory
