@@ -720,7 +720,7 @@ class PGVector(VectorStore):
                 self.EmbeddingStore.cmetadata,
                 field,
             )
-            return ~condition if filter_value else condition
+            return condition if filter_value else ~condition
         else:
             raise NotImplementedError()
 
