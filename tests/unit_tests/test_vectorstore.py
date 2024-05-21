@@ -1005,6 +1005,7 @@ def test_validate_operators() -> None:
         "$and",
         "$between",
         "$eq",
+        "$exists",
         "$gt",
         "$gte",
         "$ilike",
