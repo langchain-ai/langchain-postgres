@@ -7,6 +7,9 @@ readme = "README.md"
 repository = "https://github.com/langchain-ai/langchain-postgres"
 license = "MIT"
 
+[tool.poetry.urls]
+"Source Code" = "https://github.com/langchain-ai/langchain-postgres/tree/master/langchain_postgres"
+
 [tool.poetry.dependencies]
 python = "^3.9"
 langchain-core = ">=0.1.50,<0.3"
