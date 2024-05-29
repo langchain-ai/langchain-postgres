@@ -701,9 +701,15 @@ class PGVector(VectorStore):
             queried_field = self.EmbeddingStore.cmetadata[field].astext
 
             if operator in {"$in"}:
-                return queried_field.in_([str(val) for val in filter_value])
+                return func.jsonb_exists_any(
+                        self.EmbeddingStore.cmetadata[field], 
+                        filter_value
+                    )
             elif operator in {"$nin"}:
-                return ~queried_field.in_([str(val) for val in filter_value])
+                return ~func.jsonb_exists_any(
+                        self.EmbeddingStore.cmetadata[field], 
+                        filter_value
+                    )
             elif operator in {"$like"}:
                 return queried_field.like(filter_value)
             elif operator in {"$ilike"}:
