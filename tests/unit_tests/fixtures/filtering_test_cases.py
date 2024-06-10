@@ -203,9 +203,19 @@ TYPE_4_FILTERING_TEST_CASES = [
         {"name": {"$in": ["adam", "bob"]}},
         [1, 2],
     ),
+    # With numeric fields
+    (
+        {"id": {"$in": [1, 2]}},
+        [1, 2],
+    ),
     # Test nin
     (
         {"name": {"$nin": ["adam", "bob"]}},
+        [3],
+    ),
+    ## with numeric fields
+    (
+        {"id": {"$nin": [1, 2]}},
         [3],
     ),
 ]

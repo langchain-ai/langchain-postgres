@@ -1109,6 +1109,11 @@ class PGVector(VectorStore):
                             f"Unsupported type: {type(val)} for value: {val}"
                         )
 
+                    if isinstance(val, bool):  # b/c bool is an instance of int
+                        raise NotImplementedError(
+                            f"Unsupported type: {type(val)} for value: {val}"
+                        )
+
             queried_field = self.EmbeddingStore.cmetadata[field].astext
 
             if operator in {"$in"}:
