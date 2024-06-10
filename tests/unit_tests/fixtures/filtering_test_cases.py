@@ -165,6 +165,23 @@ TYPE_2_FILTERING_TEST_CASES = [
         {"height": {"$lte": 5.8}},
         [2, 3],
     ),
+    # Test for $not operator
+    (
+        {"$not": {"id": 1}},
+        [2, 3],
+    ),
+    (
+        {"$not": {"name": "adam"}},
+        [2, 3],
+    ),
+    (
+        {"$not": {"is_active": True}},
+        [2],
+    ),
+    (
+        {"$not": {"height": {"$gt": 5.0}}},
+        [3],
+    ),
 ]
 
 TYPE_3_FILTERING_TEST_CASES = [

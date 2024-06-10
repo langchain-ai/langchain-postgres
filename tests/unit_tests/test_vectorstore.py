@@ -992,6 +992,7 @@ async def test_async_pgvector_with_with_metadata_filters_5(
         {"$eq": {}},
         {"$exists": {}},
         {"$exists": 1},
+        {"$not": 2},
     ],
 )
 def test_invalid_filters(pgvector: PGVector, invalid_filter: Any) -> None:
@@ -1017,4 +1018,5 @@ def test_validate_operators() -> None:
         "$ne",
         "$nin",
         "$or",
+        "$not",
     ]
