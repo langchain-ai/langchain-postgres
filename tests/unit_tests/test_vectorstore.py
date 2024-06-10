@@ -1017,6 +1017,6 @@ def test_validate_operators() -> None:
         "$lte",
         "$ne",
         "$nin",
-        "$or",
         "$not",
+        "$or",
     ]
