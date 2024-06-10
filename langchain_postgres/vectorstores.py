@@ -318,6 +318,7 @@ class PGVector(VectorStore):
     * $ilike: Case insensitive like operator
     * $and: Logical AND operator
     * $or: Logical OR operator
+    * $not: Logical NOT operator
 
     Example:
 
