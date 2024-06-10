@@ -7,6 +7,9 @@ readme = "README.md"
 repository = "https://github.com/langchain-ai/langchain-postgres"
 license = "MIT"
 
+[tool.poetry.urls]
+"Source Code" = "https://github.com/langchain-ai/langchain-postgres/tree/master/langchain_postgres"
+
 [tool.poetry.dependencies]
 python = "^3.9"
 langchain-core = ">=0.1.50,<0.3"
@@ -85,3 +88,7 @@ timeout = 30
 markers = []
 asyncio_mode = "auto"
 
+[tool.codespell]
+skip = '.git,*.pdf,*.svg,*.pdf,*.yaml,*.ipynb,poetry.lock,*.min.js,*.css,package-lock.json,example_data,_dist,examples,templates,*.trig'
+ignore-regex = '.*(Stati Uniti|Tense=Pres).*'
+ignore-words-list = 'momento,collison,ned,foor,reworkd,parth,whats,aapply,mysogyny,unsecure,damon,crate,aadd,symbl,precesses,accademia,nin'
