@@ -18,7 +18,6 @@ from tests.unit_tests.fixtures.filtering_test_cases import (
     TYPE_3_FILTERING_TEST_CASES,
     TYPE_4_FILTERING_TEST_CASES,
     TYPE_5_FILTERING_TEST_CASES,
-    TYPE_6_FILTERING_TEST_CASES,
 )
 from tests.utils import VECTORSTORE_CONNECTION_STRING as CONNECTION_STRING
 
