@@ -990,6 +990,8 @@ async def test_async_pgvector_with_with_metadata_filters_5(
         {"$and": {}},
         {"$between": {}},
         {"$eq": {}},
+        {"$exists": {}},
+        {"$exists": 1},
     ],
 )
 def test_invalid_filters(pgvector: PGVector, invalid_filter: Any) -> None:
