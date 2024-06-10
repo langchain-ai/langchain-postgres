@@ -203,10 +203,38 @@ TYPE_4_FILTERING_TEST_CASES = [
         {"name": {"$in": ["adam", "bob"]}},
         [1, 2],
     ),
+    # With numeric fields
+    (
+        {"id": {"$in": [1, 2]}},
+        [1, 2],
+    ),
     # Test nin
     (
         {"name": {"$nin": ["adam", "bob"]}},
         [3],
+    ),
+    ## with numeric fields
+    (
+        {"id": {"$nin": [1, 2]}},
+        [3],
+    ),
+    # With boolean fields
+    (
+        {"is_active": {"$in": [True]}},
+        [1, 3],
+    ),
+    (
+        {"is_active": {"$nin": [True]}},
+        [2],
+    ),
+    # With null fields
+    (
+        {"happiness": {"$in": [None]}},
+        [3],
+    ),
+    (
+        {"happiness": {"$nin": [None]}},
+        [1, 2],
     ),
 ]
 
