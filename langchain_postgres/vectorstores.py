@@ -301,6 +301,41 @@ class PGVector(VectorStore):
     * langchain_postgres now accept async connections. If you want to use the async
         version, you need to set `async_mode=True` when initializing the store or
         use an async engine.
+
+    Supported filter operators:
+
+    * $eq: Equality operator
+    * $ne: Not equal operator
+    * $lt: Less than operator
+    * $lte: Less than or equal operator
+    * $gt: Greater than operator
+    * $gte: Greater than or equal operator
+    * $in: In operator
+    * $nin: Not in operator
+    * $between: Between operator
+    * $exists: Exists operator
+    * $like: Like operator
+    * $ilike: Case insensitive like operator
+    * $and: Logical AND operator
+    * $or: Logical OR operator
+
+    Example:
+
+    .. code-block:: python
+
+        vectorstore.similarity_search('kitty', k=10, filter={
+            'id': {'$in': [1, 5, 2, 9]}
+        })
+        #%% md
+
+        If you provide a dict with multiple fields, but no operators,
+        the top level will be interpreted as a logical **AND** filter
+
+        vectorstore.similarity_search('ducks', k=10, filter={
+            'id': {'$in': [1, 5, 2, 9]},
+            'location': {'$in': ["pond", "market"]}
+        })
+
     """
 
     def __init__(
