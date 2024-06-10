@@ -1262,12 +1262,11 @@ class PGVector(VectorStore):
                     # Then it's a field
                     return self._handle_field_filter(key, filters[key])
 
-                # Here we handle the $and, $or, and $not operators
-                if not isinstance(value, list):
-                    raise ValueError(
-                        f"Expected a list, but got {type(value)} for value: {value}"
-                    )
                 if key.lower() == "$and":
+                    if not isinstance(value, list):
+                        raise ValueError(
+                            f"Expected a list, but got {type(value)} for value: {value}"
+                        )
                     and_ = [self._create_filter_clause(el) for el in value]
                     if len(and_) > 1:
                         return sqlalchemy.and_(*and_)
@@ -1279,6 +1278,10 @@ class PGVector(VectorStore):
                             "but got an empty dictionary"
                         )
                 elif key.lower() == "$or":
+                    if not isinstance(value, list):
+                        raise ValueError(
+                            f"Expected a list, but got {type(value)} for value: {value}"
+                        )
                     or_ = [self._create_filter_clause(el) for el in value]
                     if len(or_) > 1:
                         return sqlalchemy.or_(*or_)
@@ -1290,13 +1293,25 @@ class PGVector(VectorStore):
                             "but got an empty dictionary"
                         )
                 elif key.lower() == "$not":
-                    not_conditions = [
-                        self._create_filter_clause(item) for item in value
-                    ]
-                    not_ = sqlalchemy.and_(
-                        *[sqlalchemy.not_(condition) for condition in not_conditions]
-                    )
-                    return not_
+                    if isinstance(value, list):
+                        not_conditions = [
+                            self._create_filter_clause(item) for item in value
+                        ]
+                        not_ = sqlalchemy.and_(
+                            *[
+                                sqlalchemy.not_(condition)
+                                for condition in not_conditions
+                            ]
+                        )
+                        return not_
+                    elif isinstance(value, dict):
+                        not_ = self._create_filter_clause(value)
+                        return sqlalchemy.not_(not_)
+                    else:
+                        raise ValueError(
+                            f"Invalid filter condition. Expected a dictionary "
+                            f"or a list but got: {type(value)}"
+                        )
                 else:
                     raise ValueError(
                         f"Invalid filter condition. Expected $and, $or or $not "

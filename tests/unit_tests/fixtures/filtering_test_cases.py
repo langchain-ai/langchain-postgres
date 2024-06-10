@@ -81,7 +81,7 @@ TYPE_1_FILTERING_TEST_CASES = [
 
 TYPE_2_FILTERING_TEST_CASES = [
     # These involve equality checks and other operators
-    # like $ne, $gt, $gte, $lt, $lte, $not
+    # like $ne, $gt, $gte, $lt, $lte
     (
         {"id": 1},
         [1],
@@ -165,27 +165,10 @@ TYPE_2_FILTERING_TEST_CASES = [
         {"height": {"$lte": 5.8}},
         [2, 3],
     ),
-    # Test for $not operator
-    (
-        {"$not": {"id": 1}},
-        [2, 3],
-    ),
-    (
-        {"$not": {"name": "adam"}},
-        [2, 3],
-    ),
-    (
-        {"$not": {"is_active": True}},
-        [2],
-    ),
-    (
-        {"$not": {"height": {"$gt": 5.0}}},
-        [3],
-    ),
 ]
 
 TYPE_3_FILTERING_TEST_CASES = [
-    # These involve usage of AND and OR operators
+    # These involve usage of AND, OR and NOT operators
     (
         {"$or": [{"id": 1}, {"id": 2}]},
         [1, 2],
@@ -201,6 +184,39 @@ TYPE_3_FILTERING_TEST_CASES = [
     (
         {"$or": [{"id": 1}, {"id": 2}, {"id": 3}]},
         [1, 2, 3],
+    ),
+    # Test for $not operator
+    (
+        {"$not": {"id": 1}},
+        [2, 3],
+    ),
+    (
+        {"$not": [{"id": 1}]},
+        [2, 3],
+    ),
+    (
+        {"$not": {"name": "adam"}},
+        [2, 3],
+    ),
+    (
+        {"$not": [{"name": "adam"}]},
+        [2, 3],
+    ),
+    (
+        {"$not": {"is_active": True}},
+        [2],
+    ),
+    (
+        {"$not": [{"is_active": True}]},
+        [2],
+    ),
+    (
+        {"$not": {"height": {"$gt": 5.0}}},
+        [3],
+    ),
+    (
+        {"$not": [{"height": {"$gt": 5.0}}]},
+        [3],
     ),
 ]
 
