@@ -88,7 +88,7 @@ TEXT_OPERATORS = {
     "$ilike",
 }
 
-LOGICAL_OPERATORS = {"$and", "$or"}
+LOGICAL_OPERATORS = {"$and", "$or", "$not"}
 
 SUPPORTED_OPERATORS = (
     set(COMPARISONS_TO_NATIVE)
@@ -1248,26 +1248,25 @@ class PGVector(VectorStore):
         """
         if isinstance(filters, dict):
             if len(filters) == 1:
-                # The only operators allowed at the top level are $AND and $OR
+                # The only operators allowed at the top level are $AND, $OR, and $NOT
                 # First check if an operator or a field
                 key, value = list(filters.items())[0]
                 if key.startswith("$"):
                     # Then it's an operator
-                    if key.lower() not in ["$and", "$or"]:
+                    if key.lower() not in ["$and", "$or", "$not"]:
                         raise ValueError(
-                            f"Invalid filter condition. Expected $and or $or "
+                            f"Invalid filter condition. Expected $and, $or or $not "
                             f"but got: {key}"
                         )
                 else:
                     # Then it's a field
                     return self._handle_field_filter(key, filters[key])
 
-                # Here we handle the $and and $or operators
-                if not isinstance(value, list):
-                    raise ValueError(
-                        f"Expected a list, but got {type(value)} for value: {value}"
-                    )
                 if key.lower() == "$and":
+                    if not isinstance(value, list):
+                        raise ValueError(
+                            f"Expected a list, but got {type(value)} for value: {value}"
+                        )
                     and_ = [self._create_filter_clause(el) for el in value]
                     if len(and_) > 1:
                         return sqlalchemy.and_(*and_)
@@ -1279,6 +1278,10 @@ class PGVector(VectorStore):
                             "but got an empty dictionary"
                         )
                 elif key.lower() == "$or":
+                    if not isinstance(value, list):
+                        raise ValueError(
+                            f"Expected a list, but got {type(value)} for value: {value}"
+                        )
                     or_ = [self._create_filter_clause(el) for el in value]
                     if len(or_) > 1:
                         return sqlalchemy.or_(*or_)
@@ -1289,9 +1292,29 @@ class PGVector(VectorStore):
                             "Invalid filter condition. Expected a dictionary "
                             "but got an empty dictionary"
                         )
+                elif key.lower() == "$not":
+                    if isinstance(value, list):
+                        not_conditions = [
+                            self._create_filter_clause(item) for item in value
+                        ]
+                        not_ = sqlalchemy.and_(
+                            *[
+                                sqlalchemy.not_(condition)
+                                for condition in not_conditions
+                            ]
+                        )
+                        return not_
+                    elif isinstance(value, dict):
+                        not_ = self._create_filter_clause(value)
+                        return sqlalchemy.not_(not_)
+                    else:
+                        raise ValueError(
+                            f"Invalid filter condition. Expected a dictionary "
+                            f"or a list but got: {type(value)}"
+                        )
                 else:
                     raise ValueError(
-                        f"Invalid filter condition. Expected $and or $or "
+                        f"Invalid filter condition. Expected $and, $or or $not "
                         f"but got: {key}"
                     )
             elif len(filters) > 1:
