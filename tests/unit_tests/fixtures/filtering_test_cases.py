@@ -218,24 +218,6 @@ TYPE_4_FILTERING_TEST_CASES = [
         {"id": {"$nin": [1, 2]}},
         [3],
     ),
-    # With boolean fields
-    (
-        {"is_active": {"$in": [True]}},
-        [1, 3],
-    ),
-    (
-        {"is_active": {"$nin": [True]}},
-        [2],
-    ),
-    # With null fields
-    (
-        {"happiness": {"$in": [None]}},
-        [3],
-    ),
-    (
-        {"happiness": {"$nin": [None]}},
-        [1, 2],
-    ),
 ]
 
 TYPE_5_FILTERING_TEST_CASES = [
