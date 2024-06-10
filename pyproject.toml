@@ -88,3 +88,7 @@ timeout = 30
 markers = []
 asyncio_mode = "auto"
 
+[tool.codespell]
+skip = '.git,*.pdf,*.svg,*.pdf,*.yaml,*.ipynb,poetry.lock,*.min.js,*.css,package-lock.json,example_data,_dist,examples,templates,*.trig'
+ignore-regex = '.*(Stati Uniti|Tense=Pres).*'
+ignore-words-list = 'momento,collison,ned,foor,reworkd,parth,whats,aapply,mysogyny,unsecure,damon,crate,aadd,symbl,precesses,accademia,nin'
