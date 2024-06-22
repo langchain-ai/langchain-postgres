@@ -1,8 +1,6 @@
 # pylint: disable=too-many-lines
 from __future__ import annotations
 
-from langchain_core.indexes.base import Index
-
 import contextlib
 import enum
 import logging
@@ -29,9 +27,19 @@ import numpy as np
 import sqlalchemy
 from langchain_core.documents import Document
 from langchain_core.embeddings import Embeddings
+from langchain_core.indexes import DeleteResponse, UpsertResponse
+from langchain_core.structured_query import StructuredQuery
 from langchain_core.utils import get_from_dict_or_env
-from langchain_core.vectorstores import VectorStore
-from sqlalchemy import SQLColumnExpression, cast, create_engine, delete, func, select
+from langchain_core.utils.iter import batch_iterate
+from sqlalchemy import (
+    SQLColumnExpression,
+    and_,
+    cast,
+    create_engine,
+    delete,
+    func,
+    select,
+)
 from sqlalchemy.dialects.postgresql import JSON, JSONB, JSONPATH, UUID, insert
 from sqlalchemy.engine import Connection, Engine
 from sqlalchemy.ext.asyncio import (
@@ -100,6 +108,14 @@ SUPPORTED_OPERATORS = (
 )
 
 
+def _as_id_generator(ids: Optional[Sequence[str]]) -> Generator[str, None, None]:
+    """Return an id generator."""
+    if ids:
+        for id in ids:
+            yield id
+    else:
+        while True:
+            yield str(uuid.uuid4())
 
 
 def _get_embedding_collection_store(vector_dimension: Optional[int] = None) -> Any:
@@ -128,7 +144,7 @@ def _get_embedding_collection_store(vector_dimension: Optional[int] = None) -> A
 
         @classmethod
         def get_by_name(
-                cls, session: Session, name: str
+            cls, session: Session, name: str
         ) -> Optional["CollectionStore"]:
             return (
                 session.query(cls)
@@ -138,7 +154,7 @@ def _get_embedding_collection_store(vector_dimension: Optional[int] = None) -> A
 
         @classmethod
         async def aget_by_name(
-                cls, session: AsyncSession, name: str
+            cls, session: AsyncSession, name: str
         ) -> Optional["CollectionStore"]:
             return (
                 (
@@ -154,10 +170,10 @@ def _get_embedding_collection_store(vector_dimension: Optional[int] = None) -> A
 
         @classmethod
         def get_or_create(
-                cls,
-                session: Session,
-                name: str,
-                cmetadata: Optional[dict] = None,
+            cls,
+            session: Session,
+            name: str,
+            cmetadata: Optional[dict] = None,
         ) -> Tuple["CollectionStore", bool]:
             """Get or create a collection.
             Returns:
@@ -176,10 +192,10 @@ def _get_embedding_collection_store(vector_dimension: Optional[int] = None) -> A
 
         @classmethod
         async def aget_or_create(
-                cls,
-                session: AsyncSession,
-                name: str,
-                cmetadata: Optional[dict] = None,
+            cls,
+            session: AsyncSession,
+            name: str,
+            cmetadata: Optional[dict] = None,
         ) -> Tuple["CollectionStore", bool]:
             """
             Get or create a collection.
@@ -248,7 +264,11 @@ def _create_vector_extension(conn: Connection) -> None:
 
 DBConnection = Union[sqlalchemy.engine.Engine, str]
 
-class PostgresDocumentIndex(Index):
+
+from langchain_core.indexes import Index
+
+
+class PGVector(Index):
     """Vectorstore implementation using Postgres as the backend.
 
     Currently, there is no mechanism for supporting data migration.
@@ -343,21 +363,21 @@ class PostgresDocumentIndex(Index):
     """
 
     def __init__(
-            self,
-            embeddings: Embeddings,
-            *,
-            connection: Union[None, DBConnection, Engine, AsyncEngine, str] = None,
-            embedding_length: Optional[int] = None,
-            collection_name: str = _LANGCHAIN_DEFAULT_COLLECTION_NAME,
-            collection_metadata: Optional[dict] = None,
-            distance_strategy: DistanceStrategy = DEFAULT_DISTANCE_STRATEGY,
-            pre_delete_collection: bool = False,
-            logger: Optional[logging.Logger] = None,
-            relevance_score_fn: Optional[Callable[[float], float]] = None,
-            engine_args: Optional[dict[str, Any]] = None,
-            use_jsonb: bool = True,
-            create_extension: bool = True,
-            async_mode: bool = False,
+        self,
+        embeddings: Embeddings,
+        *,
+        connection: Union[None, DBConnection, Engine, AsyncEngine, str] = None,
+        embedding_length: Optional[int] = None,
+        collection_name: str = _LANGCHAIN_DEFAULT_COLLECTION_NAME,
+        collection_metadata: Optional[dict] = None,
+        distance_strategy: DistanceStrategy = DEFAULT_DISTANCE_STRATEGY,
+        pre_delete_collection: bool = False,
+        logger: Optional[logging.Logger] = None,
+        relevance_score_fn: Optional[Callable[[float], float]] = None,
+        engine_args: Optional[dict[str, Any]] = None,
+        use_jsonb: bool = True,
+        create_extension: bool = True,
+        async_mode: bool = False,
     ) -> None:
         """Initialize the PGVector store.
         For an async version, use `PGVector.acreate()` instead.
@@ -434,7 +454,7 @@ class PostgresDocumentIndex(Index):
             self.__post_init__()
 
     def __post_init__(
-            self,
+        self,
     ) -> None:
         """Initialize the store."""
         if self.create_extension:
@@ -449,7 +469,7 @@ class PostgresDocumentIndex(Index):
         self.create_collection()
 
     async def __apost_init__(
-            self,
+        self,
     ) -> None:
         """Async initialize the store (use lazy approach)."""
         if self._async_init:  # Warning: possible race condition
@@ -470,6 +490,165 @@ class PostgresDocumentIndex(Index):
     @property
     def embeddings(self) -> Embeddings:
         return self.embedding_function
+
+    def delete_by_ids(self, ids: Iterable[str]) -> DeleteResponse:
+        """Delete documents by ids."""
+        batch_size = 1_000
+        for batch_ids in batch_iterate(size=batch_size, iterable=ids):
+            with self._make_sync_session() as session:
+                stmt = delete(self.EmbeddingStore).where(
+                    and_(
+                        self.EmbeddingStore.id.in_(batch_ids),
+                        self.EmbeddingStore.collection_id  # Make into a single query
+                        == self.get_collection(session).uuid,
+                    )
+                )
+                session.execute(stmt)
+                session.commit()
+
+    def lazy_get_by_ids(self, ids: Iterable[str]) -> Iterable[Document]:
+        """Lazy by get IDs."""
+        batch_size = 100
+        for batch_ids in batch_iterate(size=batch_size, iterable=ids):
+            with self._make_sync_session() as session:
+                stmt = select(self.EmbeddingStore).where(
+                    self.EmbeddingStore.id.in_(list(batch_ids))
+                )
+                results = session.execute(stmt).scalars().all()
+                for result in results:
+                    yield Document(
+                        page_content=result.document,
+                        metadata=result.cmetadata,
+                    )
+
+    def _create_filter_clause_with_uuid(
+        self, collection_uuid: str, filter: Optional[Dict[str, str]]
+    ):
+        """Create filter clause for the query."""
+        filter_by = [self.EmbeddingStore.collection_id == collection_uuid]
+        if filter:
+            filter_clauses = self._create_filter_clause(filter)
+            if filter_clauses is not None:
+                filter_by.append(filter_clauses)
+        return filter_by
+
+    def lazy_get(
+        self,
+        *,
+        ids: Optional[Iterable[str]] = None,
+        filters: Union[
+            StructuredQuery, Dict[str, Any], List[Dict[str, Any]], None
+        ] = None,
+        **kwargs: Any,
+    ) -> Iterable[Document]:
+        """Lazy get."""
+        batch_size = 100  # <-- Where to surface this? Exposing in lazy_get makes sense.
+
+        if ids:
+            raise NotImplementedError()
+
+        while True:
+            num_results = 0
+            with self._make_sync_session() as session:
+                collection = self.get_collection(session)
+
+                if filters and not isinstance(filters, dict):
+                    raise NotImplementedError()
+
+                if not filters:
+                    filter_by = [self.EmbeddingStore.collection_id == collection.uuid]
+                else:
+                    filter_by = self._create_filter_clause_with_uuid(
+                        collection.uuid, filters
+                    )
+                results: List[Any] = (
+                    session.query(
+                        self.EmbeddingStore,
+                    )
+                    .filter(*filter_by)
+                    .order_by(self.EmbeddingStore.id)
+                    .limit(batch_size + 1)
+                    .all()
+                )
+                for result in results:
+                    num_results += 1
+                    yield Document(
+                        page_content=result.document,
+                        metadata=result.cmetadata,
+                    )
+
+                if num_results < batch_size:
+                    break
+
+    def upsert(
+        self,
+        documents: Iterable[Document],
+        *,
+        ids: Optional[Iterable[str]] = None,
+        vectors: Optional[Iterable[List[float]]] = None,
+        **kwargs: Any,
+    ) -> UpsertResponse:
+        """Upsert documents into the vectorstore.
+
+        Args:
+            documents: Iterable of documents to upsert.
+            ids: Optional list of ids for the documents.
+                 If not provided, will generate a new id for each document.
+            kwargs: vectorstore specific parameters
+
+        Returns:
+            UpsertResponse
+        """
+        id_generator = _as_id_generator(ids)
+        batch_size = 100  # <-- batch size
+
+        _vector_iterator = iter(vectors) if vectors is not None else None
+
+        for docs in batch_iterate(size=batch_size, iterable=documents):
+            if _vector_iterator is not None:
+                embeddings = [next(_vector_iterator) for _ in docs]
+            else:
+                embeddings = self.embedding_function.embed_documents(
+                    [doc.page_content for doc in docs]
+                )
+
+            with self._make_sync_session() as session:  # type: ignore[arg-type]
+                collection = self.get_collection(session)
+                if not collection:
+                    raise ValueError("Collection not found")
+
+                data = []
+
+                for embedding, doc in zip(embeddings, docs):
+                    id_ = next(id_generator)
+                    if not isinstance(id_, str):
+                        raise TypeError()
+                    data.append(
+                        {
+                            "id": id_,
+                            "collection_id": collection.uuid,
+                            "embedding": embedding,
+                            "document": doc.page_content,
+                            "cmetadata": doc.metadata or {},
+                        }
+                    )
+                stmt = insert(self.EmbeddingStore).values(data)
+                on_conflict_stmt = stmt.on_conflict_do_update(
+                    index_elements=["id"],
+                    # Conflict detection based on these columns
+                    set_={
+                        "embedding": stmt.excluded.embedding,
+                        "document": stmt.excluded.document,
+                        "cmetadata": stmt.excluded.cmetadata,
+                    },
+                )
+                session.execute(on_conflict_stmt)
+                session.commit()
+
+        return UpsertResponse(
+            succeeded=[],
+            failed=[],
+        )
 
     def create_vector_extension(self) -> None:
         assert self._engine, "engine not found"
@@ -559,10 +738,10 @@ class PostgresDocumentIndex(Index):
             await session.commit()
 
     def delete(
-            self,
-            ids: Optional[List[str]] = None,
-            collection_only: bool = False,
-            **kwargs: Any,
+        self,
+        ids: Optional[List[str]] = None,
+        collection_only: bool = False,
+        **kwargs: Any,
     ) -> None:
         """Delete vectors by ids or uuids.
 
@@ -594,10 +773,10 @@ class PostgresDocumentIndex(Index):
             session.commit()
 
     async def adelete(
-            self,
-            ids: Optional[List[str]] = None,
-            collection_only: bool = False,
-            **kwargs: Any,
+        self,
+        ids: Optional[List[str]] = None,
+        collection_only: bool = False,
+        **kwargs: Any,
     ) -> None:
         """Async delete vectors by ids or uuids.
 
@@ -640,19 +819,19 @@ class PostgresDocumentIndex(Index):
 
     @classmethod
     def __from(
-            cls,
-            texts: List[str],
-            embeddings: List[List[float]],
-            embedding: Embeddings,
-            metadatas: Optional[List[dict]] = None,
-            ids: Optional[List[str]] = None,
-            collection_name: str = _LANGCHAIN_DEFAULT_COLLECTION_NAME,
-            distance_strategy: DistanceStrategy = DEFAULT_DISTANCE_STRATEGY,
-            connection: Optional[str] = None,
-            pre_delete_collection: bool = False,
-            *,
-            use_jsonb: bool = True,
-            **kwargs: Any,
+        cls,
+        texts: List[str],
+        embeddings: List[List[float]],
+        embedding: Embeddings,
+        metadatas: Optional[List[dict]] = None,
+        ids: Optional[List[str]] = None,
+        collection_name: str = _LANGCHAIN_DEFAULT_COLLECTION_NAME,
+        distance_strategy: DistanceStrategy = DEFAULT_DISTANCE_STRATEGY,
+        connection: Optional[str] = None,
+        pre_delete_collection: bool = False,
+        *,
+        use_jsonb: bool = True,
+        **kwargs: Any,
     ) -> PGVector:
         if ids is None:
             ids = [str(uuid.uuid4()) for _ in texts]
@@ -678,19 +857,19 @@ class PostgresDocumentIndex(Index):
 
     @classmethod
     async def __afrom(
-            cls,
-            texts: List[str],
-            embeddings: List[List[float]],
-            embedding: Embeddings,
-            metadatas: Optional[List[dict]] = None,
-            ids: Optional[List[str]] = None,
-            collection_name: str = _LANGCHAIN_DEFAULT_COLLECTION_NAME,
-            distance_strategy: DistanceStrategy = DEFAULT_DISTANCE_STRATEGY,
-            connection: Optional[str] = None,
-            pre_delete_collection: bool = False,
-            *,
-            use_jsonb: bool = True,
-            **kwargs: Any,
+        cls,
+        texts: List[str],
+        embeddings: List[List[float]],
+        embedding: Embeddings,
+        metadatas: Optional[List[dict]] = None,
+        ids: Optional[List[str]] = None,
+        collection_name: str = _LANGCHAIN_DEFAULT_COLLECTION_NAME,
+        distance_strategy: DistanceStrategy = DEFAULT_DISTANCE_STRATEGY,
+        connection: Optional[str] = None,
+        pre_delete_collection: bool = False,
+        *,
+        use_jsonb: bool = True,
+        **kwargs: Any,
     ) -> PGVector:
         if ids is None:
             ids = [str(uuid.uuid1()) for _ in texts]
@@ -716,12 +895,12 @@ class PostgresDocumentIndex(Index):
         return store
 
     def add_embeddings(
-            self,
-            texts: Iterable[str],
-            embeddings: List[List[float]],
-            metadatas: Optional[List[dict]] = None,
-            ids: Optional[List[str]] = None,
-            **kwargs: Any,
+        self,
+        texts: Iterable[str],
+        embeddings: List[List[float]],
+        metadatas: Optional[List[dict]] = None,
+        ids: Optional[List[str]] = None,
+        **kwargs: Any,
     ) -> List[str]:
         """Add embeddings to the vectorstore.
 
@@ -772,12 +951,12 @@ class PostgresDocumentIndex(Index):
         return ids
 
     async def aadd_embeddings(
-            self,
-            texts: Iterable[str],
-            embeddings: List[List[float]],
-            metadatas: Optional[List[dict]] = None,
-            ids: Optional[List[str]] = None,
-            **kwargs: Any,
+        self,
+        texts: Iterable[str],
+        embeddings: List[List[float]],
+        metadatas: Optional[List[dict]] = None,
+        ids: Optional[List[str]] = None,
+        **kwargs: Any,
     ) -> List[str]:
         """Async add embeddings to the vectorstore.
 
@@ -828,11 +1007,11 @@ class PostgresDocumentIndex(Index):
         return ids
 
     def add_texts(
-            self,
-            texts: Iterable[str],
-            metadatas: Optional[List[dict]] = None,
-            ids: Optional[List[str]] = None,
-            **kwargs: Any,
+        self,
+        texts: Iterable[str],
+        metadatas: Optional[List[dict]] = None,
+        ids: Optional[List[str]] = None,
+        **kwargs: Any,
     ) -> List[str]:
         """Run more texts through the embeddings and add to the vectorstore.
 
@@ -853,11 +1032,11 @@ class PostgresDocumentIndex(Index):
         )
 
     async def aadd_texts(
-            self,
-            texts: Iterable[str],
-            metadatas: Optional[List[dict]] = None,
-            ids: Optional[List[str]] = None,
-            **kwargs: Any,
+        self,
+        texts: Iterable[str],
+        metadatas: Optional[List[dict]] = None,
+        ids: Optional[List[str]] = None,
+        **kwargs: Any,
     ) -> List[str]:
         """Run more texts through the embeddings and add to the vectorstore.
 
@@ -878,11 +1057,11 @@ class PostgresDocumentIndex(Index):
         )
 
     def similarity_search(
-            self,
-            query: str,
-            k: int = 4,
-            filter: Optional[dict] = None,
-            **kwargs: Any,
+        self,
+        query: str,
+        k: int = 4,
+        filter: Optional[dict] = None,
+        **kwargs: Any,
     ) -> List[Document]:
         """Run similarity search with PGVector with distance.
 
@@ -903,11 +1082,11 @@ class PostgresDocumentIndex(Index):
         )
 
     async def asimilarity_search(
-            self,
-            query: str,
-            k: int = 4,
-            filter: Optional[dict] = None,
-            **kwargs: Any,
+        self,
+        query: str,
+        k: int = 4,
+        filter: Optional[dict] = None,
+        **kwargs: Any,
     ) -> List[Document]:
         """Run similarity search with PGVector with distance.
 
@@ -928,10 +1107,10 @@ class PostgresDocumentIndex(Index):
         )
 
     def similarity_search_with_score(
-            self,
-            query: str,
-            k: int = 4,
-            filter: Optional[dict] = None,
+        self,
+        query: str,
+        k: int = 4,
+        filter: Optional[dict] = None,
     ) -> List[Tuple[Document, float]]:
         """Return docs most similar to query.
 
@@ -951,10 +1130,10 @@ class PostgresDocumentIndex(Index):
         return docs
 
     async def asimilarity_search_with_score(
-            self,
-            query: str,
-            k: int = 4,
-            filter: Optional[dict] = None,
+        self,
+        query: str,
+        k: int = 4,
+        filter: Optional[dict] = None,
     ) -> List[Tuple[Document, float]]:
         """Return docs most similar to query.
 
@@ -988,10 +1167,10 @@ class PostgresDocumentIndex(Index):
             )
 
     def similarity_search_with_score_by_vector(
-            self,
-            embedding: List[float],
-            k: int = 4,
-            filter: Optional[dict] = None,
+        self,
+        embedding: List[float],
+        k: int = 4,
+        filter: Optional[dict] = None,
     ) -> List[Tuple[Document, float]]:
         assert not self._async_engine, "This method must be called without async_mode"
         results = self.__query_collection(embedding=embedding, k=k, filter=filter)
@@ -999,10 +1178,10 @@ class PostgresDocumentIndex(Index):
         return self._results_to_docs_and_scores(results)
 
     async def asimilarity_search_with_score_by_vector(
-            self,
-            embedding: List[float],
-            k: int = 4,
-            filter: Optional[dict] = None,
+        self,
+        embedding: List[float],
+        k: int = 4,
+        filter: Optional[dict] = None,
     ) -> List[Tuple[Document, float]]:
         await self.__apost_init__()  # Lazy async init
         async with self._make_async_session() as session:  # type: ignore[arg-type]
@@ -1027,9 +1206,9 @@ class PostgresDocumentIndex(Index):
         return docs
 
     def _handle_field_filter(
-            self,
-            field: str,
-            value: Any,
+        self,
+        field: str,
+        value: Any,
     ) -> SQLColumnExpression:
         """Create a filter for a specific field.
 
@@ -1213,7 +1392,7 @@ class PostgresDocumentIndex(Index):
         return filter_by_metadata
 
     def _create_filter_clause_json_deprecated(
-            self, filter: Any
+        self, filter: Any
     ) -> List[SQLColumnExpression]:
         """Convert filters from IR to SQL clauses.
 
@@ -1347,10 +1526,10 @@ class PostgresDocumentIndex(Index):
             )
 
     def __query_collection(
-            self,
-            embedding: List[float],
-            k: int = 4,
-            filter: Optional[Dict[str, str]] = None,
+        self,
+        embedding: List[float],
+        k: int = 4,
+        filter: Optional[Dict[str, str]] = None,
     ) -> Sequence[Any]:
         """Query the collection."""
         with self._make_sync_session() as session:  # type: ignore[arg-type]
@@ -1381,7 +1560,7 @@ class PostgresDocumentIndex(Index):
                 .join(
                     self.CollectionStore,
                     self.EmbeddingStore.collection_id == self.CollectionStore.uuid,
-                    )
+                )
                 .limit(k)
                 .all()
             )
@@ -1389,11 +1568,11 @@ class PostgresDocumentIndex(Index):
         return results
 
     async def __aquery_collection(
-            self,
-            session: AsyncSession,
-            embedding: List[float],
-            k: int = 4,
-            filter: Optional[Dict[str, str]] = None,
+        self,
+        session: AsyncSession,
+        embedding: List[float],
+        k: int = 4,
+        filter: Optional[Dict[str, str]] = None,
     ) -> Sequence[Any]:
         """Query the collection."""
         async with self._make_async_session() as session:  # type: ignore[arg-type]
@@ -1424,7 +1603,7 @@ class PostgresDocumentIndex(Index):
                 .join(
                     self.CollectionStore,
                     self.EmbeddingStore.collection_id == self.CollectionStore.uuid,
-                    )
+                )
                 .limit(k)
             )
 
@@ -1433,11 +1612,11 @@ class PostgresDocumentIndex(Index):
             return results
 
     def similarity_search_by_vector(
-            self,
-            embedding: List[float],
-            k: int = 4,
-            filter: Optional[dict] = None,
-            **kwargs: Any,
+        self,
+        embedding: List[float],
+        k: int = 4,
+        filter: Optional[dict] = None,
+        **kwargs: Any,
     ) -> List[Document]:
         """Return docs most similar to embedding vector.
 
@@ -1456,11 +1635,11 @@ class PostgresDocumentIndex(Index):
         return _results_to_docs(docs_and_scores)
 
     async def asimilarity_search_by_vector(
-            self,
-            embedding: List[float],
-            k: int = 4,
-            filter: Optional[dict] = None,
-            **kwargs: Any,
+        self,
+        embedding: List[float],
+        k: int = 4,
+        filter: Optional[dict] = None,
+        **kwargs: Any,
     ) -> List[Document]:
         """Return docs most similar to embedding vector.
 
@@ -1481,17 +1660,17 @@ class PostgresDocumentIndex(Index):
 
     @classmethod
     def from_texts(
-            cls: Type[PGVector],
-            texts: List[str],
-            embedding: Embeddings,
-            metadatas: Optional[List[dict]] = None,
-            *,
-            collection_name: str = _LANGCHAIN_DEFAULT_COLLECTION_NAME,
-            distance_strategy: DistanceStrategy = DEFAULT_DISTANCE_STRATEGY,
-            ids: Optional[List[str]] = None,
-            pre_delete_collection: bool = False,
-            use_jsonb: bool = True,
-            **kwargs: Any,
+        cls: Type[PGVector],
+        texts: List[str],
+        embedding: Embeddings,
+        metadatas: Optional[List[dict]] = None,
+        *,
+        collection_name: str = _LANGCHAIN_DEFAULT_COLLECTION_NAME,
+        distance_strategy: DistanceStrategy = DEFAULT_DISTANCE_STRATEGY,
+        ids: Optional[List[str]] = None,
+        pre_delete_collection: bool = False,
+        use_jsonb: bool = True,
+        **kwargs: Any,
     ) -> PGVector:
         """Return VectorStore initialized from documents and embeddings."""
         embeddings = embedding.embed_documents(list(texts))
@@ -1511,17 +1690,17 @@ class PostgresDocumentIndex(Index):
 
     @classmethod
     async def afrom_texts(
-            cls: Type[PGVector],
-            texts: List[str],
-            embedding: Embeddings,
-            metadatas: Optional[List[dict]] = None,
-            collection_name: str = _LANGCHAIN_DEFAULT_COLLECTION_NAME,
-            distance_strategy: DistanceStrategy = DEFAULT_DISTANCE_STRATEGY,
-            ids: Optional[List[str]] = None,
-            pre_delete_collection: bool = False,
-            *,
-            use_jsonb: bool = True,
-            **kwargs: Any,
+        cls: Type[PGVector],
+        texts: List[str],
+        embedding: Embeddings,
+        metadatas: Optional[List[dict]] = None,
+        collection_name: str = _LANGCHAIN_DEFAULT_COLLECTION_NAME,
+        distance_strategy: DistanceStrategy = DEFAULT_DISTANCE_STRATEGY,
+        ids: Optional[List[str]] = None,
+        pre_delete_collection: bool = False,
+        *,
+        use_jsonb: bool = True,
+        **kwargs: Any,
     ) -> PGVector:
         """Return VectorStore initialized from documents and embeddings."""
         embeddings = embedding.embed_documents(list(texts))
@@ -1540,16 +1719,16 @@ class PostgresDocumentIndex(Index):
 
     @classmethod
     def from_embeddings(
-            cls,
-            text_embeddings: List[Tuple[str, List[float]]],
-            embedding: Embeddings,
-            *,
-            metadatas: Optional[List[dict]] = None,
-            collection_name: str = _LANGCHAIN_DEFAULT_COLLECTION_NAME,
-            distance_strategy: DistanceStrategy = DEFAULT_DISTANCE_STRATEGY,
-            ids: Optional[List[str]] = None,
-            pre_delete_collection: bool = False,
-            **kwargs: Any,
+        cls,
+        text_embeddings: List[Tuple[str, List[float]]],
+        embedding: Embeddings,
+        *,
+        metadatas: Optional[List[dict]] = None,
+        collection_name: str = _LANGCHAIN_DEFAULT_COLLECTION_NAME,
+        distance_strategy: DistanceStrategy = DEFAULT_DISTANCE_STRATEGY,
+        ids: Optional[List[str]] = None,
+        pre_delete_collection: bool = False,
+        **kwargs: Any,
     ) -> PGVector:
         """Construct PGVector wrapper from raw documents and embeddings.
 
@@ -1597,15 +1776,15 @@ class PostgresDocumentIndex(Index):
 
     @classmethod
     async def afrom_embeddings(
-            cls,
-            text_embeddings: List[Tuple[str, List[float]]],
-            embedding: Embeddings,
-            metadatas: Optional[List[dict]] = None,
-            collection_name: str = _LANGCHAIN_DEFAULT_COLLECTION_NAME,
-            distance_strategy: DistanceStrategy = DEFAULT_DISTANCE_STRATEGY,
-            ids: Optional[List[str]] = None,
-            pre_delete_collection: bool = False,
-            **kwargs: Any,
+        cls,
+        text_embeddings: List[Tuple[str, List[float]]],
+        embedding: Embeddings,
+        metadatas: Optional[List[dict]] = None,
+        collection_name: str = _LANGCHAIN_DEFAULT_COLLECTION_NAME,
+        distance_strategy: DistanceStrategy = DEFAULT_DISTANCE_STRATEGY,
+        ids: Optional[List[str]] = None,
+        pre_delete_collection: bool = False,
+        **kwargs: Any,
     ) -> PGVector:
         """Construct PGVector wrapper from raw documents and pre-
         generated embeddings.
@@ -1642,14 +1821,14 @@ class PostgresDocumentIndex(Index):
 
     @classmethod
     def from_existing_index(
-            cls: Type[PGVector],
-            embedding: Embeddings,
-            *,
-            collection_name: str = _LANGCHAIN_DEFAULT_COLLECTION_NAME,
-            distance_strategy: DistanceStrategy = DEFAULT_DISTANCE_STRATEGY,
-            pre_delete_collection: bool = False,
-            connection: Optional[DBConnection] = None,
-            **kwargs: Any,
+        cls: Type[PGVector],
+        embedding: Embeddings,
+        *,
+        collection_name: str = _LANGCHAIN_DEFAULT_COLLECTION_NAME,
+        distance_strategy: DistanceStrategy = DEFAULT_DISTANCE_STRATEGY,
+        pre_delete_collection: bool = False,
+        connection: Optional[DBConnection] = None,
+        **kwargs: Any,
     ) -> PGVector:
         """
         Get instance of an existing PGVector store.This method will
@@ -1669,14 +1848,14 @@ class PostgresDocumentIndex(Index):
 
     @classmethod
     async def afrom_existing_index(
-            cls: Type[PGVector],
-            embedding: Embeddings,
-            *,
-            collection_name: str = _LANGCHAIN_DEFAULT_COLLECTION_NAME,
-            distance_strategy: DistanceStrategy = DEFAULT_DISTANCE_STRATEGY,
-            pre_delete_collection: bool = False,
-            connection: Optional[DBConnection] = None,
-            **kwargs: Any,
+        cls: Type[PGVector],
+        embedding: Embeddings,
+        *,
+        collection_name: str = _LANGCHAIN_DEFAULT_COLLECTION_NAME,
+        distance_strategy: DistanceStrategy = DEFAULT_DISTANCE_STRATEGY,
+        pre_delete_collection: bool = False,
+        connection: Optional[DBConnection] = None,
+        **kwargs: Any,
     ) -> PGVector:
         """
         Get instance of an existing PGVector store.This method will
@@ -1714,17 +1893,17 @@ class PostgresDocumentIndex(Index):
 
     @classmethod
     def from_documents(
-            cls: Type[PGVector],
-            documents: List[Document],
-            embedding: Embeddings,
-            *,
-            connection: Optional[DBConnection] = None,
-            collection_name: str = _LANGCHAIN_DEFAULT_COLLECTION_NAME,
-            distance_strategy: DistanceStrategy = DEFAULT_DISTANCE_STRATEGY,
-            ids: Optional[List[str]] = None,
-            pre_delete_collection: bool = False,
-            use_jsonb: bool = True,
-            **kwargs: Any,
+        cls: Type[PGVector],
+        documents: List[Document],
+        embedding: Embeddings,
+        *,
+        connection: Optional[DBConnection] = None,
+        collection_name: str = _LANGCHAIN_DEFAULT_COLLECTION_NAME,
+        distance_strategy: DistanceStrategy = DEFAULT_DISTANCE_STRATEGY,
+        ids: Optional[List[str]] = None,
+        pre_delete_collection: bool = False,
+        use_jsonb: bool = True,
+        **kwargs: Any,
     ) -> PGVector:
         """Return VectorStore initialized from documents and embeddings."""
 
@@ -1746,16 +1925,16 @@ class PostgresDocumentIndex(Index):
 
     @classmethod
     async def afrom_documents(
-            cls: Type[PGVector],
-            documents: List[Document],
-            embedding: Embeddings,
-            collection_name: str = _LANGCHAIN_DEFAULT_COLLECTION_NAME,
-            distance_strategy: DistanceStrategy = DEFAULT_DISTANCE_STRATEGY,
-            ids: Optional[List[str]] = None,
-            pre_delete_collection: bool = False,
-            *,
-            use_jsonb: bool = True,
-            **kwargs: Any,
+        cls: Type[PGVector],
+        documents: List[Document],
+        embedding: Embeddings,
+        collection_name: str = _LANGCHAIN_DEFAULT_COLLECTION_NAME,
+        distance_strategy: DistanceStrategy = DEFAULT_DISTANCE_STRATEGY,
+        ids: Optional[List[str]] = None,
+        pre_delete_collection: bool = False,
+        *,
+        use_jsonb: bool = True,
+        **kwargs: Any,
     ) -> PGVector:
         """
         Return VectorStore initialized from documents and embeddings.
@@ -1784,13 +1963,13 @@ class PostgresDocumentIndex(Index):
 
     @classmethod
     def connection_string_from_db_params(
-            cls,
-            driver: str,
-            host: str,
-            port: int,
-            database: str,
-            user: str,
-            password: str,
+        cls,
+        driver: str,
+        host: str,
+        port: int,
+        database: str,
+        user: str,
+        password: str,
     ) -> str:
         """Return connection string from database parameters."""
         if driver != "psycopg":
@@ -1825,13 +2004,13 @@ class PostgresDocumentIndex(Index):
             )
 
     def max_marginal_relevance_search_with_score_by_vector(
-            self,
-            embedding: List[float],
-            k: int = 4,
-            fetch_k: int = 20,
-            lambda_mult: float = 0.5,
-            filter: Optional[Dict[str, str]] = None,
-            **kwargs: Any,
+        self,
+        embedding: List[float],
+        k: int = 4,
+        fetch_k: int = 20,
+        lambda_mult: float = 0.5,
+        filter: Optional[Dict[str, str]] = None,
+        **kwargs: Any,
     ) -> List[Tuple[Document, float]]:
         """Return docs selected using the maximal marginal relevance with score
             to embedding vector.
@@ -1871,13 +2050,13 @@ class PostgresDocumentIndex(Index):
         return [r for i, r in enumerate(candidates) if i in mmr_selected]
 
     async def amax_marginal_relevance_search_with_score_by_vector(
-            self,
-            embedding: List[float],
-            k: int = 4,
-            fetch_k: int = 20,
-            lambda_mult: float = 0.5,
-            filter: Optional[Dict[str, str]] = None,
-            **kwargs: Any,
+        self,
+        embedding: List[float],
+        k: int = 4,
+        fetch_k: int = 20,
+        lambda_mult: float = 0.5,
+        filter: Optional[Dict[str, str]] = None,
+        **kwargs: Any,
     ) -> List[Tuple[Document, float]]:
         """Return docs selected using the maximal marginal relevance with score
             to embedding vector.
@@ -1920,13 +2099,13 @@ class PostgresDocumentIndex(Index):
             return [r for i, r in enumerate(candidates) if i in mmr_selected]
 
     def max_marginal_relevance_search(
-            self,
-            query: str,
-            k: int = 4,
-            fetch_k: int = 20,
-            lambda_mult: float = 0.5,
-            filter: Optional[Dict[str, str]] = None,
-            **kwargs: Any,
+        self,
+        query: str,
+        k: int = 4,
+        fetch_k: int = 20,
+        lambda_mult: float = 0.5,
+        filter: Optional[Dict[str, str]] = None,
+        **kwargs: Any,
     ) -> List[Document]:
         """Return docs selected using the maximal marginal relevance.
 
@@ -1958,13 +2137,13 @@ class PostgresDocumentIndex(Index):
         )
 
     async def amax_marginal_relevance_search(
-            self,
-            query: str,
-            k: int = 4,
-            fetch_k: int = 20,
-            lambda_mult: float = 0.5,
-            filter: Optional[Dict[str, str]] = None,
-            **kwargs: Any,
+        self,
+        query: str,
+        k: int = 4,
+        fetch_k: int = 20,
+        lambda_mult: float = 0.5,
+        filter: Optional[Dict[str, str]] = None,
+        **kwargs: Any,
     ) -> List[Document]:
         """Return docs selected using the maximal marginal relevance.
 
@@ -1997,13 +2176,13 @@ class PostgresDocumentIndex(Index):
         )
 
     def max_marginal_relevance_search_with_score(
-            self,
-            query: str,
-            k: int = 4,
-            fetch_k: int = 20,
-            lambda_mult: float = 0.5,
-            filter: Optional[dict] = None,
-            **kwargs: Any,
+        self,
+        query: str,
+        k: int = 4,
+        fetch_k: int = 20,
+        lambda_mult: float = 0.5,
+        filter: Optional[dict] = None,
+        **kwargs: Any,
     ) -> List[Tuple[Document, float]]:
         """Return docs selected using the maximal marginal relevance with score.
 
@@ -2037,13 +2216,13 @@ class PostgresDocumentIndex(Index):
         return docs
 
     async def amax_marginal_relevance_search_with_score(
-            self,
-            query: str,
-            k: int = 4,
-            fetch_k: int = 20,
-            lambda_mult: float = 0.5,
-            filter: Optional[dict] = None,
-            **kwargs: Any,
+        self,
+        query: str,
+        k: int = 4,
+        fetch_k: int = 20,
+        lambda_mult: float = 0.5,
+        filter: Optional[dict] = None,
+        **kwargs: Any,
     ) -> List[Tuple[Document, float]]:
         """Return docs selected using the maximal marginal relevance with score.
 
@@ -2078,13 +2257,13 @@ class PostgresDocumentIndex(Index):
         return docs
 
     def max_marginal_relevance_search_by_vector(
-            self,
-            embedding: List[float],
-            k: int = 4,
-            fetch_k: int = 20,
-            lambda_mult: float = 0.5,
-            filter: Optional[Dict[str, str]] = None,
-            **kwargs: Any,
+        self,
+        embedding: List[float],
+        k: int = 4,
+        fetch_k: int = 20,
+        lambda_mult: float = 0.5,
+        filter: Optional[Dict[str, str]] = None,
+        **kwargs: Any,
     ) -> List[Document]:
         """Return docs selected using the maximal marginal relevance
             to embedding vector.
@@ -2118,13 +2297,13 @@ class PostgresDocumentIndex(Index):
         return _results_to_docs(docs_and_scores)
 
     async def amax_marginal_relevance_search_by_vector(
-            self,
-            embedding: List[float],
-            k: int = 4,
-            fetch_k: int = 20,
-            lambda_mult: float = 0.5,
-            filter: Optional[Dict[str, str]] = None,
-            **kwargs: Any,
+        self,
+        embedding: List[float],
+        k: int = 4,
+        fetch_k: int = 20,
+        lambda_mult: float = 0.5,
+        filter: Optional[Dict[str, str]] = None,
+        **kwargs: Any,
     ) -> List[Document]:
         """Return docs selected using the maximal marginal relevance
             to embedding vector.
