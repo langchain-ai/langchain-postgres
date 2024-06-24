@@ -27,9 +27,13 @@ import numpy as np
 import sqlalchemy
 from langchain_core.documents import Document
 from langchain_core.embeddings import Embeddings
+from langchain_core.indexes import Index, DeleteResponse, UpsertResponse
+from langchain_core.structured_query import StructuredQuery
 from langchain_core.utils import get_from_dict_or_env
+from langchain_core.utils.iter import batch_iterate
 from langchain_core.vectorstores import VectorStore
-from sqlalchemy import SQLColumnExpression, cast, create_engine, delete, func, select
+from sqlalchemy import SQLColumnExpression, cast, create_engine, delete, func, select, \
+    and_
 from sqlalchemy.dialects.postgresql import JSON, JSONB, JSONPATH, UUID, insert
 from sqlalchemy.engine import Connection, Engine
 from sqlalchemy.ext.asyncio import (
@@ -2178,3 +2182,257 @@ class PGVector(VectorStore):
             )
         async with self.session_maker() as session:
             yield typing_cast(AsyncSession, session)
+
+
+class PGVector2(Index, PGVector):
+    """Vectorstore implementation using Postgres as the backend.
+
+    Currently, there is no mechanism for supporting data migration.
+
+    So breaking changes in the vectorstore schema will require the user to recreate
+    the tables and re-add the documents.
+
+    If this is a concern, please use a different vectorstore. If
+    not, this implementation should be fine for your use case.
+
+    To use this vectorstore you need to have the `vector` extension installed.
+    The `vector` extension is a Postgres extension that provides vector
+    similarity search capabilities.
+
+    ```sh
+    docker run --name pgvector-container -e POSTGRES_PASSWORD=...
+        -d pgvector/pgvector:pg16
+    ```
+
+    Example:
+        .. code-block:: python
+
+            from langchain_postgres.vectorstores import PGVector
+            from langchain_openai.embeddings import OpenAIEmbeddings
+
+            connection_string = "postgresql+psycopg://..."
+            collection_name = "state_of_the_union_test"
+            embeddings = OpenAIEmbeddings()
+            vectorstore = PGVector.from_documents(
+                embedding=embeddings,
+                documents=docs,
+                connection=connection_string,
+                collection_name=collection_name,
+                use_jsonb=True,
+                async_mode=False,
+            )
+
+
+    This code has been ported over from langchain_community with minimal changes
+    to allow users to easily transition from langchain_community to langchain_postgres.
+
+    Some changes had to be made to address issues with the community implementation:
+    * langchain_postgres now works with psycopg3. Please update your
+      connection strings from `postgresql+psycopg2://...` to
+      `postgresql+psycopg://langchain:langchain@...`
+      (yes, the driver name is `psycopg` not `psycopg3`)
+    * The schema of the embedding store and collection have been changed to make
+      add_documents work correctly with user specified ids, specifically
+      when overwriting existing documents.
+      You will need to recreate the tables if you are using an existing database.
+    * A Connection object has to be provided explicitly. Connections will not be
+      picked up automatically based on env variables.
+    * langchain_postgres now accept async connections. If you want to use the async
+        version, you need to set `async_mode=True` when initializing the store or
+        use an async engine.
+
+    Supported filter operators:
+
+    * $eq: Equality operator
+    * $ne: Not equal operator
+    * $lt: Less than operator
+    * $lte: Less than or equal operator
+    * $gt: Greater than operator
+    * $gte: Greater than or equal operator
+    * $in: In operator
+    * $nin: Not in operator
+    * $between: Between operator
+    * $exists: Exists operator
+    * $like: Like operator
+    * $ilike: Case insensitive like operator
+    * $and: Logical AND operator
+    * $or: Logical OR operator
+    * $not: Logical NOT operator
+
+    Example:
+
+    .. code-block:: python
+
+        vectorstore.similarity_search('kitty', k=10, filter={
+            'id': {'$in': [1, 5, 2, 9]}
+        })
+        #%% md
+
+        If you provide a dict with multiple fields, but no operators,
+        the top level will be interpreted as a logical **AND** filter
+
+        vectorstore.similarity_search('ducks', k=10, filter={
+            'id': {'$in': [1, 5, 2, 9]},
+            'location': {'$in': ["pond", "market"]}
+        })
+
+    """
+
+    def delete_by_ids(self, ids: Iterable[str]) -> DeleteResponse:
+        """Delete documents by ids."""
+        batch_size = 1_000
+        for batch_ids in batch_iterate(size=batch_size, iterable=ids):
+            with self._make_sync_session() as session:
+                stmt = delete(self.EmbeddingStore).where(
+                    and_(
+                        self.EmbeddingStore.id.in_(batch_ids),
+                        self.EmbeddingStore.collection_id  # Make into a single query
+                        == self.get_collection(session).uuid,
+                    )
+                )
+                session.execute(stmt)
+                session.commit()
+
+    def lazy_get_by_ids(self, ids: Iterable[str]) -> Iterable[Document]:
+        """Lazy by get IDs."""
+        batch_size = 100
+        for batch_ids in batch_iterate(size=batch_size, iterable=ids):
+            with self._make_sync_session() as session:
+                stmt = select(self.EmbeddingStore).where(
+                    self.EmbeddingStore.id.in_(list(batch_ids))
+                )
+                results = session.execute(stmt).scalars().all()
+                for result in results:
+                    yield Document(
+                        page_content=result.document,
+                        metadata=result.cmetadata,
+                    )
+
+    def _create_filter_clause_with_uuid(
+        self, collection_uuid: str, filter: Optional[Dict[str, str]]
+    ):
+        """Create filter clause for the query."""
+        filter_by = [self.EmbeddingStore.collection_id == collection_uuid]
+        if filter:
+            filter_clauses = self._create_filter_clause(filter)
+            if filter_clauses is not None:
+                filter_by.append(filter_clauses)
+        return filter_by
+
+    def lazy_get(
+        self,
+        *,
+        ids: Optional[Iterable[str]] = None,
+        filters: Union[
+            StructuredQuery, Dict[str, Any], List[Dict[str, Any]], None
+        ] = None,
+        **kwargs: Any,
+    ) -> Iterable[Document]:
+        """Lazy get."""
+        batch_size = 100  # <-- Where to surface this? Exposing in lazy_get makes sense.
+
+        if ids:
+            raise NotImplementedError()
+
+        while True:
+            num_results = 0
+            with self._make_sync_session() as session:
+                collection = self.get_collection(session)
+
+                if filters and not isinstance(filters, dict):
+                    raise NotImplementedError()
+
+                if not filters:
+                    filter_by = [self.EmbeddingStore.collection_id == collection.uuid]
+                else:
+                    filter_by = self._create_filter_clause_with_uuid(
+                        collection.uuid, filters
+                    )
+                results: List[Any] = (
+                    session.query(
+                        self.EmbeddingStore,
+                    )
+                    .filter(*filter_by)
+                    .order_by(self.EmbeddingStore.id)
+                    .limit(batch_size + 1)
+                    .all()
+                )
+                for result in results:
+                    num_results += 1
+                    yield Document(
+                        page_content=result.document,
+                        metadata=result.cmetadata,
+                    )
+
+                if num_results < batch_size:
+                    break
+
+    def upsert(
+        self,
+        documents: Iterable[Document],
+        *,
+        ids: Optional[Iterable[str]] = None,
+        vectors: Optional[Iterable[List[float]]] = None,
+        **kwargs: Any,
+    ) -> UpsertResponse:
+        """Upsert documents into the vectorstore.
+
+        Args:
+            documents: Iterable of documents to upsert.
+            ids: Optional list of ids for the documents.
+                 If not provided, will generate a new id for each document.
+            kwargs: vectorstore specific parameters
+
+        Returns:
+            UpsertResponse
+        """
+        id_generator = _as_id_generator(ids)
+        batch_size = 100  # <-- batch size
+
+        _vector_iterator = iter(vectors) if vectors is not None else None
+
+        for docs in batch_iterate(size=batch_size, iterable=documents):
+            if _vector_iterator is not None:
+                embeddings = [next(_vector_iterator) for _ in docs]
+            else:
+                embeddings = self.embedding_function.embed_documents(
+                    [doc.page_content for doc in docs]
+                )
+
+            with self._make_sync_session() as session:  # type: ignore[arg-type]
+                collection = self.get_collection(session)
+                if not collection:
+                    raise ValueError("Collection not found")
+
+                data = []
+
+                for embedding, doc in zip(embeddings, docs):
+                    id_ = next(id_generator)
+                    if not isinstance(id_, str):
+                        raise TypeError()
+                    data.append(
+                        {
+                            "id": id_,
+                            "collection_id": collection.uuid,
+                            "embedding": embedding,
+                            "document": doc.page_content,
+                            "cmetadata": doc.metadata or {},
+                        }
+                    )
+                stmt = insert(self.EmbeddingStore).values(data)
+                on_conflict_stmt = stmt.on_conflict_do_update(
+                    index_elements=["id"],
+                    # Conflict detection based on these columns
+                    set_={
+                        "embedding": stmt.excluded.embedding,
+                        "document": stmt.excluded.document,
+                        "cmetadata": stmt.excluded.cmetadata,
+                    },
+                )
+                session.execute(on_conflict_stmt)
+                session.commit()
+
+        return UpsertResponse(
+            succeeded=[],
+            failed=[],
+        )

@@ -8,7 +8,7 @@ from langchain_core.documents import Document
 from langchain_core.indexes import Index
 
 # from langchain_postgres.indexer.document_indexer import PostgresDocumentIndex
-from langchain_postgres.vectorstores2 import PGVector
+from langchain_postgres.vectorstores import PGVector2
 from tests.unit_tests.fake_embeddings import FakeEmbeddings
 from tests.utils import VECTORSTORE_CONNECTION_STRING as CONNECTION_STRING
 
@@ -33,7 +33,7 @@ class FakeEmbeddingsWithAdaDimension(FakeEmbeddings):
 def get_document_indexer() -> Generator[Index, None, None]:
     """Get a pre-populated-vectorstore"""
     embeddings = FakeEmbeddingsWithAdaDimension()
-    indexer = PGVector(
+    indexer = PGVector2(
         embeddings=embeddings,
         collection_name="test_collection2",
         connection=CONNECTION_STRING,
@@ -44,7 +44,7 @@ def get_document_indexer() -> Generator[Index, None, None]:
         indexer.drop_tables()  # Postgres specific method
 
 
-class VectorIndexTest(ABC):
+class DocumentIndexTest(ABC):
     @abstractmethod
     @pytest.fixture
     def index(self) -> Index:
@@ -120,11 +120,12 @@ class VectorIndexTest(ABC):
             Document(page_content="id 2", metadata={"id": 2}),
         ]
         index.upsert(documents=documents, vectors=[[1.0] * 3] * 3, ids=["1", "2"])
+        # Need to test no way to fetch vectors right now
         assert index.get_by_ids(ids=["1", "2"]) == documents
         assert index.get_by_ids(ids=["1", "2"]) == documents
 
 
-class TestPostgresDocumentIndex(VectorIndexTest):
+class TestPostgresDocumentIndex(DocumentIndexTest):
     @pytest.fixture()
     def index(self) -> Index:
         """Get the vectorstore class to test."""
