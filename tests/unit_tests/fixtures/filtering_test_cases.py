@@ -24,7 +24,7 @@ metadatas = [
         "id": 2,
         "height": 5.7,  # Float column
         "happiness": 0.8,  # Float column
-        "sadness": 0.1,  # Float column
+        "sadness": 0.1,  #  column
     },
     {
         "name": "jane",
