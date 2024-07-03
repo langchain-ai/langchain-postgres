@@ -5,23 +5,9 @@ import contextlib
 import enum
 import logging
 import uuid
-from typing import (
-    Any,
-    AsyncGenerator,
-    Callable,
-    Dict,
-    Generator,
-    Iterable,
-    List,
-    Optional,
-    Sequence,
-    Tuple,
-    Type,
-    Union,
-)
-from typing import (
-    cast as typing_cast,
-)
+from typing import (Any, AsyncGenerator, Callable, Dict, Generator, Iterable,
+                    List, Optional, Sequence, Tuple, Type, Union)
+from typing import cast as typing_cast
 
 import numpy as np
 import sqlalchemy
@@ -29,22 +15,14 @@ from langchain_core.documents import Document
 from langchain_core.embeddings import Embeddings
 from langchain_core.utils import get_from_dict_or_env
 from langchain_core.vectorstores import VectorStore
-from sqlalchemy import SQLColumnExpression, cast, create_engine, delete, func, select
+from sqlalchemy import (SQLColumnExpression, cast, create_engine, delete, func,
+                        select)
 from sqlalchemy.dialects.postgresql import JSON, JSONB, JSONPATH, UUID, insert
 from sqlalchemy.engine import Connection, Engine
-from sqlalchemy.ext.asyncio import (
-    AsyncEngine,
-    AsyncSession,
-    async_sessionmaker,
-    create_async_engine,
-)
-from sqlalchemy.orm import (
-    Session,
-    declarative_base,
-    relationship,
-    scoped_session,
-    sessionmaker,
-)
+from sqlalchemy.ext.asyncio import (AsyncEngine, AsyncSession,
+                                    async_sessionmaker, create_async_engine)
+from sqlalchemy.orm import (Session, declarative_base, relationship,
+                            scoped_session, sessionmaker)
 
 from langchain_postgres._utils import maximal_marginal_relevance
 
@@ -444,6 +422,7 @@ class PGVector(VectorStore):
         self.EmbeddingStore = EmbeddingStore
         self.create_tables_if_not_exists()
         self.create_collection()
+        self.create_hnsw_index()
 
     async def __apost_init__(
         self,
@@ -463,6 +442,7 @@ class PGVector(VectorStore):
 
         await self.acreate_tables_if_not_exists()
         await self.acreate_collection()
+        await self.acreate_hnsw_index()
 
     @property
     def embeddings(self) -> Embeddings:
@@ -502,6 +482,55 @@ class PGVector(VectorStore):
         await self.__apost_init__()  # Lazy async init
         async with self._async_engine.begin() as conn:
             await conn.run_sync(Base.metadata.drop_all)
+
+    def create_hnsw_index(
+        self,
+        m: int = 16,  # the max number of connections per layer
+        ef_construction: int = 64,  # A higher value of ef_construction provides better recall at the cost of index build time / insert speed.
+    ) -> None:
+        create_index_query = sqlalchemy.text(
+            "CREATE INDEX IF NOT EXISTS langchain_pg_embedding_idx "
+            "ON langchain_pg_embedding USING hnsw (embedding vector_cosine_ops) "
+            "WITH ("
+            "m = {}, "
+            "ef_construction = {}"
+            ");".format(m, ef_construction)
+        )
+
+        # Execute the queries
+        try:
+            with self._make_sync_session() as session:
+                # Create the HNSW index
+                session.execute(create_index_query)
+                session.commit()
+            self.logger.info("HNSW extension and index created successfully.")
+        except Exception as e:
+            self.logger.error(f"Failed to create HNSW extension or index: {e}")
+
+    async def acreate_hnsw_index(
+        self,
+        m: int = 16,  # the max number of connections per layer
+        ef_construction: int = 64,  # A higher value of ef_construction provides better recall at the cost of index build time / insert speed.
+    ) -> None:
+        create_index_query = sqlalchemy.text(
+            "CREATE INDEX IF NOT EXISTS langchain_pg_embedding_idx "
+            "ON langchain_pg_embedding USING hnsw (embedding vector_cosine_ops) "
+            "WITH ("
+            "m = {}, "
+            "ef_construction = {}"
+            ");".format(m, ef_construction)
+        )
+
+        # Execute the queries
+        await self.__apost_init__()  # Lazy async init
+        try:
+            async with self._make_async_session() as session:
+                # Create the HNSW index
+                await session.execute(create_index_query)
+                await session.commit()
+            self.logger.info("HNSW extension and index created successfully.")
+        except Exception as e:
+            self.logger.error(f"Failed to create HNSW extension or index: {e}")
 
     def create_collection(self) -> None:
         if self.pre_delete_collection:
