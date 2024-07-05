@@ -30,7 +30,6 @@ from langchain_core.embeddings import Embeddings
 from langchain_core.indexing import UpsertResponse
 from langchain_core.utils import get_from_dict_or_env
 from langchain_core.vectorstores import VectorStore
-from langchain_postgres._utils import maximal_marginal_relevance
 from sqlalchemy import SQLColumnExpression, cast, create_engine, delete, func, select
 from sqlalchemy.dialects.postgresql import JSON, JSONB, JSONPATH, UUID, insert
 from sqlalchemy.engine import Connection, Engine
@@ -47,6 +46,8 @@ from sqlalchemy.orm import (
     scoped_session,
     sessionmaker,
 )
+
+from langchain_postgres._utils import maximal_marginal_relevance
 
 
 class DistanceStrategy(str, enum.Enum):
@@ -989,6 +990,7 @@ class PGVector(VectorStore):
         docs = [
             (
                 Document(
+                    id=str(result.EmbeddingStore.id),
                     page_content=result.EmbeddingStore.document,
                     metadata=result.EmbeddingStore.cmetadata,
                 ),
@@ -2168,14 +2170,18 @@ class PGVector(VectorStore):
             raise AssertionError("This method must be called in sync mode.")
         texts = [item.page_content for item in items]
         metadatas = [item.metadata for item in items]
-        ids = [item.id if item.id is not None else uuid.uuid4() for item in items]
+        ids = [item.id if item.id is not None else str(uuid.uuid4()) for item in items]
         embeddings = self.embedding_function.embed_documents(list(texts))
         added_ids = self.add_embeddings(
             texts=texts, embeddings=embeddings, metadatas=metadatas, ids=ids, **kwargs
         )
         return {
             "succeeded": added_ids,
-            "failed": [item for item in items if item.id not in added_ids],
+            "failed": [
+                item
+                for item in items
+                if item.id is not None and item.id not in added_ids
+            ],
         }
 
     async def aupsert(
@@ -2194,14 +2200,18 @@ class PGVector(VectorStore):
             raise AssertionError("This method must be called with async_mode")
         texts = [item.page_content for item in items]
         metadatas = [item.metadata for item in items]
-        ids = [item.id if item.id is not None else uuid.uuid4() for item in items]
+        ids = [item.id if item.id is not None else str(uuid.uuid4()) for item in items]
         embeddings = await self.embedding_function.aembed_documents(list(texts))
         added_ids = await self.aadd_embeddings(
             texts=texts, embeddings=embeddings, metadatas=metadatas, ids=ids, **kwargs
         )
         return {
             "succeeded": added_ids,
-            "failed": [item for item in items if item.id not in added_ids],
+            "failed": [
+                item
+                for item in items
+                if item.id is not None and item.id not in added_ids
+            ],
         }
 
     def get_by_ids(self, ids: Sequence[str], /) -> List[Document]:
@@ -2209,31 +2219,21 @@ class PGVector(VectorStore):
         documents = []
         with self._make_sync_session() as session:
             collection = self.get_collection(session)
-
-            if filters and not isinstance(filters, dict):
-                raise NotImplementedError()
-
-            if not filters:
-                filter_by = [self.EmbeddingStore.collection_id == collection.uuid]
-            else:
-                filter_by = self._create_filter_clause_with_uuid(
-                    collection.uuid, filters
-                )
-            results: List[Any] = (
-                session.query(
+            filter_by = [self.EmbeddingStore.collection_id == collection.uuid]
+            stmt = (
+                select(
                     self.EmbeddingStore,
                 )
                 .where(self.EmbeddingStore.id.in_(ids))
                 .filter(*filter_by)
-                .all()
             )
 
-            for result in results:
+            for result in session.execute(stmt).scalars().all():
                 documents.append(
                     Document(
-                        id=result.EmbeddingStore.id,
-                        page_content=result.EmbeddingStore.page_content,
-                        metadata=result.EmbeddingStore.metadata,
+                        id=result.id,
+                        page_content=result.document,
+                        metadata=result.cmetadata,
                     )
                 )
         return documents
@@ -2241,34 +2241,26 @@ class PGVector(VectorStore):
     async def aget_by_ids(self, ids: Sequence[str], /) -> List[Document]:
         """Get documents by ids."""
         documents = []
-        with self._make_async_session() as session:
-            collection = self.aget_collection(session)
+        async with self._make_async_session() as session:
+            collection = await self.aget_collection(session)
+            filter_by = [self.EmbeddingStore.collection_id == collection.uuid]
 
-            if filters and not isinstance(filters, dict):
-                raise NotImplementedError()
-
-            if not filters:
-                filter_by = [self.EmbeddingStore.collection_id == collection.uuid]
-            else:
-                filter_by = self._create_filter_clause_with_uuid(
-                    collection.uuid, filters
-                )
-
-            results: List[Any] = (
-                await session.query(
+            stmt = (
+                select(
                     self.EmbeddingStore,
                 )
                 .where(self.EmbeddingStore.id.in_(ids))
                 .filter(*filter_by)
-                .all()
             )
+
+            results: List[Any] = (await session.execute(stmt)).scalars().all()
 
             for result in results:
                 documents.append(
                     Document(
-                        id=result.EmbeddingStore.id,
-                        page_content=result.EmbeddingStore.page_content,
-                        metadata=result.EmbeddingStore.metadata,
+                        id=str(result.id),
+                        page_content=result.document,
+                        metadata=result.cmetadata,
                     )
                 )
         return documents

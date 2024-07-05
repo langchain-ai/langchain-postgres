@@ -1,9 +1,10 @@
 """Test PGVector functionality."""
 import contextlib
-from typing import Any, AsyncGenerator, Dict, Generator, List
+from typing import Any, AsyncGenerator, Dict, Generator, List, Optional
 
 import pytest
 from langchain_core.documents import Document
+from langchain_core.embeddings import Embeddings
 from sqlalchemy import select
 
 from langchain_postgres.vectorstores import (
@@ -828,12 +829,14 @@ async def async_pgvector() -> AsyncGenerator[PGVector, None]:
 
 
 @contextlib.contextmanager
-def get_vectorstore() -> Generator[PGVector, None, None]:
+def get_vectorstore(
+    *, embedding: Optional[Embeddings] = None
+) -> Generator[PGVector, None, None]:
     """Get a pre-populated-vectorstore"""
     store = PGVector.from_documents(
         documents=DOCUMENTS,
         collection_name="test_collection",
-        embedding=FakeEmbeddingsWithAdaDimension(),
+        embedding=embedding or FakeEmbeddingsWithAdaDimension(),
         connection=CONNECTION_STRING,
         pre_delete_collection=True,
         relevance_score_fn=lambda d: d * 0,
@@ -846,12 +849,14 @@ def get_vectorstore() -> Generator[PGVector, None, None]:
 
 
 @contextlib.asynccontextmanager
-async def aget_vectorstore() -> AsyncGenerator[PGVector, None]:
+async def aget_vectorstore(
+    *, embedding: Optional[Embeddings] = None
+) -> AsyncGenerator[PGVector, None]:
     """Get a pre-populated-vectorstore"""
     store = await PGVector.afrom_documents(
         documents=DOCUMENTS,
         collection_name="test_collection",
-        embedding=FakeEmbeddingsWithAdaDimension(),
+        embedding=embedding or FakeEmbeddingsWithAdaDimension(),
         connection=CONNECTION_STRING,
         pre_delete_collection=True,
         relevance_score_fn=lambda d: d * 0,
