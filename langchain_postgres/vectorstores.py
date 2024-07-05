@@ -4,7 +4,6 @@ from __future__ import annotations
 import contextlib
 import enum
 import logging
-import uuid
 from typing import (Any, AsyncGenerator, Callable, Dict, Generator, Iterable,
                     List, Optional, Sequence, Tuple, Type, Union)
 from typing import cast as typing_cast
@@ -17,12 +16,12 @@ from langchain_core.utils import get_from_dict_or_env
 from langchain_core.vectorstores import VectorStore
 from sqlalchemy import (SQLColumnExpression, cast, create_engine, delete, func,
                         select)
-from sqlalchemy.dialects.postgresql import JSON, JSONB, JSONPATH, UUID, insert
+from sqlalchemy.dialects.postgresql import JSONB, JSONPATH, insert
 from sqlalchemy.engine import Connection, Engine
 from sqlalchemy.ext.asyncio import (AsyncEngine, AsyncSession,
                                     async_sessionmaker, create_async_engine)
-from sqlalchemy.orm import (Session, declarative_base, relationship,
-                            scoped_session, sessionmaker)
+from sqlalchemy.orm import (Session, declarative_base, scoped_session,
+                            sessionmaker)
 
 from langchain_postgres._utils import maximal_marginal_relevance
 
@@ -38,9 +37,6 @@ class DistanceStrategy(str, enum.Enum):
 DEFAULT_DISTANCE_STRATEGY = DistanceStrategy.COSINE
 
 Base = declarative_base()  # type: Any
-
-
-_LANGCHAIN_DEFAULT_COLLECTION_NAME = "langchain"
 
 
 _classes: Any = None
@@ -76,134 +72,43 @@ SUPPORTED_OPERATORS = (
 )
 
 
-def _get_embedding_collection_store(vector_dimension: Optional[int] = None) -> Any:
+def _get_embedding_store(vector_dimension: Optional[int] = None) -> Any:
     global _classes
     if _classes is not None:
         return _classes
 
     from pgvector.sqlalchemy import Vector  # type: ignore
 
-    class CollectionStore(Base):
-        """Collection store."""
-
-        __tablename__ = "langchain_pg_collection"
-
-        uuid = sqlalchemy.Column(
-            UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-        )
-        name = sqlalchemy.Column(sqlalchemy.String, nullable=False, unique=True)
-        cmetadata = sqlalchemy.Column(JSON)
-
-        embeddings = relationship(
-            "EmbeddingStore",
-            back_populates="collection",
-            passive_deletes=True,
-        )
-
-        @classmethod
-        def get_by_name(
-            cls, session: Session, name: str
-        ) -> Optional["CollectionStore"]:
-            return (
-                session.query(cls)
-                .filter(typing_cast(sqlalchemy.Column, cls.name) == name)
-                .first()
-            )
-
-        @classmethod
-        async def aget_by_name(
-            cls, session: AsyncSession, name: str
-        ) -> Optional["CollectionStore"]:
-            return (
-                (
-                    await session.execute(
-                        select(CollectionStore).where(
-                            typing_cast(sqlalchemy.Column, cls.name) == name
-                        )
-                    )
-                )
-                .scalars()
-                .first()
-            )
-
-        @classmethod
-        def get_or_create(
-            cls,
-            session: Session,
-            name: str,
-            cmetadata: Optional[dict] = None,
-        ) -> Tuple["CollectionStore", bool]:
-            """Get or create a collection.
-            Returns:
-                 Where the bool is True if the collection was created.
-            """  # noqa: E501
-            created = False
-            collection = cls.get_by_name(session, name)
-            if collection:
-                return collection, created
-
-            collection = cls(name=name, cmetadata=cmetadata)
-            session.add(collection)
-            session.commit()
-            created = True
-            return collection, created
-
-        @classmethod
-        async def aget_or_create(
-            cls,
-            session: AsyncSession,
-            name: str,
-            cmetadata: Optional[dict] = None,
-        ) -> Tuple["CollectionStore", bool]:
-            """
-            Get or create a collection.
-            Returns [Collection, bool] where the bool is True if the collection was created.
-            """  # noqa: E501
-            created = False
-            collection = await cls.aget_by_name(session, name)
-            if collection:
-                return collection, created
-
-            collection = cls(name=name, cmetadata=cmetadata)
-            session.add(collection)
-            await session.commit()
-            created = True
-            return collection, created
-
     class EmbeddingStore(Base):
         """Embedding store."""
 
-        __tablename__ = "langchain_pg_embedding"
+        __tablename__ = "jarvis_langchain_pg_embedding"
 
         id = sqlalchemy.Column(
-            sqlalchemy.String, nullable=True, primary_key=True, index=True, unique=True
+            sqlalchemy.String, nullable=False, primary_key=True
         )
 
-        collection_id = sqlalchemy.Column(
-            UUID(as_uuid=True),
-            sqlalchemy.ForeignKey(
-                f"{CollectionStore.__tablename__}.uuid",
-                ondelete="CASCADE",
-            ),
+        embedding: Vector = sqlalchemy.Column(Vector(vector_dimension))  # type: ignore
+        source_id = sqlalchemy.Column(
+            sqlalchemy.String(255), nullable=False, index=True
         )
-        collection = relationship(CollectionStore, back_populates="embeddings")
-
-        embedding: Vector = sqlalchemy.Column(Vector(vector_dimension))
+        uid = sqlalchemy.Column(sqlalchemy.String(255), nullable=False, index=True)
+        directory_id = sqlalchemy.Column(
+            sqlalchemy.String(255), nullable=False, index=True
+        )
         document = sqlalchemy.Column(sqlalchemy.String, nullable=True)
         cmetadata = sqlalchemy.Column(JSONB, nullable=True)
 
         __table_args__ = (
             sqlalchemy.Index(
-                "ix_cmetadata_gin",
+                "jarvis_ix_cmetadata_gin",
                 "cmetadata",
                 postgresql_using="gin",
                 postgresql_ops={"cmetadata": "jsonb_path_ops"},
             ),
         )
 
-    _classes = (EmbeddingStore, CollectionStore)
-
-    return _classes
+    return EmbeddingStore
 
 
 def _results_to_docs(docs_and_scores: Any) -> List[Document]:
@@ -323,14 +228,9 @@ class PGVector(VectorStore):
         *,
         connection: Union[None, DBConnection, Engine, AsyncEngine, str] = None,
         embedding_length: Optional[int] = None,
-        collection_name: str = _LANGCHAIN_DEFAULT_COLLECTION_NAME,
-        collection_metadata: Optional[dict] = None,
-        distance_strategy: DistanceStrategy = DEFAULT_DISTANCE_STRATEGY,
-        pre_delete_collection: bool = False,
         logger: Optional[logging.Logger] = None,
         relevance_score_fn: Optional[Callable[[float], float]] = None,
         engine_args: Optional[dict[str, Any]] = None,
-        use_jsonb: bool = True,
         create_extension: bool = True,
         async_mode: bool = False,
     ) -> None:
@@ -365,10 +265,7 @@ class PGVector(VectorStore):
         self.async_mode = async_mode
         self.embedding_function = embeddings
         self._embedding_length = embedding_length
-        self.collection_name = collection_name
-        self.collection_metadata = collection_metadata
-        self._distance_strategy = distance_strategy
-        self.pre_delete_collection = pre_delete_collection
+        self._distance_strategy = DEFAULT_DISTANCE_STRATEGY
         self.logger = logger or logging.getLogger(__name__)
         self.override_relevance_score_fn = relevance_score_fn
         self._engine: Optional[Engine] = None
@@ -399,12 +296,8 @@ class PGVector(VectorStore):
         else:
             self.session_maker = scoped_session(sessionmaker(bind=self._engine))
 
-        self.use_jsonb = use_jsonb
         self.create_extension = create_extension
 
-        if not use_jsonb:
-            # Replace with a deprecation warning.
-            raise NotImplementedError("use_jsonb=False is no longer supported.")
         if not self.async_mode:
             self.__post_init__()
 
@@ -415,13 +308,9 @@ class PGVector(VectorStore):
         if self.create_extension:
             self.create_vector_extension()
 
-        EmbeddingStore, CollectionStore = _get_embedding_collection_store(
-            self._embedding_length
-        )
-        self.CollectionStore = CollectionStore
+        EmbeddingStore = _get_embedding_store(self._embedding_length)
         self.EmbeddingStore = EmbeddingStore
         self.create_tables_if_not_exists()
-        self.create_collection()
         self.create_hnsw_index()
 
     async def __apost_init__(
@@ -432,16 +321,12 @@ class PGVector(VectorStore):
             return
         self._async_init = True
 
-        EmbeddingStore, CollectionStore = _get_embedding_collection_store(
-            self._embedding_length
-        )
-        self.CollectionStore = CollectionStore
+        EmbeddingStore = _get_embedding_store(self._embedding_length)
         self.EmbeddingStore = EmbeddingStore
         if self.create_extension:
             await self.acreate_vector_extension()
 
         await self.acreate_tables_if_not_exists()
-        await self.acreate_collection()
         await self.acreate_hnsw_index()
 
     @property
@@ -489,8 +374,8 @@ class PGVector(VectorStore):
         ef_construction: int = 64,  # A higher value of ef_construction provides better recall at the cost of index build time / insert speed.
     ) -> None:
         create_index_query = sqlalchemy.text(
-            "CREATE INDEX IF NOT EXISTS langchain_pg_embedding_idx "
-            "ON langchain_pg_embedding USING hnsw (embedding vector_cosine_ops) "
+            "CREATE INDEX IF NOT EXISTS jarvis_langchain_pg_embedding_idx "
+            "ON jarvis_langchain_pg_embedding USING hnsw (embedding vector_cosine_ops) "
             "WITH ("
             "m = {}, "
             "ef_construction = {}"
@@ -513,8 +398,8 @@ class PGVector(VectorStore):
         ef_construction: int = 64,  # A higher value of ef_construction provides better recall at the cost of index build time / insert speed.
     ) -> None:
         create_index_query = sqlalchemy.text(
-            "CREATE INDEX IF NOT EXISTS langchain_pg_embedding_idx "
-            "ON langchain_pg_embedding USING hnsw (embedding vector_cosine_ops) "
+            "CREATE INDEX IF NOT EXISTS jarvis_langchain_pg_embedding_idx "
+            "ON jarvis_langchain_pg_embedding USING hnsw (embedding vector_cosine_ops) "
             "WITH ("
             "m = {}, "
             "ef_construction = {}"
@@ -532,69 +417,15 @@ class PGVector(VectorStore):
         except Exception as e:
             self.logger.error(f"Failed to create HNSW extension or index: {e}")
 
-    def create_collection(self) -> None:
-        if self.pre_delete_collection:
-            self.delete_collection()
-        with self._make_sync_session() as session:
-            self.CollectionStore.get_or_create(
-                session, self.collection_name, cmetadata=self.collection_metadata
-            )
-            session.commit()
-
-    async def acreate_collection(self) -> None:
-        await self.__apost_init__()  # Lazy async init
-        async with self._make_async_session() as session:
-            if self.pre_delete_collection:
-                await self._adelete_collection(session)
-            await self.CollectionStore.aget_or_create(
-                session, self.collection_name, cmetadata=self.collection_metadata
-            )
-            await session.commit()
-
-    def _delete_collection(self, session: Session) -> None:
-        collection = self.get_collection(session)
-        if not collection:
-            self.logger.warning("Collection not found")
-            return
-        session.delete(collection)
-
-    async def _adelete_collection(self, session: AsyncSession) -> None:
-        collection = await self.aget_collection(session)
-        if not collection:
-            self.logger.warning("Collection not found")
-            return
-        await session.delete(collection)
-
-    def delete_collection(self) -> None:
-        with self._make_sync_session() as session:
-            collection = self.get_collection(session)
-            if not collection:
-                self.logger.warning("Collection not found")
-                return
-            session.delete(collection)
-            session.commit()
-
-    async def adelete_collection(self) -> None:
-        await self.__apost_init__()  # Lazy async init
-        async with self._make_async_session() as session:
-            collection = await self.aget_collection(session)
-            if not collection:
-                self.logger.warning("Collection not found")
-                return
-            await session.delete(collection)
-            await session.commit()
-
     def delete(
         self,
         ids: Optional[List[str]] = None,
-        collection_only: bool = False,
         **kwargs: Any,
     ) -> None:
         """Delete vectors by ids or uuids.
 
         Args:
             ids: List of ids to delete.
-            collection_only: Only delete ids in the collection.
         """
         with self._make_sync_session() as session:
             if ids is not None:
@@ -603,33 +434,21 @@ class PGVector(VectorStore):
                     "using the custom ids field)"
                 )
 
-                stmt = delete(self.EmbeddingStore)
-
-                if collection_only:
-                    collection = self.get_collection(session)
-                    if not collection:
-                        self.logger.warning("Collection not found")
-                        return
-
-                    stmt = stmt.where(
-                        self.EmbeddingStore.collection_id == collection.uuid
-                    )
-
-                stmt = stmt.where(self.EmbeddingStore.id.in_(ids))
+                stmt = delete(self.EmbeddingStore).where(
+                    self.EmbeddingStore.id.in_(ids)
+                )
                 session.execute(stmt)
             session.commit()
 
     async def adelete(
         self,
         ids: Optional[List[str]] = None,
-        collection_only: bool = False,
         **kwargs: Any,
     ) -> None:
         """Async delete vectors by ids or uuids.
 
         Args:
             ids: List of ids to delete.
-            collection_only: Only delete ids in the collection.
         """
         await self.__apost_init__()  # Lazy async init
         async with self._make_async_session() as session:
@@ -639,30 +458,11 @@ class PGVector(VectorStore):
                     "using the custom ids field)"
                 )
 
-                stmt = delete(self.EmbeddingStore)
-
-                if collection_only:
-                    collection = await self.aget_collection(session)
-                    if not collection:
-                        self.logger.warning("Collection not found")
-                        return
-
-                    stmt = stmt.where(
-                        self.EmbeddingStore.collection_id == collection.uuid
-                    )
-
-                stmt = stmt.where(self.EmbeddingStore.id.in_(ids))
+                stmt = delete(self.EmbeddingStore).where(
+                    self.EmbeddingStore.id.in_(ids)
+                )
                 await session.execute(stmt)
             await session.commit()
-
-    def get_collection(self, session: Session) -> Any:
-        assert not self._async_engine, "This method must be called without async_mode"
-        return self.CollectionStore.get_by_name(session, self.collection_name)
-
-    async def aget_collection(self, session: AsyncSession) -> Any:
-        assert self._async_engine, "This method must be called with async_mode"
-        await self.__apost_init__()  # Lazy async init
-        return await self.CollectionStore.aget_by_name(session, self.collection_name)
 
     @classmethod
     def __from(
@@ -671,33 +471,17 @@ class PGVector(VectorStore):
         embeddings: List[List[float]],
         embedding: Embeddings,
         metadatas: Optional[List[dict]] = None,
-        ids: Optional[List[str]] = None,
-        collection_name: str = _LANGCHAIN_DEFAULT_COLLECTION_NAME,
-        distance_strategy: DistanceStrategy = DEFAULT_DISTANCE_STRATEGY,
         connection: Optional[str] = None,
-        pre_delete_collection: bool = False,
-        *,
-        use_jsonb: bool = True,
         **kwargs: Any,
     ) -> PGVector:
-        if ids is None:
-            ids = [str(uuid.uuid4()) for _ in texts]
-
-        if not metadatas:
-            metadatas = [{} for _ in texts]
-
         store = cls(
             connection=connection,
-            collection_name=collection_name,
             embeddings=embedding,
-            distance_strategy=distance_strategy,
-            pre_delete_collection=pre_delete_collection,
-            use_jsonb=use_jsonb,
             **kwargs,
         )
 
         store.add_embeddings(
-            texts=texts, embeddings=embeddings, metadatas=metadatas, ids=ids, **kwargs
+            texts=texts, embeddings=embeddings, metadatas=metadatas, **kwargs
         )
 
         return store
@@ -709,34 +493,18 @@ class PGVector(VectorStore):
         embeddings: List[List[float]],
         embedding: Embeddings,
         metadatas: Optional[List[dict]] = None,
-        ids: Optional[List[str]] = None,
-        collection_name: str = _LANGCHAIN_DEFAULT_COLLECTION_NAME,
-        distance_strategy: DistanceStrategy = DEFAULT_DISTANCE_STRATEGY,
         connection: Optional[str] = None,
-        pre_delete_collection: bool = False,
-        *,
-        use_jsonb: bool = True,
         **kwargs: Any,
     ) -> PGVector:
-        if ids is None:
-            ids = [str(uuid.uuid1()) for _ in texts]
-
-        if not metadatas:
-            metadatas = [{} for _ in texts]
-
         store = cls(
             connection=connection,
-            collection_name=collection_name,
             embeddings=embedding,
-            distance_strategy=distance_strategy,
-            pre_delete_collection=pre_delete_collection,
-            use_jsonb=use_jsonb,
             async_mode=True,
             **kwargs,
         )
 
         await store.aadd_embeddings(
-            texts=texts, embeddings=embeddings, metadatas=metadatas, ids=ids, **kwargs
+            texts=texts, embeddings=embeddings, metadatas=metadatas, **kwargs
         )
 
         return store
@@ -746,7 +514,6 @@ class PGVector(VectorStore):
         texts: Iterable[str],
         embeddings: List[List[float]],
         metadatas: Optional[List[dict]] = None,
-        ids: Optional[List[str]] = None,
         **kwargs: Any,
     ) -> List[str]:
         """Add embeddings to the vectorstore.
@@ -760,27 +527,19 @@ class PGVector(VectorStore):
             kwargs: vectorstore specific parameters
         """
         assert not self._async_engine, "This method must be called with sync_mode"
-        if ids is None:
-            ids = [str(uuid.uuid4()) for _ in texts]
-
-        if not metadatas:
-            metadatas = [{} for _ in texts]
 
         with self._make_sync_session() as session:  # type: ignore[arg-type]
-            collection = self.get_collection(session)
-            if not collection:
-                raise ValueError("Collection not found")
             data = [
                 {
-                    "id": id,
-                    "collection_id": collection.uuid,
+                    "id": meta["id"],
                     "embedding": embedding,
                     "document": text,
-                    "cmetadata": metadata or {},
+                    "uid": meta["uid"],
+                    "directory_id": meta["directory_id"],
+                    "source_id": meta["source_id"],
+                    "cmetadata": meta,
                 }
-                for text, metadata, embedding, id in zip(
-                    texts, metadatas, embeddings, ids
-                )
+                for text, meta, embedding in zip(texts, metadatas, embeddings)  # type: ignore
             ]
             stmt = insert(self.EmbeddingStore).values(data)
             on_conflict_stmt = stmt.on_conflict_do_update(
@@ -790,19 +549,21 @@ class PGVector(VectorStore):
                     "embedding": stmt.excluded.embedding,
                     "document": stmt.excluded.document,
                     "cmetadata": stmt.excluded.cmetadata,
+                    "uid": stmt.excluded.uid,
+                    "directory_id": stmt.excluded.directory_id,
+                    "source_id": stmt.excluded.source_id,
                 },
             )
             session.execute(on_conflict_stmt)
             session.commit()
 
-        return ids
+        return [meta["id"] for meta in metadatas]  # type: ignore
 
     async def aadd_embeddings(
         self,
         texts: Iterable[str],
         embeddings: List[List[float]],
         metadatas: Optional[List[dict]] = None,
-        ids: Optional[List[str]] = None,
         **kwargs: Any,
     ) -> List[str]:
         """Async add embeddings to the vectorstore.
@@ -816,27 +577,19 @@ class PGVector(VectorStore):
             kwargs: vectorstore specific parameters
         """
         await self.__apost_init__()  # Lazy async init
-        if ids is None:
-            ids = [str(uuid.uuid1()) for _ in texts]
-
-        if not metadatas:
-            metadatas = [{} for _ in texts]
 
         async with self._make_async_session() as session:  # type: ignore[arg-type]
-            collection = await self.aget_collection(session)
-            if not collection:
-                raise ValueError("Collection not found")
             data = [
                 {
-                    "id": id,
-                    "collection_id": collection.uuid,
+                    "id": meta["id"],
                     "embedding": embedding,
                     "document": text,
-                    "cmetadata": metadata or {},
+                    "uid": meta["uid"],
+                    "directory_id": meta["directory_id"],
+                    "source_id": meta["source_id"],
+                    "cmetadata": meta,
                 }
-                for text, metadata, embedding, id in zip(
-                    texts, metadatas, embeddings, ids
-                )
+                for text, meta, embedding in zip(texts, metadatas, embeddings)  # type: ignore
             ]
             stmt = insert(self.EmbeddingStore).values(data)
             on_conflict_stmt = stmt.on_conflict_do_update(
@@ -846,18 +599,20 @@ class PGVector(VectorStore):
                     "embedding": stmt.excluded.embedding,
                     "document": stmt.excluded.document,
                     "cmetadata": stmt.excluded.cmetadata,
+                    "uid": stmt.excluded.uid,
+                    "directory_id": stmt.excluded.directory_id,
+                    "source_id": stmt.excluded.source_id,
                 },
             )
             await session.execute(on_conflict_stmt)
             await session.commit()
 
-        return ids
+        return [meta["id"] for meta in metadatas]  # type: ignore
 
     def add_texts(
         self,
         texts: Iterable[str],
         metadatas: Optional[List[dict]] = None,
-        ids: Optional[List[str]] = None,
         **kwargs: Any,
     ) -> List[str]:
         """Run more texts through the embeddings and add to the vectorstore.
@@ -875,14 +630,16 @@ class PGVector(VectorStore):
         assert not self._async_engine, "This method must be called without async_mode"
         embeddings = self.embedding_function.embed_documents(list(texts))
         return self.add_embeddings(
-            texts=texts, embeddings=embeddings, metadatas=metadatas, ids=ids, **kwargs
+            texts=texts,
+            embeddings=embeddings,
+            metadatas=metadatas,
+            **kwargs,
         )
 
     async def aadd_texts(
         self,
         texts: Iterable[str],
         metadatas: Optional[List[dict]] = None,
-        ids: Optional[List[str]] = None,
         **kwargs: Any,
     ) -> List[str]:
         """Run more texts through the embeddings and add to the vectorstore.
@@ -900,7 +657,10 @@ class PGVector(VectorStore):
         await self.__apost_init__()  # Lazy async init
         embeddings = await self.embedding_function.aembed_documents(list(texts))
         return await self.aadd_embeddings(
-            texts=texts, embeddings=embeddings, metadatas=metadatas, ids=ids, **kwargs
+            texts=texts,
+            embeddings=embeddings,
+            metadatas=metadatas,
+            **kwargs,
         )
 
     def similarity_search(
@@ -1050,7 +810,7 @@ class PGVector(VectorStore):
             )
             for result in results
         ]
-        return docs
+        return docs #type: ignore
 
     def _handle_field_filter(
         self,
@@ -1170,99 +930,6 @@ class PGVector(VectorStore):
         else:
             raise NotImplementedError()
 
-    def _create_filter_clause_deprecated(self, key, value):  # type: ignore[no-untyped-def]
-        """Deprecated functionality.
-
-        This is for backwards compatibility with the JSON based schema for metadata.
-        It uses incorrect operator syntax (operators are not prefixed with $).
-
-        This implementation is not efficient, and has bugs associated with
-        the way that it handles numeric filter clauses.
-        """
-        IN, NIN, BETWEEN, GT, LT, NE = "in", "nin", "between", "gt", "lt", "ne"
-        EQ, LIKE, CONTAINS, OR, AND = "eq", "like", "contains", "or", "and"
-
-        value_case_insensitive = {k.lower(): v for k, v in value.items()}
-        if IN in map(str.lower, value):
-            filter_by_metadata = self.EmbeddingStore.cmetadata[key].astext.in_(
-                value_case_insensitive[IN]
-            )
-        elif NIN in map(str.lower, value):
-            filter_by_metadata = self.EmbeddingStore.cmetadata[key].astext.not_in(
-                value_case_insensitive[NIN]
-            )
-        elif BETWEEN in map(str.lower, value):
-            filter_by_metadata = self.EmbeddingStore.cmetadata[key].astext.between(
-                str(value_case_insensitive[BETWEEN][0]),
-                str(value_case_insensitive[BETWEEN][1]),
-            )
-        elif GT in map(str.lower, value):
-            filter_by_metadata = self.EmbeddingStore.cmetadata[key].astext > str(
-                value_case_insensitive[GT]
-            )
-        elif LT in map(str.lower, value):
-            filter_by_metadata = self.EmbeddingStore.cmetadata[key].astext < str(
-                value_case_insensitive[LT]
-            )
-        elif NE in map(str.lower, value):
-            filter_by_metadata = self.EmbeddingStore.cmetadata[key].astext != str(
-                value_case_insensitive[NE]
-            )
-        elif EQ in map(str.lower, value):
-            filter_by_metadata = self.EmbeddingStore.cmetadata[key].astext == str(
-                value_case_insensitive[EQ]
-            )
-        elif LIKE in map(str.lower, value):
-            filter_by_metadata = self.EmbeddingStore.cmetadata[key].astext.like(
-                value_case_insensitive[LIKE]
-            )
-        elif CONTAINS in map(str.lower, value):
-            filter_by_metadata = self.EmbeddingStore.cmetadata[key].astext.contains(
-                value_case_insensitive[CONTAINS]
-            )
-        elif OR in map(str.lower, value):
-            or_clauses = [
-                self._create_filter_clause(key, sub_value)
-                for sub_value in value_case_insensitive[OR]
-            ]
-            filter_by_metadata = sqlalchemy.or_(*or_clauses)
-        elif AND in map(str.lower, value):
-            and_clauses = [
-                self._create_filter_clause(key, sub_value)
-                for sub_value in value_case_insensitive[AND]
-            ]
-            filter_by_metadata = sqlalchemy.and_(*and_clauses)
-
-        else:
-            filter_by_metadata = None
-
-        return filter_by_metadata
-
-    def _create_filter_clause_json_deprecated(
-        self, filter: Any
-    ) -> List[SQLColumnExpression]:
-        """Convert filters from IR to SQL clauses.
-
-        **DEPRECATED** This functionality will be deprecated in the future.
-
-        It implements translation of filters for a schema that uses JSON
-        for metadata rather than the JSONB field which is more efficient
-        for querying.
-        """
-        filter_clauses = []
-        for key, value in filter.items():
-            if isinstance(value, dict):
-                filter_by_metadata = self._create_filter_clause_deprecated(key, value)
-
-                if filter_by_metadata is not None:
-                    filter_clauses.append(filter_by_metadata)
-            else:
-                filter_by_metadata = self.EmbeddingStore.cmetadata[key].astext == str(
-                    value
-                )
-                filter_clauses.append(filter_by_metadata)
-        return filter_clauses
-
     def _create_filter_clause(self, filters: Any) -> Any:
         """Convert LangChain IR filter representation to matching SQLAlchemy clauses.
 
@@ -1380,22 +1047,11 @@ class PGVector(VectorStore):
     ) -> Sequence[Any]:
         """Query the collection."""
         with self._make_sync_session() as session:  # type: ignore[arg-type]
-            collection = self.get_collection(session)
-            if not collection:
-                raise ValueError("Collection not found")
-
-            filter_by = [self.EmbeddingStore.collection_id == collection.uuid]
+            filter_by = []
             if filter:
-                if self.use_jsonb:
-                    filter_clauses = self._create_filter_clause(filter)
-                    if filter_clauses is not None:
-                        filter_by.append(filter_clauses)
-                else:
-                    # Old way of doing things
-                    filter_clauses = self._create_filter_clause_json_deprecated(filter)
-                    filter_by.extend(filter_clauses)
-
-            _type = self.EmbeddingStore
+                filter_clauses = self._create_filter_clause(filter)
+                if filter_clauses is not None:
+                    filter_by.append(filter_clauses)
 
             results: List[Any] = (
                 session.query(
@@ -1404,10 +1060,6 @@ class PGVector(VectorStore):
                 )
                 .filter(*filter_by)
                 .order_by(sqlalchemy.asc("distance"))
-                .join(
-                    self.CollectionStore,
-                    self.EmbeddingStore.collection_id == self.CollectionStore.uuid,
-                )
                 .limit(k)
                 .all()
             )
@@ -1423,22 +1075,11 @@ class PGVector(VectorStore):
     ) -> Sequence[Any]:
         """Query the collection."""
         async with self._make_async_session() as session:  # type: ignore[arg-type]
-            collection = await self.aget_collection(session)
-            if not collection:
-                raise ValueError("Collection not found")
-
-            filter_by = [self.EmbeddingStore.collection_id == collection.uuid]
+            filter_by = []
             if filter:
-                if self.use_jsonb:
-                    filter_clauses = self._create_filter_clause(filter)
-                    if filter_clauses is not None:
-                        filter_by.append(filter_clauses)
-                else:
-                    # Old way of doing things
-                    filter_clauses = self._create_filter_clause_json_deprecated(filter)
-                    filter_by.extend(filter_clauses)
-
-            _type = self.EmbeddingStore
+                filter_clauses = self._create_filter_clause(filter)
+                if filter_clauses is not None:
+                    filter_by.append(filter_clauses)
 
             stmt = (
                 select(
@@ -1447,10 +1088,6 @@ class PGVector(VectorStore):
                 )
                 .filter(*filter_by)
                 .order_by(sqlalchemy.asc("distance"))
-                .join(
-                    self.CollectionStore,
-                    self.EmbeddingStore.collection_id == self.CollectionStore.uuid,
-                )
                 .limit(k)
             )
 
@@ -1511,12 +1148,6 @@ class PGVector(VectorStore):
         texts: List[str],
         embedding: Embeddings,
         metadatas: Optional[List[dict]] = None,
-        *,
-        collection_name: str = _LANGCHAIN_DEFAULT_COLLECTION_NAME,
-        distance_strategy: DistanceStrategy = DEFAULT_DISTANCE_STRATEGY,
-        ids: Optional[List[str]] = None,
-        pre_delete_collection: bool = False,
-        use_jsonb: bool = True,
         **kwargs: Any,
     ) -> PGVector:
         """Return VectorStore initialized from documents and embeddings."""
@@ -1527,11 +1158,6 @@ class PGVector(VectorStore):
             embeddings,
             embedding,
             metadatas=metadatas,
-            ids=ids,
-            collection_name=collection_name,
-            distance_strategy=distance_strategy,
-            pre_delete_collection=pre_delete_collection,
-            use_jsonb=use_jsonb,
             **kwargs,
         )
 
@@ -1541,12 +1167,7 @@ class PGVector(VectorStore):
         texts: List[str],
         embedding: Embeddings,
         metadatas: Optional[List[dict]] = None,
-        collection_name: str = _LANGCHAIN_DEFAULT_COLLECTION_NAME,
-        distance_strategy: DistanceStrategy = DEFAULT_DISTANCE_STRATEGY,
         ids: Optional[List[str]] = None,
-        pre_delete_collection: bool = False,
-        *,
-        use_jsonb: bool = True,
         **kwargs: Any,
     ) -> PGVector:
         """Return VectorStore initialized from documents and embeddings."""
@@ -1557,10 +1178,6 @@ class PGVector(VectorStore):
             embedding,
             metadatas=metadatas,
             ids=ids,
-            collection_name=collection_name,
-            distance_strategy=distance_strategy,
-            pre_delete_collection=pre_delete_collection,
-            use_jsonb=use_jsonb,
             **kwargs,
         )
 
@@ -1571,10 +1188,6 @@ class PGVector(VectorStore):
         embedding: Embeddings,
         *,
         metadatas: Optional[List[dict]] = None,
-        collection_name: str = _LANGCHAIN_DEFAULT_COLLECTION_NAME,
-        distance_strategy: DistanceStrategy = DEFAULT_DISTANCE_STRATEGY,
-        ids: Optional[List[str]] = None,
-        pre_delete_collection: bool = False,
         **kwargs: Any,
     ) -> PGVector:
         """Construct PGVector wrapper from raw documents and embeddings.
@@ -1614,10 +1227,6 @@ class PGVector(VectorStore):
             embeddings,
             embedding,
             metadatas=metadatas,
-            ids=ids,
-            collection_name=collection_name,
-            distance_strategy=distance_strategy,
-            pre_delete_collection=pre_delete_collection,
             **kwargs,
         )
 
@@ -1627,10 +1236,6 @@ class PGVector(VectorStore):
         text_embeddings: List[Tuple[str, List[float]]],
         embedding: Embeddings,
         metadatas: Optional[List[dict]] = None,
-        collection_name: str = _LANGCHAIN_DEFAULT_COLLECTION_NAME,
-        distance_strategy: DistanceStrategy = DEFAULT_DISTANCE_STRATEGY,
-        ids: Optional[List[str]] = None,
-        pre_delete_collection: bool = False,
         **kwargs: Any,
     ) -> PGVector:
         """Construct PGVector wrapper from raw documents and pre-
@@ -1659,10 +1264,6 @@ class PGVector(VectorStore):
             embeddings,
             embedding,
             metadatas=metadatas,
-            ids=ids,
-            collection_name=collection_name,
-            distance_strategy=distance_strategy,
-            pre_delete_collection=pre_delete_collection,
             **kwargs,
         )
 
@@ -1671,9 +1272,6 @@ class PGVector(VectorStore):
         cls: Type[PGVector],
         embedding: Embeddings,
         *,
-        collection_name: str = _LANGCHAIN_DEFAULT_COLLECTION_NAME,
-        distance_strategy: DistanceStrategy = DEFAULT_DISTANCE_STRATEGY,
-        pre_delete_collection: bool = False,
         connection: Optional[DBConnection] = None,
         **kwargs: Any,
     ) -> PGVector:
@@ -1684,10 +1282,7 @@ class PGVector(VectorStore):
         """
         store = cls(
             connection=connection,
-            collection_name=collection_name,
             embeddings=embedding,
-            distance_strategy=distance_strategy,
-            pre_delete_collection=pre_delete_collection,
             **kwargs,
         )
 
@@ -1698,9 +1293,6 @@ class PGVector(VectorStore):
         cls: Type[PGVector],
         embedding: Embeddings,
         *,
-        collection_name: str = _LANGCHAIN_DEFAULT_COLLECTION_NAME,
-        distance_strategy: DistanceStrategy = DEFAULT_DISTANCE_STRATEGY,
-        pre_delete_collection: bool = False,
         connection: Optional[DBConnection] = None,
         **kwargs: Any,
     ) -> PGVector:
@@ -1711,10 +1303,7 @@ class PGVector(VectorStore):
         """
         store = PGVector(
             connection=connection,
-            collection_name=collection_name,
             embeddings=embedding,
-            distance_strategy=distance_strategy,
-            pre_delete_collection=pre_delete_collection,
             async_mode=True,
             **kwargs,
         )
@@ -1745,11 +1334,7 @@ class PGVector(VectorStore):
         embedding: Embeddings,
         *,
         connection: Optional[DBConnection] = None,
-        collection_name: str = _LANGCHAIN_DEFAULT_COLLECTION_NAME,
-        distance_strategy: DistanceStrategy = DEFAULT_DISTANCE_STRATEGY,
         ids: Optional[List[str]] = None,
-        pre_delete_collection: bool = False,
-        use_jsonb: bool = True,
         **kwargs: Any,
     ) -> PGVector:
         """Return VectorStore initialized from documents and embeddings."""
@@ -1759,14 +1344,10 @@ class PGVector(VectorStore):
 
         return cls.from_texts(
             texts=texts,
-            pre_delete_collection=pre_delete_collection,
             embedding=embedding,
-            distance_strategy=distance_strategy,
             metadatas=metadatas,
             connection=connection,
             ids=ids,
-            collection_name=collection_name,
-            use_jsonb=use_jsonb,
             **kwargs,
         )
 
@@ -1775,12 +1356,7 @@ class PGVector(VectorStore):
         cls: Type[PGVector],
         documents: List[Document],
         embedding: Embeddings,
-        collection_name: str = _LANGCHAIN_DEFAULT_COLLECTION_NAME,
-        distance_strategy: DistanceStrategy = DEFAULT_DISTANCE_STRATEGY,
         ids: Optional[List[str]] = None,
-        pre_delete_collection: bool = False,
-        *,
-        use_jsonb: bool = True,
         **kwargs: Any,
     ) -> PGVector:
         """
@@ -1798,13 +1374,9 @@ class PGVector(VectorStore):
 
         return await cls.afrom_texts(
             texts=texts,
-            pre_delete_collection=pre_delete_collection,
             embedding=embedding,
-            distance_strategy=distance_strategy,
             metadatas=metadatas,
             ids=ids,
-            collection_name=collection_name,
-            use_jsonb=use_jsonb,
             **kwargs,
         )
 
