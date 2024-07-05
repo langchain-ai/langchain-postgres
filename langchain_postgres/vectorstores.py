@@ -27,8 +27,10 @@ import numpy as np
 import sqlalchemy
 from langchain_core.documents import Document
 from langchain_core.embeddings import Embeddings
+from langchain_core.indexing import UpsertResponse
 from langchain_core.utils import get_from_dict_or_env
 from langchain_core.vectorstores import VectorStore
+from langchain_postgres._utils import maximal_marginal_relevance
 from sqlalchemy import SQLColumnExpression, cast, create_engine, delete, func, select
 from sqlalchemy.dialects.postgresql import JSON, JSONB, JSONPATH, UUID, insert
 from sqlalchemy.engine import Connection, Engine
@@ -45,8 +47,6 @@ from sqlalchemy.orm import (
     scoped_session,
     sessionmaker,
 )
-
-from langchain_postgres._utils import maximal_marginal_relevance
 
 
 class DistanceStrategy(str, enum.Enum):
@@ -714,7 +714,7 @@ class PGVector(VectorStore):
 
     def add_embeddings(
         self,
-        texts: Iterable[str],
+        texts: Sequence[str],
         embeddings: List[List[float]],
         metadatas: Optional[List[dict]] = None,
         ids: Optional[List[str]] = None,
@@ -770,7 +770,7 @@ class PGVector(VectorStore):
 
     async def aadd_embeddings(
         self,
-        texts: Iterable[str],
+        texts: Sequence[str],
         embeddings: List[List[float]],
         metadatas: Optional[List[dict]] = None,
         ids: Optional[List[str]] = None,
@@ -823,31 +823,6 @@ class PGVector(VectorStore):
             await session.commit()
 
         return ids
-
-    def add_texts(
-        self,
-        texts: Iterable[str],
-        metadatas: Optional[List[dict]] = None,
-        ids: Optional[List[str]] = None,
-        **kwargs: Any,
-    ) -> List[str]:
-        """Run more texts through the embeddings and add to the vectorstore.
-
-        Args:
-            texts: Iterable of strings to add to the vectorstore.
-            metadatas: Optional list of metadatas associated with the texts.
-            ids: Optional list of ids for the texts.
-                 If not provided, will generate a new id for each text.
-            kwargs: vectorstore specific parameters
-
-        Returns:
-            List of ids from adding the texts into the vectorstore.
-        """
-        assert not self._async_engine, "This method must be called without async_mode"
-        embeddings = self.embedding_function.embed_documents(list(texts))
-        return self.add_embeddings(
-            texts=texts, embeddings=embeddings, metadatas=metadatas, ids=ids, **kwargs
-        )
 
     async def aadd_texts(
         self,
@@ -2178,3 +2153,122 @@ class PGVector(VectorStore):
             )
         async with self.session_maker() as session:
             yield typing_cast(AsyncSession, session)
+
+    def upsert(self, items: Sequence[Document], /, **kwargs: Any) -> UpsertResponse:
+        """Upsert documents into the vectorstore.
+
+        Args:
+            items: Sequence of documents to upsert.
+            kwargs: vectorstore specific parameters
+
+        Returns:
+            UpsertResponse
+        """
+        if self._async_engine:
+            raise AssertionError("This method must be called in sync mode.")
+        texts = [item.page_content for item in items]
+        metadatas = [item.metadata for item in items]
+        ids = [item.id if item.id is not None else uuid.uuid4() for item in items]
+        embeddings = self.embedding_function.embed_documents(list(texts))
+        added_ids = self.add_embeddings(
+            texts=texts, embeddings=embeddings, metadatas=metadatas, ids=ids, **kwargs
+        )
+        return {
+            "succeeded": added_ids,
+            "failed": [item for item in items if item.id not in added_ids],
+        }
+
+    async def aupsert(
+        self, items: Sequence[Document], /, **kwargs: Any
+    ) -> UpsertResponse:
+        """Upsert documents into the vectorstore.
+
+        Args:
+            items: Sequence of documents to upsert.
+            kwargs: vectorstore specific parameters
+
+        Returns:
+            UpsertResponse
+        """
+        if not self._async_engine:
+            raise AssertionError("This method must be called with async_mode")
+        texts = [item.page_content for item in items]
+        metadatas = [item.metadata for item in items]
+        ids = [item.id if item.id is not None else uuid.uuid4() for item in items]
+        embeddings = await self.embedding_function.aembed_documents(list(texts))
+        added_ids = await self.aadd_embeddings(
+            texts=texts, embeddings=embeddings, metadatas=metadatas, ids=ids, **kwargs
+        )
+        return {
+            "succeeded": added_ids,
+            "failed": [item for item in items if item.id not in added_ids],
+        }
+
+    def get_by_ids(self, ids: Sequence[str], /) -> List[Document]:
+        """Get documents by ids."""
+        documents = []
+        with self._make_sync_session() as session:
+            collection = self.get_collection(session)
+
+            if filters and not isinstance(filters, dict):
+                raise NotImplementedError()
+
+            if not filters:
+                filter_by = [self.EmbeddingStore.collection_id == collection.uuid]
+            else:
+                filter_by = self._create_filter_clause_with_uuid(
+                    collection.uuid, filters
+                )
+            results: List[Any] = (
+                session.query(
+                    self.EmbeddingStore,
+                )
+                .where(self.EmbeddingStore.id.in_(ids))
+                .filter(*filter_by)
+                .all()
+            )
+
+            for result in results:
+                documents.append(
+                    Document(
+                        id=result.EmbeddingStore.id,
+                        page_content=result.EmbeddingStore.page_content,
+                        metadata=result.EmbeddingStore.metadata,
+                    )
+                )
+        return documents
+
+    async def aget_by_ids(self, ids: Sequence[str], /) -> List[Document]:
+        """Get documents by ids."""
+        documents = []
+        with self._make_async_session() as session:
+            collection = self.aget_collection(session)
+
+            if filters and not isinstance(filters, dict):
+                raise NotImplementedError()
+
+            if not filters:
+                filter_by = [self.EmbeddingStore.collection_id == collection.uuid]
+            else:
+                filter_by = self._create_filter_clause_with_uuid(
+                    collection.uuid, filters
+                )
+
+            results: List[Any] = (
+                await session.query(
+                    self.EmbeddingStore,
+                )
+                .where(self.EmbeddingStore.id.in_(ids))
+                .filter(*filter_by)
+                .all()
+            )
+
+            for result in results:
+                documents.append(
+                    Document(
+                        id=result.EmbeddingStore.id,
+                        page_content=result.EmbeddingStore.page_content,
+                        metadata=result.EmbeddingStore.metadata,
+                    )
+                )
+        return documents
