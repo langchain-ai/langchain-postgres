@@ -2178,7 +2178,7 @@ class PGVector(VectorStore):
         return {
             "succeeded": added_ids,
             "failed": [
-                item
+                item.id
                 for item in items
                 if item.id is not None and item.id not in added_ids
             ],
@@ -2208,7 +2208,7 @@ class PGVector(VectorStore):
         return {
             "succeeded": added_ids,
             "failed": [
-                item
+                item.id
                 for item in items
                 if item.id is not None and item.id not in added_ids
             ],
