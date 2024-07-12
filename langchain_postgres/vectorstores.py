@@ -11,7 +11,6 @@ from typing import (
     Callable,
     Dict,
     Generator,
-    Iterable,
     List,
     Optional,
     Sequence,
@@ -824,35 +823,6 @@ class PGVector(VectorStore):
             await session.commit()
 
         return ids
-
-    async def aadd_texts(
-        self,
-        texts: Iterable[str],
-        metadatas: Optional[List[dict]] = None,
-        ids: Optional[List[str]] = None,
-        **kwargs: Any,
-    ) -> List[str]:
-        """Run more texts through the embeddings and add to the vectorstore.
-
-        Args:
-            texts: Iterable of strings to add to the vectorstore.
-            metadatas: Optional list of metadatas associated with the texts.
-            ids: Optional list of ids for the texts.
-                 If not provided, will generate a new id for each text.
-            kwargs: vectorstore specific parameters
-
-        Returns:
-            List of ids from adding the texts into the vectorstore.
-        """
-        await self.__apost_init__()  # Lazy async init
-        embeddings = await self.embedding_function.aembed_documents(list(texts))
-        return await self.aadd_embeddings(
-            texts=list(texts),
-            embeddings=embeddings,
-            metadatas=metadatas,
-            ids=ids,
-            **kwargs,
-        )
 
     def similarity_search(
         self,
