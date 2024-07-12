@@ -1,3 +1,5 @@
+from typing import AsyncGenerator, Generator
+
 import pytest
 from langchain_core.vectorstores import VectorStore
 from langchain_standard_tests.integration_tests.vectorstores import (
@@ -5,12 +7,12 @@ from langchain_standard_tests.integration_tests.vectorstores import (
     ReadWriteTestSuite,
 )
 
-from tests.unit_tests.test_vectorstore import get_vectorstore, aget_vectorstore
+from tests.unit_tests.test_vectorstore import aget_vectorstore, get_vectorstore
 
 
 class TestSync(ReadWriteTestSuite):
     @pytest.fixture()
-    def vectorstore(self) -> VectorStore:
+    def vectorstore(self) -> Generator[VectorStore, None, None]:  # type: ignore
         """Get an empty vectorstore for unit tests."""
         with get_vectorstore(embedding=self.get_embeddings()) as vstore:
             vstore.drop_tables()
@@ -21,7 +23,7 @@ class TestSync(ReadWriteTestSuite):
 
 class TestAsync(AsyncReadWriteTestSuite):
     @pytest.fixture()
-    async def vectorstore(self) -> VectorStore:
+    async def vectorstore(self) -> AsyncGenerator[VectorStore, None]:  # type: ignore
         """Get an empty vectorstore for unit tests."""
         async with aget_vectorstore(embedding=self.get_embeddings()) as vstore:
             await vstore.adrop_tables()
