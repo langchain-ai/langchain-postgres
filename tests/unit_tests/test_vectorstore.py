@@ -1,6 +1,6 @@
 """Test PGVector functionality."""
 import contextlib
-from typing import AsyncGenerator, Dict, Generator, List, Optional
+from typing import Any, AsyncGenerator, Dict, Generator, List, Optional
 
 import pytest
 from langchain_core.documents import Document
@@ -23,8 +23,6 @@ from tests.unit_tests.fixtures.filtering_test_cases import (
 from tests.utils import VECTORSTORE_CONNECTION_STRING as CONNECTION_STRING
 
 ADA_TOKEN_COUNT = 1536
-
-from typing import Any
 
 
 class AnyStr(str):
