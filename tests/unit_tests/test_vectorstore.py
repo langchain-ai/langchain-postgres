@@ -1,6 +1,6 @@
 """Test PGVector functionality."""
 import contextlib
-from typing import Any, AsyncGenerator, Dict, Generator, List, Optional
+from typing import AsyncGenerator, Dict, Generator, List, Optional
 
 import pytest
 from langchain_core.documents import Document
@@ -23,6 +23,13 @@ from tests.unit_tests.fixtures.filtering_test_cases import (
 from tests.utils import VECTORSTORE_CONNECTION_STRING as CONNECTION_STRING
 
 ADA_TOKEN_COUNT = 1536
+
+from typing import Any
+
+
+class AnyStr(str):
+    def __eq__(self, other: Any) -> bool:
+        return isinstance(other, str)
 
 
 class FakeEmbeddingsWithAdaDimension(FakeEmbeddings):
@@ -50,7 +57,7 @@ def test_pgvector() -> None:
         pre_delete_collection=True,
     )
     output = docsearch.similarity_search("foo", k=1)
-    assert output == [Document(page_content="foo")]
+    assert output == [Document(page_content="foo", id=AnyStr())]
 
 
 @pytest.mark.asyncio
@@ -65,7 +72,7 @@ async def test_async_pgvector() -> None:
         pre_delete_collection=True,
     )
     output = await docsearch.asimilarity_search("foo", k=1)
-    assert output == [Document(page_content="foo")]
+    assert output == [Document(page_content="foo", id=AnyStr())]
 
 
 def test_pgvector_embeddings() -> None:
@@ -81,7 +88,7 @@ def test_pgvector_embeddings() -> None:
         pre_delete_collection=True,
     )
     output = docsearch.similarity_search("foo", k=1)
-    assert output == [Document(page_content="foo")]
+    assert output == [Document(page_content="foo", id=AnyStr())]
 
 
 @pytest.mark.asyncio
@@ -98,7 +105,7 @@ async def test_async_pgvector_embeddings() -> None:
         pre_delete_collection=True,
     )
     output = await docsearch.asimilarity_search("foo", k=1)
-    assert output == [Document(page_content="foo")]
+    assert output == [Document(page_content="foo", id=AnyStr())]
 
 
 def test_pgvector_with_metadatas() -> None:
@@ -114,7 +121,7 @@ def test_pgvector_with_metadatas() -> None:
         pre_delete_collection=True,
     )
     output = docsearch.similarity_search("foo", k=1)
-    assert output == [Document(page_content="foo", metadata={"page": "0"})]
+    assert output == [Document(page_content="foo", metadata={"page": "0"}, id=AnyStr())]
 
 
 @pytest.mark.asyncio
@@ -131,7 +138,7 @@ async def test_async_pgvector_with_metadatas() -> None:
         pre_delete_collection=True,
     )
     output = await docsearch.asimilarity_search("foo", k=1)
-    assert output == [Document(page_content="foo", metadata={"page": "0"})]
+    assert output == [Document(page_content="foo", metadata={"page": "0"}, id=AnyStr())]
 
 
 def test_pgvector_with_metadatas_with_scores() -> None:
@@ -147,7 +154,9 @@ def test_pgvector_with_metadatas_with_scores() -> None:
         pre_delete_collection=True,
     )
     output = docsearch.similarity_search_with_score("foo", k=1)
-    assert output == [(Document(page_content="foo", metadata={"page": "0"}), 0.0)]
+    assert output == [
+        (Document(page_content="foo", metadata={"page": "0"}, id=AnyStr()), 0.0)
+    ]
 
 
 @pytest.mark.asyncio
@@ -164,7 +173,9 @@ async def test_async_pgvector_with_metadatas_with_scores() -> None:
         pre_delete_collection=True,
     )
     output = await docsearch.asimilarity_search_with_score("foo", k=1)
-    assert output == [(Document(page_content="foo", metadata={"page": "0"}), 0.0)]
+    assert output == [
+        (Document(page_content="foo", metadata={"page": "0"}, id=AnyStr()), 0.0)
+    ]
 
 
 def test_pgvector_with_filter_match() -> None:
@@ -180,7 +191,9 @@ def test_pgvector_with_filter_match() -> None:
         pre_delete_collection=True,
     )
     output = docsearch.similarity_search_with_score("foo", k=1, filter={"page": "0"})
-    assert output == [(Document(page_content="foo", metadata={"page": "0"}), 0.0)]
+    assert output == [
+        (Document(page_content="foo", metadata={"page": "0"}, id=AnyStr()), 0.0)
+    ]
 
 
 @pytest.mark.asyncio
@@ -199,7 +212,9 @@ async def test_async_pgvector_with_filter_match() -> None:
     output = await docsearch.asimilarity_search_with_score(
         "foo", k=1, filter={"page": "0"}
     )
-    assert output == [(Document(page_content="foo", metadata={"page": "0"}), 0.0)]
+    assert output == [
+        (Document(page_content="foo", metadata={"page": "0"}, id=AnyStr()), 0.0)
+    ]
 
 
 def test_pgvector_with_filter_distant_match() -> None:
@@ -216,7 +231,10 @@ def test_pgvector_with_filter_distant_match() -> None:
     )
     output = docsearch.similarity_search_with_score("foo", k=1, filter={"page": "2"})
     assert output == [
-        (Document(page_content="baz", metadata={"page": "2"}), 0.0013003906671379406)
+        (
+            Document(page_content="baz", metadata={"page": "2"}, id=AnyStr()),
+            0.0013003906671379406,
+        )
     ]
 
 
@@ -237,7 +255,10 @@ async def test_async_pgvector_with_filter_distant_match() -> None:
         "foo", k=1, filter={"page": "2"}
     )
     assert output == [
-        (Document(page_content="baz", metadata={"page": "2"}), 0.0013003906671379406)
+        (
+            Document(page_content="baz", metadata={"page": "2"}, id=AnyStr()),
+            0.0013003906671379406,
+        )
     ]
 
 
@@ -397,22 +418,27 @@ def test_pgvector_index_documents() -> None:
         Document(
             page_content="there are cats in the pond",
             metadata={"id": 1, "location": "pond", "topic": "animals"},
+            id="1",
         ),
         Document(
             page_content="ducks are also found in the pond",
             metadata={"id": 2, "location": "pond", "topic": "animals"},
+            id="2",
         ),
         Document(
             page_content="fresh apples are available at the market",
             metadata={"id": 3, "location": "market", "topic": "food"},
+            id="3",
         ),
         Document(
             page_content="the market also sells fresh oranges",
             metadata={"id": 4, "location": "market", "topic": "food"},
+            id="4",
         ),
         Document(
             page_content="the new art exhibit is fascinating",
             metadata={"id": 5, "location": "museum", "topic": "art"},
+            id="5",
         ),
     ]
 
@@ -441,6 +467,7 @@ def test_pgvector_index_documents() -> None:
         Document(
             page_content="new content in the zoo",
             metadata={"id": 1, "location": "zoo", "topic": "zoo"},
+            id="1",
         ),
     ]
 
@@ -473,22 +500,27 @@ async def test_async_pgvector_index_documents() -> None:
         Document(
             page_content="there are cats in the pond",
             metadata={"id": 1, "location": "pond", "topic": "animals"},
+            id="1",
         ),
         Document(
             page_content="ducks are also found in the pond",
             metadata={"id": 2, "location": "pond", "topic": "animals"},
+            id="2",
         ),
         Document(
             page_content="fresh apples are available at the market",
             metadata={"id": 3, "location": "market", "topic": "food"},
+            id="3",
         ),
         Document(
             page_content="the market also sells fresh oranges",
             metadata={"id": 4, "location": "market", "topic": "food"},
+            id="4",
         ),
         Document(
             page_content="the new art exhibit is fascinating",
             metadata={"id": 5, "location": "museum", "topic": "art"},
+            id="5",
         ),
     ]
 
@@ -519,6 +551,7 @@ async def test_async_pgvector_index_documents() -> None:
         Document(
             page_content="new content in the zoo",
             metadata={"id": 1, "location": "zoo", "topic": "zoo"},
+            id="1",
         ),
     ]
 
@@ -563,9 +596,15 @@ def test_pgvector_relevance_score() -> None:
 
     output = docsearch.similarity_search_with_relevance_scores("foo", k=3)
     assert output == [
-        (Document(page_content="foo", metadata={"page": "0"}), 1.0),
-        (Document(page_content="bar", metadata={"page": "1"}), 0.9996744261675065),
-        (Document(page_content="baz", metadata={"page": "2"}), 0.9986996093328621),
+        (Document(page_content="foo", metadata={"page": "0"}, id=AnyStr()), 1.0),
+        (
+            Document(page_content="bar", metadata={"page": "1"}, id=AnyStr()),
+            0.9996744261675065,
+        ),
+        (
+            Document(page_content="baz", metadata={"page": "2"}, id=AnyStr()),
+            0.9986996093328621,
+        ),
     ]
 
 
@@ -585,9 +624,15 @@ async def test_async_pgvector_relevance_score() -> None:
 
     output = await docsearch.asimilarity_search_with_relevance_scores("foo", k=3)
     assert output == [
-        (Document(page_content="foo", metadata={"page": "0"}), 1.0),
-        (Document(page_content="bar", metadata={"page": "1"}), 0.9996744261675065),
-        (Document(page_content="baz", metadata={"page": "2"}), 0.9986996093328621),
+        (Document(page_content="foo", metadata={"page": "0"}, id=AnyStr()), 1.0),
+        (
+            Document(page_content="bar", metadata={"page": "1"}, id=AnyStr()),
+            0.9996744261675065,
+        ),
+        (
+            Document(page_content="baz", metadata={"page": "2"}, id=AnyStr()),
+            0.9986996093328621,
+        ),
     ]
 
 
@@ -610,8 +655,8 @@ def test_pgvector_retriever_search_threshold() -> None:
     )
     output = retriever.get_relevant_documents("summer")
     assert output == [
-        Document(page_content="foo", metadata={"page": "0"}),
-        Document(page_content="bar", metadata={"page": "1"}),
+        Document(page_content="foo", metadata={"page": "0"}, id=AnyStr()),
+        Document(page_content="bar", metadata={"page": "1"}, id=AnyStr()),
     ]
 
 
@@ -635,8 +680,8 @@ async def test_async_pgvector_retriever_search_threshold() -> None:
     )
     output = await retriever.aget_relevant_documents("summer")
     assert output == [
-        Document(page_content="foo", metadata={"page": "0"}),
-        Document(page_content="bar", metadata={"page": "1"}),
+        Document(page_content="foo", metadata={"page": "0"}, id=AnyStr()),
+        Document(page_content="bar", metadata={"page": "1"}, id=AnyStr()),
     ]
 
 
@@ -698,7 +743,7 @@ def test_pgvector_max_marginal_relevance_search() -> None:
         pre_delete_collection=True,
     )
     output = docsearch.max_marginal_relevance_search("foo", k=1, fetch_k=3)
-    assert output == [Document(page_content="foo")]
+    assert output == [Document(page_content="foo", id=AnyStr())]
 
 
 @pytest.mark.asyncio
@@ -713,7 +758,7 @@ async def test_async_pgvector_max_marginal_relevance_search() -> None:
         pre_delete_collection=True,
     )
     output = await docsearch.amax_marginal_relevance_search("foo", k=1, fetch_k=3)
-    assert output == [Document(page_content="foo")]
+    assert output == [Document(page_content="foo", id=AnyStr())]
 
 
 def test_pgvector_max_marginal_relevance_search_with_score() -> None:
@@ -727,7 +772,7 @@ def test_pgvector_max_marginal_relevance_search_with_score() -> None:
         pre_delete_collection=True,
     )
     output = docsearch.max_marginal_relevance_search_with_score("foo", k=1, fetch_k=3)
-    assert output == [(Document(page_content="foo"), 0.0)]
+    assert output == [(Document(page_content="foo", id=AnyStr()), 0.0)]
 
 
 @pytest.mark.asyncio
@@ -744,7 +789,7 @@ async def test_async_pgvector_max_marginal_relevance_search_with_score() -> None
     output = await docsearch.amax_marginal_relevance_search_with_score(
         "foo", k=1, fetch_k=3
     )
-    assert output == [(Document(page_content="foo"), 0.0)]
+    assert output == [(Document(page_content="foo", id=AnyStr()), 0.0)]
 
 
 def test_pgvector_with_custom_connection() -> None:
@@ -758,7 +803,7 @@ def test_pgvector_with_custom_connection() -> None:
         pre_delete_collection=True,
     )
     output = docsearch.similarity_search("foo", k=1)
-    assert output == [Document(page_content="foo")]
+    assert output == [Document(page_content="foo", id=AnyStr())]
 
 
 @pytest.mark.asyncio
@@ -773,7 +818,7 @@ async def test_async_pgvector_with_custom_connection() -> None:
         pre_delete_collection=True,
     )
     output = await docsearch.asimilarity_search("foo", k=1)
-    assert output == [Document(page_content="foo")]
+    assert output == [Document(page_content="foo", id=AnyStr())]
 
 
 def test_pgvector_with_custom_engine_args() -> None:
@@ -796,7 +841,7 @@ def test_pgvector_with_custom_engine_args() -> None:
         engine_args=engine_args,
     )
     output = docsearch.similarity_search("foo", k=1)
-    assert output == [Document(page_content="foo")]
+    assert output == [Document(page_content="foo", id=AnyStr())]
 
 
 # We should reuse this test-case across other integrations
