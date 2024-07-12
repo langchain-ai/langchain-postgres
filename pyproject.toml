@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "langchain-postgres"
-version = "0.0.7"
+version = "0.0.9"
 description = "An integration package connecting Postgres and LangChain"
 authors = []
 readme = "README.md"
@@ -11,7 +11,7 @@ license = "MIT"
 "Source Code" = "https://github.com/langchain-ai/langchain-postgres/tree/master/langchain_postgres"
 
 [tool.poetry.dependencies]
-python = "^3.9"
+python = "^3.8.1"
 langchain-core = "^0.2.13"
 psycopg = "^3"
 psycopg-pool = "^3.2.1"
