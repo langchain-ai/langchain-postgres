@@ -847,7 +847,11 @@ class PGVector(VectorStore):
         await self.__apost_init__()  # Lazy async init
         embeddings = await self.embedding_function.aembed_documents(list(texts))
         return await self.aadd_embeddings(
-            texts=texts, embeddings=embeddings, metadatas=metadatas, ids=ids, **kwargs
+            texts=list(texts),
+            embeddings=embeddings,
+            metadatas=metadatas,
+            ids=ids,
+            **kwargs,
         )
 
     def similarity_search(
@@ -2253,7 +2257,7 @@ class PGVector(VectorStore):
                 .filter(*filter_by)
             )
 
-            results: List[Any] = (await session.execute(stmt)).scalars().all()
+            results: Sequence[Any] = (await session.execute(stmt)).scalars().all()
 
             for result in results:
                 documents.append(

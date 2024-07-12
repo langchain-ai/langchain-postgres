@@ -5,26 +5,26 @@ from langchain_standard_tests.integration_tests.vectorstores import (
     ReadWriteTestSuite,
 )
 
-from tests.unit_tests.test_vectorstore import aget_vectorstore, get_vectorstore
+from tests.unit_tests.test_vectorstore import get_vectorstore, aget_vectorstore
 
 
 class TestSync(ReadWriteTestSuite):
     @pytest.fixture()
     def vectorstore(self) -> VectorStore:
         """Get an empty vectorstore for unit tests."""
-        with get_vectorstore(embedding=self.get_embeddings()) as vectorstore:
-            vectorstore.drop_tables()
-            vectorstore.create_tables_if_not_exists()
-            vectorstore.create_collection()
-            yield vectorstore
+        with get_vectorstore(embedding=self.get_embeddings()) as vstore:
+            vstore.drop_tables()
+            vstore.create_tables_if_not_exists()
+            vstore.create_collection()
+            yield vstore
 
 
 class TestAsync(AsyncReadWriteTestSuite):
     @pytest.fixture()
     async def vectorstore(self) -> VectorStore:
         """Get an empty vectorstore for unit tests."""
-        async with aget_vectorstore(embedding=self.get_embeddings()) as vectorstore:
-            await vectorstore.adrop_tables()
-            await vectorstore.acreate_tables_if_not_exists()
-            await vectorstore.acreate_collection()
-            yield vectorstore
+        async with aget_vectorstore(embedding=self.get_embeddings()) as vstore:
+            await vstore.adrop_tables()
+            await vstore.acreate_tables_if_not_exists()
+            await vstore.acreate_collection()
+            yield vstore
