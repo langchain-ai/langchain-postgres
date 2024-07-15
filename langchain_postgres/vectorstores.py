@@ -2319,6 +2319,7 @@ class PGVector(VectorStore):
             print("HNSW extension and index created successfully.")  # noqa: T201
         except Exception as e:
             print(f"Failed to create HNSW extension or index: {e}")  # noqa: T201
+            raise e
 
     async def acreate_hnsw_index(
         self,
@@ -2339,6 +2340,7 @@ class PGVector(VectorStore):
             print("HNSW extension and index created successfully.")  # noqa: T201
         except Exception as e:
             print(f"Failed to create HNSW extension or index: {e}")  # noqa: T201
+            raise e
 
     @contextlib.contextmanager
     def _make_sync_session(self) -> Generator[Session, None, None]:
