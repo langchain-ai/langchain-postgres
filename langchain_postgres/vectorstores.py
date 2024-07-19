@@ -120,16 +120,30 @@ class IndexManager:
             raise ValueError("Invalid connection type")
 
     def list_indexes(self) -> List[Dict[str, Any]]:
-        """List all indexes."""
+        """List all indexes from the embeddings column."""
         with self._engine.connect() as conn:
-            result = conn.execute(text("SELECT * FROM pg_indexes WHERE tablename = 'langchain_pg_embedding'"))
+            result = conn.execute(
+                text("""
+                    SELECT * 
+                    FROM pg_indexes 
+                    WHERE tablename = 'langchain_pg_embedding' 
+                    AND indexdef LIKE '%embedding%'
+                    """)
+            )
             indexes = [dict(row) for row in result]
         return indexes
 
     async def alist_indexes(self) -> List[Dict[str, Any]]:
-        """Asynchronously list all indexes."""
+        """Asynchronously list all indexes from the embeddings column."""
         async with self._engine.connect() as conn:
-            result = await conn.execute(text("SELECT * FROM pg_indexes WHERE tablename = 'langchain_pg_embedding'"))
+            result = await conn.execute(
+                text("""
+                    SELECT * 
+                    FROM pg_indexes 
+                    WHERE tablename = 'langchain_pg_embedding' 
+                    AND indexdef LIKE '%embedding%'
+                    """)
+            )
             indexes = [dict(row) for row in result]
         return indexes
 
