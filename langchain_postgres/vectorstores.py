@@ -265,7 +265,7 @@ class PGVector(VectorStore):
     Key init args — client params:
         connection: Union[None, DBConnection, Engine, AsyncEngine, str]
             Connection string or engine.
-        
+
     Instantiate:
         .. code-block:: python
 
