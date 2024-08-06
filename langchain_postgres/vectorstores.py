@@ -29,7 +29,7 @@ from langchain_core.embeddings import Embeddings
 from langchain_core.indexing import UpsertResponse
 from langchain_core.utils import get_from_dict_or_env
 from langchain_core.vectorstores import VectorStore
-from sqlalchemy import SQLColumnExpression, cast, create_engine, delete, func, select
+from sqlalchemy import SQLColumnExpression, cast, create_engine, delete, func, select, text
 from sqlalchemy.dialects.postgresql import JSON, JSONB, JSONPATH, UUID, insert
 from sqlalchemy.engine import Connection, Engine
 from sqlalchemy.ext.asyncio import (
@@ -829,6 +829,7 @@ class PGVector(VectorStore):
         query: str,
         k: int = 4,
         filter: Optional[dict] = None,
+        full_text_search: Optional[List[str]] = None,
         **kwargs: Any,
     ) -> List[Document]:
         """Run similarity search with PGVector with distance.
@@ -847,6 +848,7 @@ class PGVector(VectorStore):
             embedding=embedding,
             k=k,
             filter=filter,
+            full_text_search=full_text_search,
         )
 
     async def asimilarity_search(
@@ -939,9 +941,10 @@ class PGVector(VectorStore):
         embedding: List[float],
         k: int = 4,
         filter: Optional[dict] = None,
+        full_text_search: Optional[List[str]] = None,
     ) -> List[Tuple[Document, float]]:
         assert not self._async_engine, "This method must be called without async_mode"
-        results = self.__query_collection(embedding=embedding, k=k, filter=filter)
+        results = self.__query_collection(embedding=embedding, k=k, filter=filter, full_text_search=full_text_search)
 
         return self._results_to_docs_and_scores(results)
 
@@ -1299,6 +1302,7 @@ class PGVector(VectorStore):
         embedding: List[float],
         k: int = 4,
         filter: Optional[Dict[str, str]] = None,
+        full_text_search: Optional[List[str]] = None
     ) -> Sequence[Any]:
         """Query the collection."""
         with self._make_sync_session() as session:  # type: ignore[arg-type]
@@ -1307,6 +1311,7 @@ class PGVector(VectorStore):
                 raise ValueError("Collection not found")
 
             filter_by = [self.EmbeddingStore.collection_id == collection.uuid]
+            
             if filter:
                 if self.use_jsonb:
                     filter_clauses = self._create_filter_clause(filter)
@@ -1316,6 +1321,11 @@ class PGVector(VectorStore):
                     # Old way of doing things
                     filter_clauses = self._create_filter_clause_json_deprecated(filter)
                     filter_by.extend(filter_clauses)
+                    
+            if full_text_search:
+                filter_by.append(
+                    text(f"to_tsvector(document) @@ to_tsquery('{' | '.join(full_text_search)}')")
+                )
 
             _type = self.EmbeddingStore
 
@@ -1385,6 +1395,7 @@ class PGVector(VectorStore):
         embedding: List[float],
         k: int = 4,
         filter: Optional[dict] = None,
+        full_text_search: Optional[List[str]] = None,
         **kwargs: Any,
     ) -> List[Document]:
         """Return docs most similar to embedding vector.
@@ -1399,7 +1410,7 @@ class PGVector(VectorStore):
         """
         assert not self._async_engine, "This method must be called without async_mode"
         docs_and_scores = self.similarity_search_with_score_by_vector(
-            embedding=embedding, k=k, filter=filter
+            embedding=embedding, k=k, filter=filter, full_text_search=full_text_search
         )
         return _results_to_docs(docs_and_scores)
 
