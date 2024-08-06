@@ -953,11 +953,12 @@ class PGVector(VectorStore):
         embedding: List[float],
         k: int = 4,
         filter: Optional[dict] = None,
+        full_text_search: Optional[List[str]] = None,
     ) -> List[Tuple[Document, float]]:
         await self.__apost_init__()  # Lazy async init
         async with self._make_async_session() as session:  # type: ignore[arg-type]
             results = await self.__aquery_collection(
-                session=session, embedding=embedding, k=k, filter=filter
+                session=session, embedding=embedding, k=k, filter=filter, full_text_search=full_text_search
             )
 
             return self._results_to_docs_and_scores(results)
@@ -1352,6 +1353,7 @@ class PGVector(VectorStore):
         embedding: List[float],
         k: int = 4,
         filter: Optional[Dict[str, str]] = None,
+        full_text_search: Optional[List[str]] = None,
     ) -> Sequence[Any]:
         """Query the collection."""
         async with self._make_async_session() as session:  # type: ignore[arg-type]
@@ -1360,6 +1362,7 @@ class PGVector(VectorStore):
                 raise ValueError("Collection not found")
 
             filter_by = [self.EmbeddingStore.collection_id == collection.uuid]
+            
             if filter:
                 if self.use_jsonb:
                     filter_clauses = self._create_filter_clause(filter)
@@ -1369,6 +1372,11 @@ class PGVector(VectorStore):
                     # Old way of doing things
                     filter_clauses = self._create_filter_clause_json_deprecated(filter)
                     filter_by.extend(filter_clauses)
+
+            if full_text_search:
+                filter_by.append(
+                    text(f"to_tsvector(document) @@ to_tsquery('{' | '.join(full_text_search)}')")
+                )
 
             _type = self.EmbeddingStore
 
@@ -1419,6 +1427,7 @@ class PGVector(VectorStore):
         embedding: List[float],
         k: int = 4,
         filter: Optional[dict] = None,
+        full_text_search: Optional[List[str]] = None,
         **kwargs: Any,
     ) -> List[Document]:
         """Return docs most similar to embedding vector.
@@ -1434,7 +1443,7 @@ class PGVector(VectorStore):
         assert self._async_engine, "This method must be called with async_mode"
         await self.__apost_init__()  # Lazy async init
         docs_and_scores = await self.asimilarity_search_with_score_by_vector(
-            embedding=embedding, k=k, filter=filter
+            embedding=embedding, k=k, filter=filter, full_text_search=full_text_search
         )
         return _results_to_docs(docs_and_scores)
 
