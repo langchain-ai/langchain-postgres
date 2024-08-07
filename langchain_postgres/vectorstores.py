@@ -383,6 +383,10 @@ class PGVector(VectorStore):
                 NOTE: This is not mandatory. Defining it will prevent vectors of
                 any other size to be added to the embeddings table but, without it,
                 the embeddings can't be indexed.
+            embedding_index: The type of index to use for the embeddings.
+                (default: None)
+            embedding_index_ops: The index operator class to use for the index.
+                (default: None)
             collection_name: The name of the collection to use. (default: langchain)
                 NOTE: This is not the name of the table, but the name of the collection.
                 The tables will be created when initializing the store (if not exists)
@@ -1446,6 +1450,8 @@ class PGVector(VectorStore):
             embedding: Embedding to look up documents similar to.
             k: Number of Documents to return. Defaults to 4.
             filter (Optional[Dict[str, str]]): Filter by metadata. Defaults to None.
+            full_text_search: filter by full text search only if one or more words are present in the document.
+                If passed (string1 & string2) then the document should contain both string1 and string2.
 
         Returns:
             List of Documents most similar to the query vector.
