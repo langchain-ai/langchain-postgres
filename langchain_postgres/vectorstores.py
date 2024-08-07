@@ -226,9 +226,9 @@ def _get_embedding_collection_store(
                 postgresql_ops={"cmetadata": "jsonb_path_ops"},
             ),
             sqlalchemy.Index(
-                f"ix_embedding_{embedding_index}",
+                f"ix_embedding_{embedding_index.value}",
                 "embedding",
-                postgresql_using=embedding_index,
+                postgresql_using=embedding_index.value,
                 postgresql_ops={"embedding": embedding_index_ops},
             ) if embedding_index is not None else None,
         )
