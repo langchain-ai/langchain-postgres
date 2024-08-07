@@ -98,7 +98,11 @@ SUPPORTED_OPERATORS = (
 )
 
 
-def _get_embedding_collection_store(vector_dimension: Optional[int] = None) -> Any:
+def _get_embedding_collection_store(
+    vector_dimension: Optional[int] = None,
+    embedding_index: Optional[EmbeddingIndexType] = None,
+    embedding_index_ops: Optional[str] = None,
+) -> Any:
     global _classes
     if _classes is not None:
         return _classes
@@ -221,6 +225,12 @@ def _get_embedding_collection_store(vector_dimension: Optional[int] = None) -> A
                 postgresql_using="gin",
                 postgresql_ops={"cmetadata": "jsonb_path_ops"},
             ),
+            sqlalchemy.Index(
+                f"ix_embedding_{embedding_index}",
+                "embedding",
+                postgresql_using=embedding_index,
+                postgresql_ops={"embedding": embedding_index_ops},
+            ) if embedding_index is not None else None,
         )
 
     _classes = (EmbeddingStore, CollectionStore)
@@ -244,6 +254,10 @@ def _create_vector_extension(conn: Connection) -> None:
 
 DBConnection = Union[sqlalchemy.engine.Engine, str]
 
+class EmbeddingIndexType(enum.Enum):
+    hnsw = "hnsw"
+    ivfflat = "ivfflat"
+   
 
 class PGVector(VectorStore):
     """Vectorstore implementation using Postgres as the backend.
@@ -345,6 +359,8 @@ class PGVector(VectorStore):
         *,
         connection: Union[None, DBConnection, Engine, AsyncEngine, str] = None,
         embedding_length: Optional[int] = None,
+        embedding_index: Optional[EmbeddingIndexType] = None,
+        embedding_index_ops: Optional[str] = None,
         collection_name: str = _LANGCHAIN_DEFAULT_COLLECTION_NAME,
         collection_metadata: Optional[dict] = None,
         distance_strategy: DistanceStrategy = DEFAULT_DISTANCE_STRATEGY,
@@ -387,6 +403,8 @@ class PGVector(VectorStore):
         self.async_mode = async_mode
         self.embedding_function = embeddings
         self._embedding_length = embedding_length
+        self._embedding_index = embedding_index
+        self._embedding_index_ops = embedding_index_ops
         self.collection_name = collection_name
         self.collection_metadata = collection_metadata
         self._distance_strategy = distance_strategy
@@ -396,6 +414,16 @@ class PGVector(VectorStore):
         self._engine: Optional[Engine] = None
         self._async_engine: Optional[AsyncEngine] = None
         self._async_init = False
+
+        if self._embedding_length is None and self.embedding_index is not None:
+            raise ValueError(
+                "embedding_length must be provided when using embedding_index"
+            )
+            
+        if self.embedding_index is not None and self.embedding_index_ops is None:
+            raise ValueError(
+                "embedding_index_ops must be provided when using embedding_index"
+            )
 
         if isinstance(connection, str):
             if async_mode:
@@ -438,8 +466,11 @@ class PGVector(VectorStore):
             self.create_vector_extension()
 
         EmbeddingStore, CollectionStore = _get_embedding_collection_store(
-            self._embedding_length
+            vector_dimension=self._embedding_length,
+            embedding_index=self._embedding_index,
+            embedding_index_ops=self._embedding_index_ops,
         )
+        
         self.CollectionStore = CollectionStore
         self.EmbeddingStore = EmbeddingStore
         self.create_tables_if_not_exists()
@@ -454,8 +485,11 @@ class PGVector(VectorStore):
         self._async_init = True
 
         EmbeddingStore, CollectionStore = _get_embedding_collection_store(
-            self._embedding_length
+            vector_dimension=self._embedding_length,
+            embedding_index=self._embedding_index,
+            embedding_index_ops=self._embedding_index_ops,
         )
+        
         self.CollectionStore = CollectionStore
         self.EmbeddingStore = EmbeddingStore
         if self.create_extension:
