@@ -1476,6 +1476,8 @@ class PGVector(VectorStore):
             embedding: Embedding to look up documents similar to.
             k: Number of Documents to return. Defaults to 4.
             filter (Optional[Dict[str, str]]): Filter by metadata. Defaults to None.
+            full_text_search: filter by full text search only if one or more words are present in the document.
+                If passed (string1 & string2) then the document should contain both string1 and string2.
 
         Returns:
             List of Documents most similar to the query vector.
