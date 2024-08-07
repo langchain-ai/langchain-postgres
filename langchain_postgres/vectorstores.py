@@ -246,98 +246,130 @@ DBConnection = Union[sqlalchemy.engine.Engine, str]
 
 
 class PGVector(VectorStore):
-    """Vectorstore implementation using Postgres as the backend.
+    """Postgres vector store integration.
 
-    Currently, there is no mechanism for supporting data migration.
+    Setup:
+        Install ``langchain_postgres`` and run the docker container.
 
-    So breaking changes in the vectorstore schema will require the user to recreate
-    the tables and re-add the documents.
+        .. code-block:: bash
 
-    If this is a concern, please use a different vectorstore. If
-    not, this implementation should be fine for your use case.
+            pip install -qU langchain-postgres
+            docker run --name pgvector-container -e POSTGRES_USER=langchain -e POSTGRES_PASSWORD=langchain -e POSTGRES_DB=langchain -p 6024:5432 -d pgvector/pgvector:pg16
 
-    To use this vectorstore you need to have the `vector` extension installed.
-    The `vector` extension is a Postgres extension that provides vector
-    similarity search capabilities.
+    Key init args — indexing params:
+        collection_name: str
+            Name of the collection.
+        embeddings: Embeddings
+            Embedding function to use.
 
-    ```sh
-    docker run --name pgvector-container -e POSTGRES_PASSWORD=...
-        -d pgvector/pgvector:pg16
-    ```
+    Key init args — client params:
+        connection: Union[None, DBConnection, Engine, AsyncEngine, str]
+            Connection string or engine.
 
-    Example:
+    Instantiate:
         .. code-block:: python
 
+            from langchain_postgres import PGVector
             from langchain_postgres.vectorstores import PGVector
-            from langchain_openai.embeddings import OpenAIEmbeddings
+            from langchain_openai import OpenAIEmbeddings
 
-            connection_string = "postgresql+psycopg://..."
-            collection_name = "state_of_the_union_test"
-            embeddings = OpenAIEmbeddings()
-            vectorstore = PGVector.from_documents(
-                embedding=embeddings,
-                documents=docs,
-                connection=connection_string,
+            # See docker command above to launch a postgres instance with pgvector enabled.
+            connection = "postgresql+psycopg://langchain:langchain@localhost:6024/langchain"  # Uses psycopg3!
+            collection_name = "my_docs"
+
+            vector_store = PGVector(
+                embeddings=OpenAIEmbeddings(model="text-embedding-3-large"),
                 collection_name=collection_name,
+                connection=connection,
                 use_jsonb=True,
-                async_mode=False,
             )
 
+    Add Documents:
+        .. code-block:: python
 
-    This code has been ported over from langchain_community with minimal changes
-    to allow users to easily transition from langchain_community to langchain_postgres.
+            from langchain_core.documents import Document
 
-    Some changes had to be made to address issues with the community implementation:
-    * langchain_postgres now works with psycopg3. Please update your
-      connection strings from `postgresql+psycopg2://...` to
-      `postgresql+psycopg://langchain:langchain@...`
-      (yes, the driver name is `psycopg` not `psycopg3`)
-    * The schema of the embedding store and collection have been changed to make
-      add_documents work correctly with user specified ids, specifically
-      when overwriting existing documents.
-      You will need to recreate the tables if you are using an existing database.
-    * A Connection object has to be provided explicitly. Connections will not be
-      picked up automatically based on env variables.
-    * langchain_postgres now accept async connections. If you want to use the async
-        version, you need to set `async_mode=True` when initializing the store or
-        use an async engine.
+            document_1 = Document(page_content="foo", metadata={"baz": "bar"})
+            document_2 = Document(page_content="thud", metadata={"bar": "baz"})
+            document_3 = Document(page_content="i will be deleted :(")
 
-    Supported filter operators:
+            documents = [document_1, document_2, document_3]
+            ids = ["1", "2", "3"]
+            vector_store.add_documents(documents=documents, ids=ids)
 
-    * $eq: Equality operator
-    * $ne: Not equal operator
-    * $lt: Less than operator
-    * $lte: Less than or equal operator
-    * $gt: Greater than operator
-    * $gte: Greater than or equal operator
-    * $in: In operator
-    * $nin: Not in operator
-    * $between: Between operator
-    * $exists: Exists operator
-    * $like: Like operator
-    * $ilike: Case insensitive like operator
-    * $and: Logical AND operator
-    * $or: Logical OR operator
-    * $not: Logical NOT operator
+    Delete Documents:
+        .. code-block:: python
 
-    Example:
+            vector_store.delete(ids=["3"])
 
-    .. code-block:: python
+    Search:
+        .. code-block:: python
 
-        vectorstore.similarity_search('kitty', k=10, filter={
-            'id': {'$in': [1, 5, 2, 9]}
-        })
-        #%% md
+            results = vector_store.similarity_search(query="thud",k=1)
+            for doc in results:
+                print(f"* {doc.page_content} [{doc.metadata}]")
 
-        If you provide a dict with multiple fields, but no operators,
-        the top level will be interpreted as a logical **AND** filter
+        .. code-block:: python
 
-        vectorstore.similarity_search('ducks', k=10, filter={
-            'id': {'$in': [1, 5, 2, 9]},
-            'location': {'$in': ["pond", "market"]}
-        })
+            * thud [{'bar': 'baz'}]
 
-    """
+    Search with filter:
+        .. code-block:: python
+
+            results = vector_store.similarity_search(query="thud",k=1,filter={"bar": "baz"})
+            for doc in results:
+                print(f"* {doc.page_content} [{doc.metadata}]")
+
+        .. code-block:: python
+
+            * thud [{'bar': 'baz'}]
+
+    Search with score:
+        .. code-block:: python
+
+            results = vector_store.similarity_search_with_score(query="qux",k=1)
+            for doc, score in results:
+                print(f"* [SIM={score:3f}] {doc.page_content} [{doc.metadata}]")
+
+        .. code-block:: python
+
+            * [SIM=0.499243] foo [{'baz': 'bar'}]
+
+    Async:
+        .. code-block:: python
+
+            # add documents
+            # await vector_store.aadd_documents(documents=documents, ids=ids)
+
+            # delete documents
+            # await vector_store.adelete(ids=["3"])
+
+            # search
+            # results = vector_store.asimilarity_search(query="thud",k=1)
+
+            # search with score
+            results = await vector_store.asimilarity_search_with_score(query="qux",k=1)
+            for doc,score in results:
+                print(f"* [SIM={score:3f}] {doc.page_content} [{doc.metadata}]")
+
+        .. code-block:: python
+
+            * [SIM=0.499243] foo [{'baz': 'bar'}]
+
+    Use as Retriever:
+        .. code-block:: python
+
+            retriever = vector_store.as_retriever(
+                search_type="mmr",
+                search_kwargs={"k": 1, "fetch_k": 2, "lambda_mult": 0.5},
+            )
+            retriever.invoke("thud")
+
+        .. code-block:: python
+
+            [Document(metadata={'bar': 'baz'}, page_content='thud')]
+
+    """  # noqa: E501
 
     def __init__(
         self,
