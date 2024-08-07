@@ -415,12 +415,12 @@ class PGVector(VectorStore):
         self._async_engine: Optional[AsyncEngine] = None
         self._async_init = False
 
-        if self._embedding_length is None and self.embedding_index is not None:
+        if self._embedding_length is None and self._embedding_index is not None:
             raise ValueError(
                 "embedding_length must be provided when using embedding_index"
             )
             
-        if self.embedding_index is not None and self.embedding_index_ops is None:
+        if self._embedding_index is not None and self._embedding_index_ops is None:
             raise ValueError(
                 "embedding_index_ops must be provided when using embedding_index"
             )
