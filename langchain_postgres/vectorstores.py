@@ -59,9 +59,25 @@ class DistanceStrategy(str, enum.Enum):
 
 DEFAULT_DISTANCE_STRATEGY = DistanceStrategy.COSINE
 
+
+class HNSWDistanceStrategy(str, enum.Enum):
+    """Enumerator of the HNSW index Distance strategies."""
+
+    EUCLIDEAN = "vector_l2_ops"
+    COSINE = "vector_cosine_ops"
+    MAX_INNER_PRODUCT = "vector_ip_ops"
+    L1_DISTANCE = "vector_l1_ops"
+    HAMMING_DISTANCE = "bit_hamming_ops"
+    Jaccard_DISTANCE = "bit_jaccard_ops"
+
+
+DEFAULT_HNSW_DISTANCE_STRATEGY = HNSWDistanceStrategy.COSINE
+
+
 Base = declarative_base()  # type: Any
 
 
+ADA_TOKEN_COUNT = 1536
 _LANGCHAIN_DEFAULT_COLLECTION_NAME = "langchain"
 
 
@@ -869,6 +885,11 @@ class PGVector(VectorStore):
             query (str): Query text to search for.
             k (int): Number of results to return. Defaults to 4.
             filter (Optional[Dict[str, str]]): Filter by metadata. Defaults to None.
+            **kwargs (Any): Additional parameters.
+                - use_hnsw (bool): Use HNSW index for similarity search.
+                Defaults to False.
+                - ef_search (int): The number of candidates to consider
+                  during the search. Defaults to 100.
 
         Returns:
             List of Documents most similar to the query.
@@ -879,6 +900,7 @@ class PGVector(VectorStore):
             embedding=embedding,
             k=k,
             filter=filter,
+            **kwargs,
         )
 
     async def asimilarity_search(
@@ -894,6 +916,11 @@ class PGVector(VectorStore):
             query (str): Query text to search for.
             k (int): Number of results to return. Defaults to 4.
             filter (Optional[Dict[str, str]]): Filter by metadata. Defaults to None.
+            **kwargs (Any): Additional parameters.
+                - use_hnsw (bool): Use HNSW index for similarity search.
+                Defaults to False.
+                - ef_search (int): The number of candidates to consider
+                  during the search. Defaults to 100.
 
         Returns:
             List of Documents most similar to the query.
@@ -904,6 +931,7 @@ class PGVector(VectorStore):
             embedding=embedding,
             k=k,
             filter=filter,
+            **kwargs,
         )
 
     def similarity_search_with_score(
@@ -911,6 +939,7 @@ class PGVector(VectorStore):
         query: str,
         k: int = 4,
         filter: Optional[dict] = None,
+        **kwargs: Any,
     ) -> List[Tuple[Document, float]]:
         """Return docs most similar to query.
 
@@ -918,6 +947,11 @@ class PGVector(VectorStore):
             query: Text to look up documents similar to.
             k: Number of Documents to return. Defaults to 4.
             filter (Optional[Dict[str, str]]): Filter by metadata. Defaults to None.
+            **kwargs (Any): Additional parameters.
+                - use_hnsw (bool): Use HNSW index for similarity search.
+                Defaults to False.
+                - ef_search (int): The number of candidates to consider
+                  during the search. Defaults to 100.
 
         Returns:
             List of Documents most similar to the query and score for each.
@@ -925,7 +959,7 @@ class PGVector(VectorStore):
         assert not self._async_engine, "This method must be called without async_mode"
         embedding = self.embedding_function.embed_query(query)
         docs = self.similarity_search_with_score_by_vector(
-            embedding=embedding, k=k, filter=filter
+            embedding=embedding, k=k, filter=filter, **kwargs
         )
         return docs
 
@@ -934,6 +968,7 @@ class PGVector(VectorStore):
         query: str,
         k: int = 4,
         filter: Optional[dict] = None,
+        **kwargs: Any,
     ) -> List[Tuple[Document, float]]:
         """Return docs most similar to query.
 
@@ -941,6 +976,11 @@ class PGVector(VectorStore):
             query: Text to look up documents similar to.
             k: Number of Documents to return. Defaults to 4.
             filter (Optional[Dict[str, str]]): Filter by metadata. Defaults to None.
+            **kwargs (Any): Additional parameters.
+                - use_hnsw (bool): Use HNSW index for similarity search.
+                Defaults to False.
+                - ef_search (int): The number of candidates to consider
+                  during the search. Defaults to 100.
 
         Returns:
             List of Documents most similar to the query and score for each.
@@ -948,7 +988,7 @@ class PGVector(VectorStore):
         await self.__apost_init__()  # Lazy async init
         embedding = self.embedding_function.embed_query(query)
         docs = await self.asimilarity_search_with_score_by_vector(
-            embedding=embedding, k=k, filter=filter
+            embedding=embedding, k=k, filter=filter, **kwargs
         )
         return docs
 
@@ -971,9 +1011,15 @@ class PGVector(VectorStore):
         embedding: List[float],
         k: int = 4,
         filter: Optional[dict] = None,
+        **kwargs: Any,
     ) -> List[Tuple[Document, float]]:
         assert not self._async_engine, "This method must be called without async_mode"
-        results = self.__query_collection(embedding=embedding, k=k, filter=filter)
+        results = self.__query_collection(
+            embedding=embedding,
+            k=k,
+            filter=filter,
+            **kwargs,
+        )
 
         return self._results_to_docs_and_scores(results)
 
@@ -982,11 +1028,16 @@ class PGVector(VectorStore):
         embedding: List[float],
         k: int = 4,
         filter: Optional[dict] = None,
+        **kwargs: Any,
     ) -> List[Tuple[Document, float]]:
         await self.__apost_init__()  # Lazy async init
         async with self._make_async_session() as session:  # type: ignore[arg-type]
             results = await self.__aquery_collection(
-                session=session, embedding=embedding, k=k, filter=filter
+                session=session,
+                embedding=embedding,
+                k=k,
+                filter=filter,
+                **kwargs,
             )
 
             return self._results_to_docs_and_scores(results)
@@ -1326,11 +1377,30 @@ class PGVector(VectorStore):
                 f"Invalid type: Expected a dictionary but got type: {type(filters)}"
             )
 
+    def _execute_hnsw_settings(self, session: Session, **kwargs: Any) -> None:
+        session.execute(sqlalchemy.text("SET LOCAL enable_seqscan = off;"))
+        session.execute(
+            sqlalchemy.text(
+                f"SET LOCAL hnsw.ef_search = {kwargs.get('ef_search', 100)};"
+            )
+        )
+
+    async def _aexecute_hnsw_settings(
+        self, session: AsyncSession, **kwargs: Any
+    ) -> None:
+        await session.execute(sqlalchemy.text("SET LOCAL enable_seqscan = off;"))
+        await session.execute(
+            sqlalchemy.text(
+                f"SET LOCAL hnsw.ef_search = {kwargs.get('ef_search', 100)};"
+            )
+        )
+
     def __query_collection(
         self,
         embedding: List[float],
         k: int = 4,
         filter: Optional[Dict[str, str]] = None,
+        **kwargs: Any,
     ) -> Sequence[Any]:
         """Query the collection."""
         with self._make_sync_session() as session:  # type: ignore[arg-type]
@@ -1350,6 +1420,8 @@ class PGVector(VectorStore):
                     filter_by.extend(filter_clauses)
 
             _type = self.EmbeddingStore
+            if kwargs.get("use_hnsw", True):
+                self._execute_hnsw_settings(session, **kwargs)
 
             results: List[Any] = (
                 session.query(
@@ -1374,6 +1446,7 @@ class PGVector(VectorStore):
         embedding: List[float],
         k: int = 4,
         filter: Optional[Dict[str, str]] = None,
+        **kwargs: Any,
     ) -> Sequence[Any]:
         """Query the collection."""
         async with self._make_async_session() as session:  # type: ignore[arg-type]
@@ -1393,6 +1466,9 @@ class PGVector(VectorStore):
                     filter_by.extend(filter_clauses)
 
             _type = self.EmbeddingStore
+
+            if kwargs.get("use_hnsw", True):
+                await self._aexecute_hnsw_settings(session, **kwargs)
 
             stmt = (
                 select(
@@ -1425,13 +1501,18 @@ class PGVector(VectorStore):
             embedding: Embedding to look up documents similar to.
             k: Number of Documents to return. Defaults to 4.
             filter (Optional[Dict[str, str]]): Filter by metadata. Defaults to None.
+            **kwargs (Any): Additional parameters.
+                - use_hnsw (bool): Use HNSW index for similarity search.
+                Defaults to False.
+                - ef_search (int): The number of candidates to consider
+                  during the search. Defaults to 100.
 
         Returns:
             List of Documents most similar to the query vector.
         """
         assert not self._async_engine, "This method must be called without async_mode"
         docs_and_scores = self.similarity_search_with_score_by_vector(
-            embedding=embedding, k=k, filter=filter
+            embedding=embedding, k=k, filter=filter, **kwargs
         )
         return _results_to_docs(docs_and_scores)
 
@@ -1455,7 +1536,10 @@ class PGVector(VectorStore):
         assert self._async_engine, "This method must be called with async_mode"
         await self.__apost_init__()  # Lazy async init
         docs_and_scores = await self.asimilarity_search_with_score_by_vector(
-            embedding=embedding, k=k, filter=filter
+            embedding=embedding,
+            k=k,
+            filter=filter,
+            **kwargs,
         )
         return _results_to_docs(docs_and_scores)
 
@@ -1835,7 +1919,9 @@ class PGVector(VectorStore):
                 relevance to the query and score for each.
         """
         assert not self._async_engine, "This method must be called without async_mode"
-        results = self.__query_collection(embedding=embedding, k=fetch_k, filter=filter)
+        results = self.__query_collection(
+            embedding=embedding, k=fetch_k, filter=filter, **kwargs
+        )
 
         embedding_list = [result.EmbeddingStore.embedding for result in results]
 
@@ -1875,6 +1961,11 @@ class PGVector(VectorStore):
                 to maximum diversity and 1 to minimum diversity.
                 Defaults to 0.5.
             filter (Optional[Dict[str, str]]): Filter by metadata. Defaults to None.
+            **kwargs (Any): Additional parameters.
+                - use_hnsw (bool): Use HNSW index for similarity search.
+                  Defaults to False.
+                - ef_search (int): The number of candidates to consider
+                  during the search. Defaults to 100.
 
         Returns:
             List[Tuple[Document, float]]: List of Documents selected by maximal marginal
@@ -1883,7 +1974,11 @@ class PGVector(VectorStore):
         await self.__apost_init__()  # Lazy async init
         async with self._make_async_session() as session:
             results = await self.__aquery_collection(
-                session=session, embedding=embedding, k=fetch_k, filter=filter
+                session=session,
+                embedding=embedding,
+                k=fetch_k,
+                filter=filter,
+                **kwargs,
             )
 
             embedding_list = [result.EmbeddingStore.embedding for result in results]
@@ -1923,6 +2018,11 @@ class PGVector(VectorStore):
                 to maximum diversity and 1 to minimum diversity.
                 Defaults to 0.5.
             filter (Optional[Dict[str, str]]): Filter by metadata. Defaults to None.
+            **kwargs (Any): Additional parameters.
+                - use_hnsw (bool): Use HNSW index for similarity search.
+                  Defaults to False.
+                - ef_search (int): The number of candidates to consider
+                  during the search. Defaults to 100.
 
         Returns:
             List[Document]: List of Documents selected by maximal marginal relevance.
@@ -1961,6 +2061,11 @@ class PGVector(VectorStore):
                 to maximum diversity and 1 to minimum diversity.
                 Defaults to 0.5.
             filter (Optional[Dict[str, str]]): Filter by metadata. Defaults to None.
+            **kwargs (Any): Additional parameters.
+                - use_hnsw (bool): Use HNSW index for similarity search.
+                Defaults to False.
+                - ef_search (int): The number of candidates to consider
+                  during the search. Defaults to 100.
 
         Returns:
             List[Document]: List of Documents selected by maximal marginal relevance.
@@ -2000,6 +2105,11 @@ class PGVector(VectorStore):
                 to maximum diversity and 1 to minimum diversity.
                 Defaults to 0.5.
             filter (Optional[Dict[str, str]]): Filter by metadata. Defaults to None.
+            **kwargs (Any): Additional parameters.
+                - use_hnsw (bool): Use HNSW index for similarity search.
+                Defaults to False.
+                - ef_search (int): The number of candidates to consider
+                  during the search. Defaults to 100.
 
         Returns:
             List[Tuple[Document, float]]: List of Documents selected by maximal marginal
@@ -2040,6 +2150,11 @@ class PGVector(VectorStore):
                 to maximum diversity and 1 to minimum diversity.
                 Defaults to 0.5.
             filter (Optional[Dict[str, str]]): Filter by metadata. Defaults to None.
+            **kwargs (Any): Additional parameters.
+                - use_hnsw (bool): Use HNSW index for similarity search.
+                Defaults to False.
+                - ef_search (int): The number of candidates to consider
+                  during the search. Defaults to 100.
 
         Returns:
             List[Tuple[Document, float]]: List of Documents selected by maximal marginal
@@ -2082,6 +2197,11 @@ class PGVector(VectorStore):
                 to maximum diversity and 1 to minimum diversity.
                 Defaults to 0.5.
             filter (Optional[Dict[str, str]]): Filter by metadata. Defaults to None.
+            **kwargs (Any): Additional parameters.
+                - use_hnsw (bool): Use HNSW index for similarity search.
+                Defaults to False.
+                - ef_search (int): The number of candidates to consider
+                  during the search. Defaults to 100.
 
         Returns:
             List[Document]: List of Documents selected by maximal marginal relevance.
@@ -2122,6 +2242,11 @@ class PGVector(VectorStore):
                 to maximum diversity and 1 to minimum diversity.
                 Defaults to 0.5.
             filter (Optional[Dict[str, str]]): Filter by metadata. Defaults to None.
+            **kwargs (Any): Additional parameters.
+                - use_hnsw (bool): Use HNSW index for similarity search.
+                Defaults to False.
+                - ef_search (int): The number of candidates to consider
+                  during the search. Defaults to 100.
 
         Returns:
             List[Document]: List of Documents selected by maximal marginal relevance.
@@ -2139,6 +2264,66 @@ class PGVector(VectorStore):
         )
 
         return _results_to_docs(docs_and_scores)
+
+    def _prepare_create_hnsw_index_query(
+        self,
+        dims: int = ADA_TOKEN_COUNT,
+        distance_strategy: HNSWDistanceStrategy = DEFAULT_HNSW_DISTANCE_STRATEGY,
+        m: int = 8,
+        ef_construction: int = 16,
+    ) -> sqlalchemy.TextClause:
+        create_index_query = sqlalchemy.text(
+            "CREATE INDEX IF NOT EXISTS langchain_pg_embedding_idx "
+            "ON langchain_pg_embedding USING hnsw ((embedding::vector({})) {}) "
+            "WITH ("
+            "m = {}, "
+            "ef_construction = {}"
+            ");".format(dims, distance_strategy, m, ef_construction)
+        )
+
+        return create_index_query
+
+    def create_hnsw_index(
+        self,
+        distance_strategy: HNSWDistanceStrategy = DEFAULT_HNSW_DISTANCE_STRATEGY,
+        m: int = 8,
+        ef_construction: int = 16,
+    ) -> None:
+        assert self._engine, "engine not found"
+        create_index_query = self._prepare_create_hnsw_index_query(
+            distance_strategy=distance_strategy, m=m, ef_construction=ef_construction
+        )
+
+        # Execute the queries
+        try:
+            with self._make_sync_session() as session:
+                session.execute(create_index_query)
+                session.commit()
+            print("HNSW extension and index created successfully.")  # noqa: T201
+        except Exception as e:
+            print(f"Failed to create HNSW extension or index: {e}")  # noqa: T201
+            raise e
+
+    async def acreate_hnsw_index(
+        self,
+        distance_strategy: HNSWDistanceStrategy = DEFAULT_HNSW_DISTANCE_STRATEGY,
+        m: int = 8,
+        ef_construction: int = 16,
+    ) -> None:
+        assert self._async_engine, "This method must be called with async_mode"
+        create_index_query = self._prepare_create_hnsw_index_query(
+            distance_strategy=distance_strategy, m=m, ef_construction=ef_construction
+        )
+
+        # Execute the queries
+        try:
+            async with self._make_async_session() as session:
+                await session.execute(create_index_query)
+                await session.commit()
+            print("HNSW extension and index created successfully.")  # noqa: T201
+        except Exception as e:
+            print(f"Failed to create HNSW extension or index: {e}")  # noqa: T201
+            raise e
 
     @contextlib.contextmanager
     def _make_sync_session(self) -> Generator[Session, None, None]:
