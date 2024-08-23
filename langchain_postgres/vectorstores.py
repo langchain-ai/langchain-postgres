@@ -377,7 +377,7 @@ class PGVector(VectorStore):
         *,
         connection: Union[None, DBConnection, Engine, AsyncEngine, str] = None,
         embedding_length: Optional[int] = None,
-        collection_name: str = _LANGCHAIN_DEFAULT_COLLECTION_NAME,
+        collection_name: str = None,
         collection_metadata: Optional[dict] = None,
         distance_strategy: DistanceStrategy = DEFAULT_DISTANCE_STRATEGY,
         pre_delete_collection: bool = False,
@@ -419,7 +419,10 @@ class PGVector(VectorStore):
         self.async_mode = async_mode
         self.embedding_function = embeddings
         self._embedding_length = embedding_length
-        self.collection_name = collection_name
+        if collection_name:
+            self.collection_name = collection_name
+        else: 
+            self.collection_name = _LANGCHAIN_DEFAULT_COLLECTION_NAME
         self.collection_metadata = collection_metadata
         self._distance_strategy = distance_strategy
         self.pre_delete_collection = pre_delete_collection
