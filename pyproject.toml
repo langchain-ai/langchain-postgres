@@ -4,7 +4,7 @@ version = "0.0.11"
 description = "An integration package connecting Postgres and LangChain"
 authors = []
 readme = "README.md"
-repository = "https://github.com/t stlangchain-ai/langchain-postgres"
+repository = "https://github.com/langchain-ai/langchain-postgres"
 license = "MIT"
 
 [tool.poetry.urls]
