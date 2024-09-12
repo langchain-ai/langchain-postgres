@@ -11,6 +11,7 @@ from typing import (
     Callable,
     Dict,
     Generator,
+    Iterable,
     List,
     Optional,
     Sequence,
@@ -26,7 +27,6 @@ import numpy as np
 import sqlalchemy
 from langchain_core.documents import Document
 from langchain_core.embeddings import Embeddings
-from langchain_core.indexing import UpsertResponse
 from langchain_core.utils import get_from_dict_or_env
 from langchain_core.vectorstores import VectorStore
 from sqlalchemy import SQLColumnExpression, cast, create_engine, delete, func, select
@@ -764,7 +764,9 @@ class PGVector(VectorStore):
         """
         assert not self._async_engine, "This method must be called with sync_mode"
         if ids is None:
-            ids = [str(uuid.uuid4()) for _ in texts]
+            ids_ = [str(uuid.uuid4()) for _ in texts]
+        else:
+            ids_ = [id if id is not None else str(uuid.uuid4()) for id in ids]
 
         if not metadatas:
             metadatas = [{} for _ in texts]
@@ -782,7 +784,7 @@ class PGVector(VectorStore):
                     "cmetadata": metadata or {},
                 }
                 for text, metadata, embedding, id in zip(
-                    texts, metadatas, embeddings, ids
+                    texts, metadatas, embeddings, ids_
                 )
             ]
             stmt = insert(self.EmbeddingStore).values(data)
@@ -798,7 +800,7 @@ class PGVector(VectorStore):
             session.execute(on_conflict_stmt)
             session.commit()
 
-        return ids
+        return ids_
 
     async def aadd_embeddings(
         self,
@@ -819,8 +821,11 @@ class PGVector(VectorStore):
             kwargs: vectorstore specific parameters
         """
         await self.__apost_init__()  # Lazy async init
+
         if ids is None:
-            ids = [str(uuid.uuid1()) for _ in texts]
+            ids_ = [str(uuid.uuid4()) for _ in texts]
+        else:
+            ids_ = [id if id is not None else str(uuid.uuid4()) for id in ids]
 
         if not metadatas:
             metadatas = [{} for _ in texts]
@@ -838,7 +843,7 @@ class PGVector(VectorStore):
                     "cmetadata": metadata or {},
                 }
                 for text, metadata, embedding, id in zip(
-                    texts, metadatas, embeddings, ids
+                    texts, metadatas, embeddings, ids_
                 )
             ]
             stmt = insert(self.EmbeddingStore).values(data)
@@ -854,7 +859,67 @@ class PGVector(VectorStore):
             await session.execute(on_conflict_stmt)
             await session.commit()
 
-        return ids
+        return ids_
+
+    def add_texts(
+        self,
+        texts: Iterable[str],
+        metadatas: Optional[List[dict]] = None,
+        ids: Optional[List[str]] = None,
+        **kwargs: Any,
+    ) -> List[str]:
+        """Run more texts through the embeddings and add to the vectorstore.
+
+        Args:
+            texts: Iterable of strings to add to the vectorstore.
+            metadatas: Optional list of metadatas associated with the texts.
+            ids: Optional list of ids for the texts.
+                 If not provided, will generate a new id for each text.
+            kwargs: vectorstore specific parameters
+
+        Returns:
+            List of ids from adding the texts into the vectorstore.
+        """
+        assert not self._async_engine, "This method must be called without async_mode"
+        texts_ = list(texts)
+        embeddings = self.embedding_function.embed_documents(texts_)
+        return self.add_embeddings(
+            texts=texts_,
+            embeddings=list(embeddings),
+            metadatas=list(metadatas) if metadatas else None,
+            ids=list(ids) if ids else None,
+            **kwargs,
+        )
+
+    async def aadd_texts(
+        self,
+        texts: Iterable[str],
+        metadatas: Optional[List[dict]] = None,
+        ids: Optional[List[str]] = None,
+        **kwargs: Any,
+    ) -> List[str]:
+        """Run more texts through the embeddings and add to the vectorstore.
+
+        Args:
+            texts: Iterable of strings to add to the vectorstore.
+            metadatas: Optional list of metadatas associated with the texts.
+            ids: Optional list of ids for the texts.
+                 If not provided, will generate a new id for each text.
+            kwargs: vectorstore specific parameters
+
+        Returns:
+            List of ids from adding the texts into the vectorstore.
+        """
+        await self.__apost_init__()  # Lazy async init
+        texts_ = list(texts)
+        embeddings = await self.embedding_function.aembed_documents(texts_)
+        return await self.aadd_embeddings(
+            texts=texts_,
+            embeddings=list(embeddings),
+            metadatas=list(metadatas) if metadatas else None,
+            ids=list(ids) if ids else None,
+            **kwargs,
+        )
 
     def similarity_search(
         self,
@@ -2161,64 +2226,6 @@ class PGVector(VectorStore):
             )
         async with self.session_maker() as session:
             yield typing_cast(AsyncSession, session)
-
-    def upsert(self, items: Sequence[Document], /, **kwargs: Any) -> UpsertResponse:
-        """Upsert documents into the vectorstore.
-
-        Args:
-            items: Sequence of documents to upsert.
-            kwargs: vectorstore specific parameters
-
-        Returns:
-            UpsertResponse
-        """
-        if self._async_engine:
-            raise AssertionError("This method must be called in sync mode.")
-        texts = [item.page_content for item in items]
-        metadatas = [item.metadata for item in items]
-        ids = [item.id if item.id is not None else str(uuid.uuid4()) for item in items]
-        embeddings = self.embedding_function.embed_documents(list(texts))
-        added_ids = self.add_embeddings(
-            texts=texts, embeddings=embeddings, metadatas=metadatas, ids=ids, **kwargs
-        )
-        return {
-            "succeeded": added_ids,
-            "failed": [
-                item.id
-                for item in items
-                if item.id is not None and item.id not in added_ids
-            ],
-        }
-
-    async def aupsert(
-        self, items: Sequence[Document], /, **kwargs: Any
-    ) -> UpsertResponse:
-        """Upsert documents into the vectorstore.
-
-        Args:
-            items: Sequence of documents to upsert.
-            kwargs: vectorstore specific parameters
-
-        Returns:
-            UpsertResponse
-        """
-        if not self._async_engine:
-            raise AssertionError("This method must be called with async_mode")
-        texts = [item.page_content for item in items]
-        metadatas = [item.metadata for item in items]
-        ids = [item.id if item.id is not None else str(uuid.uuid4()) for item in items]
-        embeddings = await self.embedding_function.aembed_documents(list(texts))
-        added_ids = await self.aadd_embeddings(
-            texts=texts, embeddings=embeddings, metadatas=metadatas, ids=ids, **kwargs
-        )
-        return {
-            "succeeded": added_ids,
-            "failed": [
-                item.id
-                for item in items
-                if item.id is not None and item.id not in added_ids
-            ],
-        }
 
     def get_by_ids(self, ids: Sequence[str], /) -> List[Document]:
         """Get documents by ids."""
