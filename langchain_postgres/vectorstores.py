@@ -764,7 +764,9 @@ class PGVector(VectorStore):
         """
         assert not self._async_engine, "This method must be called with sync_mode"
         if ids is None:
-            ids = [str(uuid.uuid4()) for _ in texts]
+            ids_ = [str(uuid.uuid4()) for _ in texts]
+        else:
+            ids_ = [id if id is not None else str(uuid.uuid4()) for id in ids]
 
         if not metadatas:
             metadatas = [{} for _ in texts]
@@ -782,7 +784,7 @@ class PGVector(VectorStore):
                     "cmetadata": metadata or {},
                 }
                 for text, metadata, embedding, id in zip(
-                    texts, metadatas, embeddings, ids
+                    texts, metadatas, embeddings, ids_
                 )
             ]
             stmt = insert(self.EmbeddingStore).values(data)
@@ -798,7 +800,7 @@ class PGVector(VectorStore):
             session.execute(on_conflict_stmt)
             session.commit()
 
-        return ids
+        return ids_
 
     async def aadd_embeddings(
         self,
@@ -819,8 +821,11 @@ class PGVector(VectorStore):
             kwargs: vectorstore specific parameters
         """
         await self.__apost_init__()  # Lazy async init
+
         if ids is None:
-            ids = [str(uuid.uuid1()) for _ in texts]
+            ids_ = [str(uuid.uuid4()) for _ in texts]
+        else:
+            ids_ = [id if id is not None else str(uuid.uuid4()) for id in ids]
 
         if not metadatas:
             metadatas = [{} for _ in texts]
@@ -838,7 +843,7 @@ class PGVector(VectorStore):
                     "cmetadata": metadata or {},
                 }
                 for text, metadata, embedding, id in zip(
-                    texts, metadatas, embeddings, ids
+                    texts, metadatas, embeddings, ids_
                 )
             ]
             stmt = insert(self.EmbeddingStore).values(data)
@@ -854,7 +859,7 @@ class PGVector(VectorStore):
             await session.execute(on_conflict_stmt)
             await session.commit()
 
-        return ids
+        return ids_
 
     def add_texts(
         self,
