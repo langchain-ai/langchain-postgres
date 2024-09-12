@@ -8,6 +8,11 @@ on:
         type: string
         description: "From which folder this pipeline executes"
   workflow_dispatch:
+    inputs:
+      working-directory:
+        required: true
+        type: string
+        default: '.'
 
 env:
   POETRY_VERSION: "1.7.1"
