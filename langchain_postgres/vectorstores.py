@@ -886,8 +886,8 @@ class PGVector(VectorStore):
         return self.add_embeddings(
             texts=texts_,
             embeddings=list(embeddings),
-            metadatas=list(metadatas),
-            ids=list(ids),
+            metadatas=list(metadatas) if metadatas else None,
+            ids=list(ids) if ids else None,
             **kwargs,
         )
 
@@ -916,8 +916,8 @@ class PGVector(VectorStore):
         return await self.aadd_embeddings(
             texts=texts_,
             embeddings=list(embeddings),
-            metadatas=list(metadatas),
-            ids=list(ids),
+            metadatas=list(metadatas) if metadatas else None,
+            ids=list(ids) if ids else None,
             **kwargs,
         )
 
