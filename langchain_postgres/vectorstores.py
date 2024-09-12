@@ -881,9 +881,14 @@ class PGVector(VectorStore):
             List of ids from adding the texts into the vectorstore.
         """
         assert not self._async_engine, "This method must be called without async_mode"
-        embeddings = self.embedding_function.embed_documents(list(texts))
+        texts_ = list(texts)
+        embeddings = self.embedding_function.embed_documents(texts_)
         return self.add_embeddings(
-            texts=texts, embeddings=embeddings, metadatas=metadatas, ids=ids, **kwargs
+            texts=texts_,
+            embeddings=list(embeddings),
+            metadatas=list(metadatas),
+            ids=list(ids),
+            **kwargs,
         )
 
     async def aadd_texts(
@@ -906,9 +911,14 @@ class PGVector(VectorStore):
             List of ids from adding the texts into the vectorstore.
         """
         await self.__apost_init__()  # Lazy async init
-        embeddings = await self.embedding_function.aembed_documents(list(texts))
+        texts_ = list(texts)
+        embeddings = await self.embedding_function.aembed_documents(texts_)
         return await self.aadd_embeddings(
-            texts=texts, embeddings=embeddings, metadatas=metadatas, ids=ids, **kwargs
+            texts=texts_,
+            embeddings=list(embeddings),
+            metadatas=list(metadatas),
+            ids=list(ids),
+            **kwargs,
         )
 
     def similarity_search(
