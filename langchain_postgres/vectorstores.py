@@ -11,6 +11,7 @@ from typing import (
     Callable,
     Dict,
     Generator,
+    Iterable,
     List,
     Optional,
     Sequence,
@@ -26,7 +27,6 @@ import numpy as np
 import sqlalchemy
 from langchain_core.documents import Document
 from langchain_core.embeddings import Embeddings
-from langchain_core.indexing import UpsertResponse
 from langchain_core.utils import get_from_dict_or_env
 from langchain_core.vectorstores import VectorStore
 from sqlalchemy import SQLColumnExpression, cast, create_engine, delete, func, select
@@ -246,98 +246,130 @@ DBConnection = Union[sqlalchemy.engine.Engine, str]
 
 
 class PGVector(VectorStore):
-    """Vectorstore implementation using Postgres as the backend.
+    """Postgres vector store integration.
 
-    Currently, there is no mechanism for supporting data migration.
+    Setup:
+        Install ``langchain_postgres`` and run the docker container.
 
-    So breaking changes in the vectorstore schema will require the user to recreate
-    the tables and re-add the documents.
+        .. code-block:: bash
 
-    If this is a concern, please use a different vectorstore. If
-    not, this implementation should be fine for your use case.
+            pip install -qU langchain-postgres
+            docker run --name pgvector-container -e POSTGRES_USER=langchain -e POSTGRES_PASSWORD=langchain -e POSTGRES_DB=langchain -p 6024:5432 -d pgvector/pgvector:pg16
 
-    To use this vectorstore you need to have the `vector` extension installed.
-    The `vector` extension is a Postgres extension that provides vector
-    similarity search capabilities.
+    Key init args — indexing params:
+        collection_name: str
+            Name of the collection.
+        embeddings: Embeddings
+            Embedding function to use.
 
-    ```sh
-    docker run --name pgvector-container -e POSTGRES_PASSWORD=...
-        -d pgvector/pgvector:pg16
-    ```
+    Key init args — client params:
+        connection: Union[None, DBConnection, Engine, AsyncEngine, str]
+            Connection string or engine.
 
-    Example:
+    Instantiate:
         .. code-block:: python
 
+            from langchain_postgres import PGVector
             from langchain_postgres.vectorstores import PGVector
-            from langchain_openai.embeddings import OpenAIEmbeddings
+            from langchain_openai import OpenAIEmbeddings
 
-            connection_string = "postgresql+psycopg://..."
-            collection_name = "state_of_the_union_test"
-            embeddings = OpenAIEmbeddings()
-            vectorstore = PGVector.from_documents(
-                embedding=embeddings,
-                documents=docs,
-                connection=connection_string,
+            # See docker command above to launch a postgres instance with pgvector enabled.
+            connection = "postgresql+psycopg://langchain:langchain@localhost:6024/langchain"  # Uses psycopg3!
+            collection_name = "my_docs"
+
+            vector_store = PGVector(
+                embeddings=OpenAIEmbeddings(model="text-embedding-3-large"),
                 collection_name=collection_name,
+                connection=connection,
                 use_jsonb=True,
-                async_mode=False,
             )
 
+    Add Documents:
+        .. code-block:: python
 
-    This code has been ported over from langchain_community with minimal changes
-    to allow users to easily transition from langchain_community to langchain_postgres.
+            from langchain_core.documents import Document
 
-    Some changes had to be made to address issues with the community implementation:
-    * langchain_postgres now works with psycopg3. Please update your
-      connection strings from `postgresql+psycopg2://...` to
-      `postgresql+psycopg://langchain:langchain@...`
-      (yes, the driver name is `psycopg` not `psycopg3`)
-    * The schema of the embedding store and collection have been changed to make
-      add_documents work correctly with user specified ids, specifically
-      when overwriting existing documents.
-      You will need to recreate the tables if you are using an existing database.
-    * A Connection object has to be provided explicitly. Connections will not be
-      picked up automatically based on env variables.
-    * langchain_postgres now accept async connections. If you want to use the async
-        version, you need to set `async_mode=True` when initializing the store or
-        use an async engine.
+            document_1 = Document(page_content="foo", metadata={"baz": "bar"})
+            document_2 = Document(page_content="thud", metadata={"bar": "baz"})
+            document_3 = Document(page_content="i will be deleted :(")
 
-    Supported filter operators:
+            documents = [document_1, document_2, document_3]
+            ids = ["1", "2", "3"]
+            vector_store.add_documents(documents=documents, ids=ids)
 
-    * $eq: Equality operator
-    * $ne: Not equal operator
-    * $lt: Less than operator
-    * $lte: Less than or equal operator
-    * $gt: Greater than operator
-    * $gte: Greater than or equal operator
-    * $in: In operator
-    * $nin: Not in operator
-    * $between: Between operator
-    * $exists: Exists operator
-    * $like: Like operator
-    * $ilike: Case insensitive like operator
-    * $and: Logical AND operator
-    * $or: Logical OR operator
-    * $not: Logical NOT operator
+    Delete Documents:
+        .. code-block:: python
 
-    Example:
+            vector_store.delete(ids=["3"])
 
-    .. code-block:: python
+    Search:
+        .. code-block:: python
 
-        vectorstore.similarity_search('kitty', k=10, filter={
-            'id': {'$in': [1, 5, 2, 9]}
-        })
-        #%% md
+            results = vector_store.similarity_search(query="thud",k=1)
+            for doc in results:
+                print(f"* {doc.page_content} [{doc.metadata}]")
 
-        If you provide a dict with multiple fields, but no operators,
-        the top level will be interpreted as a logical **AND** filter
+        .. code-block:: python
 
-        vectorstore.similarity_search('ducks', k=10, filter={
-            'id': {'$in': [1, 5, 2, 9]},
-            'location': {'$in': ["pond", "market"]}
-        })
+            * thud [{'bar': 'baz'}]
 
-    """
+    Search with filter:
+        .. code-block:: python
+
+            results = vector_store.similarity_search(query="thud",k=1,filter={"bar": "baz"})
+            for doc in results:
+                print(f"* {doc.page_content} [{doc.metadata}]")
+
+        .. code-block:: python
+
+            * thud [{'bar': 'baz'}]
+
+    Search with score:
+        .. code-block:: python
+
+            results = vector_store.similarity_search_with_score(query="qux",k=1)
+            for doc, score in results:
+                print(f"* [SIM={score:3f}] {doc.page_content} [{doc.metadata}]")
+
+        .. code-block:: python
+
+            * [SIM=0.499243] foo [{'baz': 'bar'}]
+
+    Async:
+        .. code-block:: python
+
+            # add documents
+            # await vector_store.aadd_documents(documents=documents, ids=ids)
+
+            # delete documents
+            # await vector_store.adelete(ids=["3"])
+
+            # search
+            # results = vector_store.asimilarity_search(query="thud",k=1)
+
+            # search with score
+            results = await vector_store.asimilarity_search_with_score(query="qux",k=1)
+            for doc,score in results:
+                print(f"* [SIM={score:3f}] {doc.page_content} [{doc.metadata}]")
+
+        .. code-block:: python
+
+            * [SIM=0.499243] foo [{'baz': 'bar'}]
+
+    Use as Retriever:
+        .. code-block:: python
+
+            retriever = vector_store.as_retriever(
+                search_type="mmr",
+                search_kwargs={"k": 1, "fetch_k": 2, "lambda_mult": 0.5},
+            )
+            retriever.invoke("thud")
+
+        .. code-block:: python
+
+            [Document(metadata={'bar': 'baz'}, page_content='thud')]
+
+    """  # noqa: E501
 
     def __init__(
         self,
@@ -732,7 +764,9 @@ class PGVector(VectorStore):
         """
         assert not self._async_engine, "This method must be called with sync_mode"
         if ids is None:
-            ids = [str(uuid.uuid4()) for _ in texts]
+            ids_ = [str(uuid.uuid4()) for _ in texts]
+        else:
+            ids_ = [id if id is not None else str(uuid.uuid4()) for id in ids]
 
         if not metadatas:
             metadatas = [{} for _ in texts]
@@ -750,7 +784,7 @@ class PGVector(VectorStore):
                     "cmetadata": metadata or {},
                 }
                 for text, metadata, embedding, id in zip(
-                    texts, metadatas, embeddings, ids
+                    texts, metadatas, embeddings, ids_
                 )
             ]
             stmt = insert(self.EmbeddingStore).values(data)
@@ -766,7 +800,7 @@ class PGVector(VectorStore):
             session.execute(on_conflict_stmt)
             session.commit()
 
-        return ids
+        return ids_
 
     async def aadd_embeddings(
         self,
@@ -787,8 +821,11 @@ class PGVector(VectorStore):
             kwargs: vectorstore specific parameters
         """
         await self.__apost_init__()  # Lazy async init
+
         if ids is None:
-            ids = [str(uuid.uuid1()) for _ in texts]
+            ids_ = [str(uuid.uuid4()) for _ in texts]
+        else:
+            ids_ = [id if id is not None else str(uuid.uuid4()) for id in ids]
 
         if not metadatas:
             metadatas = [{} for _ in texts]
@@ -806,7 +843,7 @@ class PGVector(VectorStore):
                     "cmetadata": metadata or {},
                 }
                 for text, metadata, embedding, id in zip(
-                    texts, metadatas, embeddings, ids
+                    texts, metadatas, embeddings, ids_
                 )
             ]
             stmt = insert(self.EmbeddingStore).values(data)
@@ -822,7 +859,67 @@ class PGVector(VectorStore):
             await session.execute(on_conflict_stmt)
             await session.commit()
 
-        return ids
+        return ids_
+
+    def add_texts(
+        self,
+        texts: Iterable[str],
+        metadatas: Optional[List[dict]] = None,
+        ids: Optional[List[str]] = None,
+        **kwargs: Any,
+    ) -> List[str]:
+        """Run more texts through the embeddings and add to the vectorstore.
+
+        Args:
+            texts: Iterable of strings to add to the vectorstore.
+            metadatas: Optional list of metadatas associated with the texts.
+            ids: Optional list of ids for the texts.
+                 If not provided, will generate a new id for each text.
+            kwargs: vectorstore specific parameters
+
+        Returns:
+            List of ids from adding the texts into the vectorstore.
+        """
+        assert not self._async_engine, "This method must be called without async_mode"
+        texts_ = list(texts)
+        embeddings = self.embedding_function.embed_documents(texts_)
+        return self.add_embeddings(
+            texts=texts_,
+            embeddings=list(embeddings),
+            metadatas=list(metadatas) if metadatas else None,
+            ids=list(ids) if ids else None,
+            **kwargs,
+        )
+
+    async def aadd_texts(
+        self,
+        texts: Iterable[str],
+        metadatas: Optional[List[dict]] = None,
+        ids: Optional[List[str]] = None,
+        **kwargs: Any,
+    ) -> List[str]:
+        """Run more texts through the embeddings and add to the vectorstore.
+
+        Args:
+            texts: Iterable of strings to add to the vectorstore.
+            metadatas: Optional list of metadatas associated with the texts.
+            ids: Optional list of ids for the texts.
+                 If not provided, will generate a new id for each text.
+            kwargs: vectorstore specific parameters
+
+        Returns:
+            List of ids from adding the texts into the vectorstore.
+        """
+        await self.__apost_init__()  # Lazy async init
+        texts_ = list(texts)
+        embeddings = await self.embedding_function.aembed_documents(texts_)
+        return await self.aadd_embeddings(
+            texts=texts_,
+            embeddings=list(embeddings),
+            metadatas=list(metadatas) if metadatas else None,
+            ids=list(ids) if ids else None,
+            **kwargs,
+        )
 
     def similarity_search(
         self,
@@ -2129,64 +2226,6 @@ class PGVector(VectorStore):
             )
         async with self.session_maker() as session:
             yield typing_cast(AsyncSession, session)
-
-    def upsert(self, items: Sequence[Document], /, **kwargs: Any) -> UpsertResponse:
-        """Upsert documents into the vectorstore.
-
-        Args:
-            items: Sequence of documents to upsert.
-            kwargs: vectorstore specific parameters
-
-        Returns:
-            UpsertResponse
-        """
-        if self._async_engine:
-            raise AssertionError("This method must be called in sync mode.")
-        texts = [item.page_content for item in items]
-        metadatas = [item.metadata for item in items]
-        ids = [item.id if item.id is not None else str(uuid.uuid4()) for item in items]
-        embeddings = self.embeddings.embed_documents(list(texts))
-        added_ids = self.add_embeddings(
-            texts=texts, embeddings=embeddings, metadatas=metadatas, ids=ids, **kwargs
-        )
-        return {
-            "succeeded": added_ids,
-            "failed": [
-                item.id
-                for item in items
-                if item.id is not None and item.id not in added_ids
-            ],
-        }
-
-    async def aupsert(
-        self, items: Sequence[Document], /, **kwargs: Any
-    ) -> UpsertResponse:
-        """Upsert documents into the vectorstore.
-
-        Args:
-            items: Sequence of documents to upsert.
-            kwargs: vectorstore specific parameters
-
-        Returns:
-            UpsertResponse
-        """
-        if not self._async_engine:
-            raise AssertionError("This method must be called with async_mode")
-        texts = [item.page_content for item in items]
-        metadatas = [item.metadata for item in items]
-        ids = [item.id if item.id is not None else str(uuid.uuid4()) for item in items]
-        embeddings = await self.embeddings.aembed_documents(list(texts))
-        added_ids = await self.aadd_embeddings(
-            texts=texts, embeddings=embeddings, metadatas=metadatas, ids=ids, **kwargs
-        )
-        return {
-            "succeeded": added_ids,
-            "failed": [
-                item.id
-                for item in items
-                if item.id is not None and item.id not in added_ids
-            ],
-        }
 
     def get_by_ids(self, ids: Sequence[str], /) -> List[Document]:
         """Get documents by ids."""
