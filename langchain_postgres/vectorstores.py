@@ -939,7 +939,7 @@ class PGVector(VectorStore):
             List of Documents most similar to the query.
         """
         assert not self._async_engine, "This method must be called without async_mode"
-        embedding = self.embedding_function.embed_query(text=query)
+        embedding = self.embeddings.embed_query(query)
         return self.similarity_search_by_vector(
             embedding=embedding,
             k=k,
@@ -964,7 +964,7 @@ class PGVector(VectorStore):
             List of Documents most similar to the query.
         """
         await self.__apost_init__()  # Lazy async init
-        embedding = self.embedding_function.embed_query(text=query)
+        embedding = await self.embeddings.aembed_query(query)
         return await self.asimilarity_search_by_vector(
             embedding=embedding,
             k=k,
@@ -988,7 +988,7 @@ class PGVector(VectorStore):
             List of Documents most similar to the query and score for each.
         """
         assert not self._async_engine, "This method must be called without async_mode"
-        embedding = self.embedding_function.embed_query(query)
+        embedding = self.embeddings.embed_query(query)
         docs = self.similarity_search_with_score_by_vector(
             embedding=embedding, k=k, filter=filter
         )
@@ -1011,7 +1011,7 @@ class PGVector(VectorStore):
             List of Documents most similar to the query and score for each.
         """
         await self.__apost_init__()  # Lazy async init
-        embedding = self.embedding_function.embed_query(query)
+        embedding = await self.embeddings.aembed_query(query)
         docs = await self.asimilarity_search_with_score_by_vector(
             embedding=embedding, k=k, filter=filter
         )
@@ -1065,7 +1065,7 @@ class PGVector(VectorStore):
                     page_content=result.EmbeddingStore.document,
                     metadata=result.EmbeddingStore.cmetadata,
                 ),
-                result.distance if self.embedding_function is not None else None,
+                result.distance if self.embeddings is not None else None,
             )
             for result in results
         ]
@@ -1569,7 +1569,7 @@ class PGVector(VectorStore):
         **kwargs: Any,
     ) -> PGVector:
         """Return VectorStore initialized from documents and embeddings."""
-        embeddings = embedding.embed_documents(list(texts))
+        embeddings = await embedding.aembed_documents(list(texts))
         return await cls.__afrom(
             texts,
             embeddings,
@@ -1992,7 +1992,7 @@ class PGVector(VectorStore):
         Returns:
             List[Document]: List of Documents selected by maximal marginal relevance.
         """
-        embedding = self.embedding_function.embed_query(query)
+        embedding = self.embeddings.embed_query(query)
         return self.max_marginal_relevance_search_by_vector(
             embedding,
             k=k,
@@ -2031,7 +2031,7 @@ class PGVector(VectorStore):
             List[Document]: List of Documents selected by maximal marginal relevance.
         """
         await self.__apost_init__()  # Lazy async init
-        embedding = self.embedding_function.embed_query(query)
+        embedding = await self.embeddings.aembed_query(query)
         return await self.amax_marginal_relevance_search_by_vector(
             embedding,
             k=k,
@@ -2070,7 +2070,7 @@ class PGVector(VectorStore):
             List[Tuple[Document, float]]: List of Documents selected by maximal marginal
                 relevance to the query and score for each.
         """
-        embedding = self.embedding_function.embed_query(query)
+        embedding = self.embeddings.embed_query(query)
         docs = self.max_marginal_relevance_search_with_score_by_vector(
             embedding=embedding,
             k=k,
@@ -2111,7 +2111,7 @@ class PGVector(VectorStore):
                 relevance to the query and score for each.
         """
         await self.__apost_init__()  # Lazy async init
-        embedding = self.embedding_function.embed_query(query)
+        embedding = await self.embeddings.aembed_query(query)
         docs = await self.amax_marginal_relevance_search_with_score_by_vector(
             embedding=embedding,
             k=k,
