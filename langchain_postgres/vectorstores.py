@@ -1375,7 +1375,7 @@ class PGVector(VectorStore):
                     
             if full_text_search:
                 filter_by.append(
-                    text(f"to_tsvector(document) @@ to_tsquery('{' | '.join(full_text_search)}')")
+                    text(f"document_vector @@ to_tsquery('{' | '.join(full_text_search)}')")
                 )
 
             _type = self.EmbeddingStore
