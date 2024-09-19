@@ -30,7 +30,7 @@ from langchain_core.indexing import UpsertResponse
 from langchain_core.utils import get_from_dict_or_env
 from langchain_core.vectorstores import VectorStore
 from sqlalchemy import SQLColumnExpression, cast, create_engine, delete, func, select, text
-from sqlalchemy.dialects.postgresql import JSON, JSONB, JSONPATH, UUID, insert
+from sqlalchemy.dialects.postgresql import JSON, JSONB, JSONPATH, UUID, TSVECTOR, insert
 from sqlalchemy.engine import Connection, Engine
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
@@ -217,6 +217,13 @@ def _get_embedding_collection_store(
         embedding: Vector = sqlalchemy.Column(Vector(vector_dimension))
         document = sqlalchemy.Column(sqlalchemy.String, nullable=True)
         cmetadata = sqlalchemy.Column(JSONB, nullable=True)
+        document_vector = sqlalchemy.Column(
+            TSVECTOR,
+            sqlalchemy.Computed(
+                "to_tsvector('english', document)",
+                persisted=True,
+            )
+        )
 
         __table_args__ = (
             sqlalchemy.Index(
@@ -224,6 +231,11 @@ def _get_embedding_collection_store(
                 "cmetadata",
                 postgresql_using="gin",
                 postgresql_ops={"cmetadata": "jsonb_path_ops"},
+            ),
+            sqlalchemy.Index(
+                "ix_document_vector_gin",
+                "document_vector",
+                postgresql_using="gin",
             ),
             sqlalchemy.Index(
                 f"ix_embedding_{embedding_index.value}",
