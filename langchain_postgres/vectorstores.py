@@ -1058,17 +1058,38 @@ class PGVector(VectorStore):
 
     def _results_to_docs_and_scores(self, results: Any) -> List[Tuple[Document, float]]:
         """Return docs and scores from results."""
-        docs = [
-            (
-                Document(
-                    id=str(result.EmbeddingStore.id),
-                    page_content=result.EmbeddingStore.document,
-                    metadata=result.EmbeddingStore.cmetadata,
-                ),
-                result.distance if self.embeddings is not None else None,
+        docs = []
+        for result in results:
+            metadata = result.EmbeddingStore.cmetadata
+
+            # Attempt to convert metadata to a dict
+            try:
+                if isinstance(metadata, dict):
+                    pass  # Already a dict
+                elif isinstance(metadata, str):
+                    metadata = json.loads(metadata)
+                elif hasattr(metadata, 'buf'):
+                    # For Fragment types (e.g., from asyncpg)
+                    metadata_bytes = metadata.buf
+                    metadata_str = metadata_bytes.decode('utf-8')
+                    metadata = json.loads(metadata_str)
+                elif hasattr(metadata, 'decode'):
+                    # For other byte-like types
+                    metadata_str = metadata.decode('utf-8')
+                    metadata = json.loads(metadata_str)
+                else:
+                    metadata = {}  # Default to empty dict if unknown type
+            except Exception as e:
+                self.logger.warning(f"Failed to deserialize metadata: {e}")
+                metadata = {}
+
+            doc = Document(
+                id=str(result.EmbeddingStore.id),
+                page_content=result.EmbeddingStore.document,
+                metadata=metadata,
             )
-            for result in results
-        ]
+            score = result.distance if self.embeddings is not None else None
+            docs.append((doc, score))
         return docs
 
     def _handle_field_filter(
