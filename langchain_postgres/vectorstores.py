@@ -588,74 +588,86 @@ class PGVector(VectorStore):
             await session.commit()
 
     def delete(
-        self,
-        ids: Optional[List[str]] = None,
-        collection_only: bool = False,
-        **kwargs: Any,
+            self,
+            ids: Optional[List[str]] = None,
+            *,
+            filter: Optional[Dict[str, Any]] = None,
+            collection_only: bool = False,
+            **kwargs: Any,
     ) -> None:
-        """Delete vectors by ids or uuids.
+        """Delete vectors by ids or metadata filter.
 
         Args:
-            ids: List of ids to delete.
-            collection_only: Only delete ids in the collection.
+            ids: Optional list of ids to delete.
+            filter: Optional metadata filter dictionary.
+            collection_only: If True, delete only from the current collection.
+            **kwargs: Additional arguments.
         """
+        if ids is None and filter is None:
+            self.logger.warning("No ids or filter provided for deletion.")
+            return
+
         with self._make_sync_session() as session:
+            stmt = delete(self.EmbeddingStore)
+            if collection_only:
+                collection = self.get_collection(session)
+                if not collection:
+                    self.logger.warning("Collection not found.")
+                    return
+                stmt = stmt.where(self.EmbeddingStore.collection_id == collection.uuid)
+
             if ids is not None:
-                self.logger.debug(
-                    "Trying to delete vectors by ids (represented by the model "
-                    "using the custom ids field)"
-                )
-
-                stmt = delete(self.EmbeddingStore)
-
-                if collection_only:
-                    collection = self.get_collection(session)
-                    if not collection:
-                        self.logger.warning("Collection not found")
-                        return
-
-                    stmt = stmt.where(
-                        self.EmbeddingStore.collection_id == collection.uuid
-                    )
-
+                self.logger.debug("Deleting vectors by ids.")
                 stmt = stmt.where(self.EmbeddingStore.id.in_(ids))
-                session.execute(stmt)
+
+            if filter is not None:
+                self.logger.debug("Deleting vectors by metadata filter.")
+                filter_clause = self._create_filter_clause(filter)
+                stmt = stmt.where(filter_clause)
+
+            session.execute(stmt)
             session.commit()
 
     async def adelete(
-        self,
-        ids: Optional[List[str]] = None,
-        collection_only: bool = False,
-        **kwargs: Any,
+            self,
+            ids: Optional[List[str]] = None,
+            *,
+            filter: Optional[Dict[str, Any]] = None,
+            collection_only: bool = False,
+            **kwargs: Any,
     ) -> None:
-        """Async delete vectors by ids or uuids.
+        """Asynchronously delete vectors by ids or metadata filter.
 
         Args:
-            ids: List of ids to delete.
-            collection_only: Only delete ids in the collection.
+            ids: Optional list of ids to delete.
+            filter: Optional metadata filter dictionary.
+            collection_only: If True, delete only from the current collection.
+            **kwargs: Additional arguments.
         """
-        await self.__apost_init__()  # Lazy async init
+        if ids is None and filter is None:
+            self.logger.warning("No ids or filter provided for deletion.")
+            return
+
+        await self.__apost_init__()
         async with self._make_async_session() as session:
+            stmt = delete(self.EmbeddingStore)
+            if collection_only:
+                collection = await self.aget_collection(session)
+                if not collection:
+                    self.logger.warning("Collection not found.")
+                    return
+                stmt = stmt.where(self.EmbeddingStore.collection_id == collection.uuid)
+
             if ids is not None:
-                self.logger.debug(
-                    "Trying to delete vectors by ids (represented by the model "
-                    "using the custom ids field)"
-                )
-
-                stmt = delete(self.EmbeddingStore)
-
-                if collection_only:
-                    collection = await self.aget_collection(session)
-                    if not collection:
-                        self.logger.warning("Collection not found")
-                        return
-
-                    stmt = stmt.where(
-                        self.EmbeddingStore.collection_id == collection.uuid
-                    )
-
+                self.logger.debug("Deleting vectors by ids.")
                 stmt = stmt.where(self.EmbeddingStore.id.in_(ids))
-                await session.execute(stmt)
+
+            if filter is not None:
+                self.logger.debug("Deleting vectors by metadata filter.")
+                filter_clause = self._create_filter_clause(filter)
+                stmt = stmt.where(filter_clause)
+
+            await session.execute(stmt)
             await session.commit()
 
     def get_collection(self, session: Session) -> Any:
