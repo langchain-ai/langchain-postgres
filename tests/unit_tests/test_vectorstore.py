@@ -159,9 +159,12 @@ def test_pgvector_with_metadatas_with_scores() -> None:
 
 @pytest.mark.asyncio
 async def test_async_pgvector_with_metadatas_with_scores() -> None:
-    """Test end to end construction and search."""
+    """Test construction and search with metadata deserialization."""
     texts = ["foo", "bar", "baz"]
-    metadatas = [{"page": str(i)} for i in range(len(texts))]
+    metadatas = [
+        {"page": str(i), "info": {"nested": f"value{i}"}}
+        for i in range(len(texts))
+    ]
     docsearch = await PGVector.afrom_texts(
         texts=texts,
         collection_name="test_collection",
@@ -170,10 +173,13 @@ async def test_async_pgvector_with_metadatas_with_scores() -> None:
         connection=CONNECTION_STRING,
         pre_delete_collection=True,
     )
-    output = await docsearch.asimilarity_search_with_score("foo", k=1)
-    assert output == [
-        (Document(page_content="foo", metadata={"page": "0"}, id=AnyStr()), 0.0)
-    ]
+    output = await docsearch.asimilarity_search_with_score("foo", k=3)
+    for i, (doc, score) in enumerate(output):
+        expected_metadata = metadatas[i]
+        assert doc.page_content == texts[i]
+        assert doc.metadata == expected_metadata
+        assert isinstance(doc.metadata, dict)
+        assert score is not None
 
 
 def test_pgvector_with_filter_match() -> None:
