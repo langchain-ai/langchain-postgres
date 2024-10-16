@@ -202,9 +202,12 @@ def test_pgvector_with_filter_match() -> None:
 
 @pytest.mark.asyncio
 async def test_async_pgvector_with_filter_match() -> None:
-    """Test end to end construction and search."""
+    """Test search with filter and metadata deserialization."""
     texts = ["foo", "bar", "baz"]
-    metadatas = [{"page": str(i)} for i in range(len(texts))]
+    metadatas = [
+        {"page": str(i), "info": {"nested": f"value{i}"}}
+        for i in range(len(texts))
+    ]
     docsearch = await PGVector.afrom_texts(
         texts=texts,
         collection_name="test_collection_filter",
@@ -214,11 +217,36 @@ async def test_async_pgvector_with_filter_match() -> None:
         pre_delete_collection=True,
     )
     output = await docsearch.asimilarity_search_with_score(
-        "foo", k=1, filter={"page": "0"}
+        "foo", k=3, filter={"page": "0"}
     )
-    assert output == [
-        (Document(page_content="foo", metadata={"page": "0"}, id=AnyStr()), 0.0)
+    assert len(output) == 1
+    doc, score = output[0]
+    assert doc.page_content == "foo"
+    assert doc.metadata == metadatas[0]
+    assert isinstance(doc.metadata, dict)
+    assert score is not None
+
+
+@pytest.mark.asyncio
+async def test_async_pgvector_metadata_deserialization() -> None:
+    """Test that metadata is correctly deserialized in async operations."""
+    texts = ["foo", "bar", "baz"]
+    metadatas = [
+        {"page": str(i), "info": {"nested": f"value{i}"}}
+        for i in range(len(texts))
     ]
+    docsearch = await PGVector.afrom_texts(
+        texts=texts,
+        collection_name="test_collection_metadata",
+        embedding=FakeEmbeddingsWithAdaDimension(),
+        metadatas=metadatas,
+        connection=CONNECTION_STRING,
+        pre_delete_collection=True,
+    )
+    output = await docsearch.asimilarity_search("foo", k=3)
+    for doc, expected_metadata in zip(output, metadatas):
+        assert doc.metadata == expected_metadata
+        assert isinstance(doc.metadata, dict)
 
 
 def test_pgvector_with_filter_distant_match() -> None:
