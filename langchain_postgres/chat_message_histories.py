@@ -80,9 +80,8 @@ def _insert_message_query(table_name: str) -> sql.Composed:
 class PostgresChatMessageHistory(BaseChatMessageHistory):
     def __init__(
         self,
-        table_name: str,
         session_id: str,
-        /,
+        table_name: str = "chat_history",
         *,
         sync_connection: Optional[psycopg.Connection] = None,
         async_connection: Optional[psycopg.AsyncConnection] = None,
