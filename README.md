@@ -106,5 +106,4 @@ Learn how to [migrate a `PGVector` vector store to `AlloyDBVectorStore`](https:/
 - **Clear separation**: clearly separate table and extension creation, allowing for distinct permissions and streamlined workflows.
 - **Better integration with AlloyDB**: take advantage of AlloyDB's advanced indexing and scalability capabilities.
 
-
-
+Note: The vector store currently supports metadata filtering using Postgres syntax instead of [database agnostic filter syntax](https://python.langchain.com/docs/how_to/query_constructing_filters/).
