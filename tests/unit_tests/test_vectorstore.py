@@ -410,6 +410,55 @@ async def test_async_pgvector_delete_docs() -> None:
         assert sorted(record.id for record in records) == []  # type: ignore
 
 
+def test_pgvector_delete_by_metadata() -> None:
+    """Test deleting documents by metadata."""
+    texts = ["foo", "bar", "baz"]
+    metadatas = [{"category": "news"}, {"category": "sports"}, {"category": "news"}]
+    vectorstore = PGVector.from_texts(
+        texts=texts,
+        collection_name="test_delete_by_metadata",
+        embedding=FakeEmbeddingsWithAdaDimension(),
+        metadatas=metadatas,
+        ids=["1", "2", "3"],
+        connection=CONNECTION_STRING,
+        pre_delete_collection=True,
+    )
+    # Delete documents where category is 'news'
+    vectorstore.delete(filter={"category": {"$eq": "news"}})
+    with vectorstore.session_maker() as session:
+        records = list(session.query(vectorstore.EmbeddingStore).all())
+        # Should only have the document with category 'sports' remaining
+        assert len(records) == 1
+        assert records[0].id == "2"
+        assert records[0].cmetadata["category"] == "sports"
+
+
+@pytest.mark.asyncio
+async def test_async_pgvector_delete_by_metadata() -> None:
+    """Test deleting documents by metadata asynchronously."""
+    texts = ["foo", "bar", "baz"]
+    metadatas = [{"category": "news"}, {"category": "sports"}, {"category": "news"}]
+    vectorstore = await PGVector.afrom_texts(
+        texts=texts,
+        collection_name="test_delete_by_metadata",
+        embedding=FakeEmbeddingsWithAdaDimension(),
+        metadatas=metadatas,
+        ids=["1", "2", "3"],
+        connection=CONNECTION_STRING,
+        pre_delete_collection=True,
+    )
+    # Delete documents where category is 'news'
+    await vectorstore.adelete(filter={"category": {"$eq": "news"}})
+    async with vectorstore.session_maker() as session:
+        records = (
+            (await session.execute(select(vectorstore.EmbeddingStore))).scalars().all()
+        )
+        # Should only have the document with category 'sports' remaining
+        assert len(records) == 1
+        assert records[0].id == "2"
+        assert records[0].cmetadata["category"] == "sports"
+
+
 def test_pgvector_index_documents() -> None:
     """Test adding duplicate documents results in overwrites."""
     documents = [
