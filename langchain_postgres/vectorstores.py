@@ -1558,7 +1558,7 @@ class PGVector(VectorStore):
         )
 
         if self._iterative_scan == IterativeScan.relaxed_order:
-            cte = stmt.cte("relaxed_results", materialized=True)
+            cte = stmt.cte("relaxed_results").prefix_with("MATERIALIZED")
             stmt = (
                 select(cte)
                 .order_by(text("distance"))
