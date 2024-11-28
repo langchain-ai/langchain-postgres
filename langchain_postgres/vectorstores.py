@@ -420,7 +420,8 @@ class PGVector(VectorStore):
         use_jsonb: bool = True,
         create_extension: bool = True,
         async_mode: bool = False,
-        iterative_scan: Optional[IterativeScan] = None
+        iterative_scan: Optional[IterativeScan] = None,
+        max_scan_tuples: Optional[int] = None,
     ) -> None:
         """Initialize the PGVector store.
         For an async version, use `PGVector.acreate()` instead.
@@ -469,6 +470,7 @@ class PGVector(VectorStore):
         self._async_engine: Optional[AsyncEngine] = None
         self._async_init = False
         self._iterative_scan = iterative_scan
+        self._max_scan_tuples = max_scan_tuples
 
         if self._embedding_length is None and self._embedding_index is not None:
             raise ValueError(
@@ -521,6 +523,11 @@ class PGVector(VectorStore):
         if self._iterative_scan == IterativeScan.strict_order and self._embedding_index == EmbeddingIndexType.ivfflat:
             raise ValueError(
                 "iterative_scan=strict_order is not supported with embedding_index=ivfflat"
+            )
+
+        if self._max_scan_tuples is not None and self._embedding_index != EmbeddingIndexType.hnsw:
+            raise ValueError(
+                "max_scan_tuples is not supported without embedding_index=hnsw"
             )
 
     def __post_init__(
@@ -1472,6 +1479,7 @@ class PGVector(VectorStore):
         """Query the collection."""
         with self._make_sync_session() as session:  # type: ignore[arg-type]
             self._set_iterative_scan(session)
+            self._set_max_scan_tuples(session)
 
             collection = self.get_collection(session)
 
@@ -1498,6 +1506,7 @@ class PGVector(VectorStore):
         """Query the collection."""
         async with self._make_async_session() as session:  # type: ignore[arg-type]
             await self._aset_iterative_scan(session)
+            await self._aset_max_scan_tuples(session)
 
             collection = await self.aget_collection(session)
 
@@ -1595,6 +1604,27 @@ class PGVector(VectorStore):
         await session.execute(
             text(f"SET {self._embedding_index.value}.iterative_scan = {self._iterative_scan.value}")
         )
+
+    def _set_max_scan_tuples(self, session: Session):
+        assert not self._async_engine, "This method must be called without async_mode"
+
+        if self._max_scan_tuples is None or self._embedding_index != EmbeddingIndexType.hnsw:
+            return
+
+        session.execute(
+            text(f"SET hnsw.max_scan_tuples = {self._max_scan_tuples}")
+        )
+
+    async def _aset_max_scan_tuples(self, session: AsyncSession):
+        assert self._async_engine, "This method must be called with async_mode"
+
+        if self._max_scan_tuples is None or self._embedding_index != EmbeddingIndexType.hnsw:
+            return
+
+        await session.execute(
+            text(f"SET hnsw.max_scan_tuples = {self._max_scan_tuples}")
+        )
+
 
     def similarity_search_by_vector(
         self,
