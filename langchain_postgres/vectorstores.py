@@ -420,7 +420,7 @@ class PGVector(VectorStore):
         use_jsonb: bool = True,
         create_extension: bool = True,
         async_mode: bool = False,
-        iterative_Scan: Optional[IterativeScan] = None
+        iterative_scan: Optional[IterativeScan] = None
     ) -> None:
         """Initialize the PGVector store.
         For an async version, use `PGVector.acreate()` instead.
@@ -468,7 +468,7 @@ class PGVector(VectorStore):
         self._engine: Optional[Engine] = None
         self._async_engine: Optional[AsyncEngine] = None
         self._async_init = False
-        self._iterative_scan = iterative_Scan
+        self._iterative_scan = iterative_scan
 
         if self._embedding_length is None and self._embedding_index is not None:
             raise ValueError(
