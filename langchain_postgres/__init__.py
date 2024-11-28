@@ -2,7 +2,7 @@ from importlib import metadata
 
 from langchain_postgres.chat_message_histories import PostgresChatMessageHistory
 from langchain_postgres.translator import PGVectorTranslator
-from langchain_postgres.vectorstores import PGVector, EmbeddingIndexType
+from langchain_postgres.vectorstores import PGVector, EmbeddingIndexType, IterativeScan
 
 try:
     __version__ = metadata.version(__package__)
@@ -15,5 +15,6 @@ __all__ = [
     "PostgresChatMessageHistory",
     "PGVector",
     "PGVectorTranslator",
-    "EmbeddingIndexType"
+    "EmbeddingIndexType",
+    "IterativeScan"
 ]

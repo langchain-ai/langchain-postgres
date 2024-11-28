@@ -266,9 +266,11 @@ def _create_vector_extension(conn: Connection) -> None:
 
 DBConnection = Union[sqlalchemy.engine.Engine, str]
 
+
 class EmbeddingIndexType(enum.Enum):
     hnsw = "hnsw"
     ivfflat = "ivfflat"
+
 
 class IterativeScan(enum.Enum):
     off = "off"
