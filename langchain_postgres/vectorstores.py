@@ -269,6 +269,11 @@ DBConnection = Union[sqlalchemy.engine.Engine, str]
 class EmbeddingIndexType(enum.Enum):
     hnsw = "hnsw"
     ivfflat = "ivfflat"
+
+class IterativeScan(enum.Enum):
+    off = "off"
+    strict_order = "strict_order"
+    relaxed_order = "relaxed_order"
    
 
 class PGVector(VectorStore):
@@ -415,6 +420,7 @@ class PGVector(VectorStore):
         use_jsonb: bool = True,
         create_extension: bool = True,
         async_mode: bool = False,
+        iterative_Scan: Optional[IterativeScan] = None
     ) -> None:
         """Initialize the PGVector store.
         For an async version, use `PGVector.acreate()` instead.
@@ -462,6 +468,7 @@ class PGVector(VectorStore):
         self._engine: Optional[Engine] = None
         self._async_engine: Optional[AsyncEngine] = None
         self._async_init = False
+        self._iterative_scan = iterative_Scan
 
         if self._embedding_length is None and self._embedding_index is not None:
             raise ValueError(
@@ -505,6 +512,16 @@ class PGVector(VectorStore):
             raise NotImplementedError("use_jsonb=False is no longer supported.")
         if not self.async_mode:
             self.__post_init__()
+
+        if self._embedding_index is None and self._iterative_scan is not None:
+            raise ValueError(
+                "iterative_scan is not supported without embedding_index"
+            )
+
+        if self._iterative_scan == IterativeScan.strict_order and self._embedding_index == EmbeddingIndexType.ivfflat:
+            raise ValueError(
+                "iterative_scan=strict_order is not supported with embedding_index=ivfflat"
+            )
 
     def __post_init__(
         self,
@@ -1454,45 +1471,21 @@ class PGVector(VectorStore):
     ) -> Sequence[Any]:
         """Query the collection."""
         with self._make_sync_session() as session:  # type: ignore[arg-type]
+            self._set_iterative_scan(session)
+
             collection = self.get_collection(session)
-            if not collection:
-                raise ValueError("Collection not found")
 
-            filter_by = [self.EmbeddingStore.collection_id == collection.uuid]
-            
-            if filter:
-                if self.use_jsonb:
-                    filter_clauses = self._create_filter_clause(filter)
-                    if filter_clauses is not None:
-                        filter_by.append(filter_clauses)
-                else:
-                    # Old way of doing things
-                    filter_clauses = self._create_filter_clause_json_deprecated(filter)
-                    filter_by.extend(filter_clauses)
-                    
-            if full_text_search:
-                filter_by.append(
-                    text(f"document_vector @@ to_tsquery('{' | '.join(full_text_search)}')")
-                )
-
-            _type = self.EmbeddingStore
-
-            results: List[Any] = (
-                session.query(
-                    self.EmbeddingStore,
-                    self.distance_strategy(embedding).label("distance"),
-                )
-                .filter(*filter_by)
-                .order_by(sqlalchemy.asc("distance"))
-                .join(
-                    self.CollectionStore,
-                    self.EmbeddingStore.collection_id == self.CollectionStore.uuid,
-                )
-                .limit(k)
-                .all()
+            stmt = self._build_query_collection(
+                collection=collection,
+                embedding=embedding,
+                k=k,
+                filter=filter,
+                full_text_search=full_text_search
             )
 
-        return results
+            results: Sequence[Any] = session.execute(stmt).all()
+
+            return results
 
     async def __aquery_collection(
         self,
@@ -1504,46 +1497,94 @@ class PGVector(VectorStore):
     ) -> Sequence[Any]:
         """Query the collection."""
         async with self._make_async_session() as session:  # type: ignore[arg-type]
+            await self._aset_iterative_scan(session)
+
             collection = await self.aget_collection(session)
-            if not collection:
-                raise ValueError("Collection not found")
 
-            filter_by = [self.EmbeddingStore.collection_id == collection.uuid]
-            
-            if filter:
-                if self.use_jsonb:
-                    filter_clauses = self._create_filter_clause(filter)
-                    if filter_clauses is not None:
-                        filter_by.append(filter_clauses)
-                else:
-                    # Old way of doing things
-                    filter_clauses = self._create_filter_clause_json_deprecated(filter)
-                    filter_by.extend(filter_clauses)
-
-            if full_text_search:
-                filter_by.append(
-                    text(f"to_tsvector(document) @@ to_tsquery('{' | '.join(full_text_search)}')")
-                )
-
-            _type = self.EmbeddingStore
-
-            stmt = (
-                select(
-                    self.EmbeddingStore,
-                    self.distance_strategy(embedding).label("distance"),
-                )
-                .filter(*filter_by)
-                .order_by(sqlalchemy.asc("distance"))
-                .join(
-                    self.CollectionStore,
-                    self.EmbeddingStore.collection_id == self.CollectionStore.uuid,
-                )
-                .limit(k)
+            stmt = self._build_query_collection(
+                collection=collection,
+                embedding=embedding,
+                k=k,
+                filter=filter,
+                full_text_search=full_text_search
             )
 
             results: Sequence[Any] = (await session.execute(stmt)).all()
 
             return results
+
+    def _build_query_collection(
+        self,
+        collection: Any,
+        embedding: List[float],
+        k: int,
+        filter: Optional[Dict[str, str]] = None,
+        full_text_search: Optional[List[str]] = None
+    ):
+        if not collection:
+            raise ValueError("Collection not found")
+
+        filter_by = [self.EmbeddingStore.collection_id == collection.uuid]
+
+        if filter:
+            if self.use_jsonb:
+                filter_clauses = self._create_filter_clause(filter)
+                if filter_clauses is not None:
+                    filter_by.append(filter_clauses)
+            else:
+                # Old way of doing things
+                filter_clauses = self._create_filter_clause_json_deprecated(filter)
+                filter_by.extend(filter_clauses)
+
+        if full_text_search:
+            filter_by.append(
+                text(f"to_tsvector(document) @@ to_tsquery('{' | '.join(full_text_search)}')")
+            )
+
+        _type = self.EmbeddingStore
+
+        stmt = (
+            select(
+                self.EmbeddingStore,
+                self.distance_strategy(embedding).label("distance"),
+            )
+            .filter(*filter_by)
+            .order_by(sqlalchemy.asc("distance"))
+            .join(
+                self.CollectionStore,
+                self.EmbeddingStore.collection_id == self.CollectionStore.uuid,
+            )
+            .limit(k)
+        )
+
+        if self._iterative_scan == IterativeScan.relaxed_order:
+            cte = stmt.cte("relaxed_results", materialized=True)
+            stmt = (
+                select(cte)
+                .order_by(text("distance"))
+            )
+
+        return stmt
+
+    def _set_iterative_scan(self, session: Session):
+        assert not self._async_engine, "This method must be called without async_mode"
+
+        if self._iterative_scan is None or self._embedding_index is None:
+            return
+
+        session.execute(
+            text(f"SET {self._embedding_index.value}.iterative_scan = {self._iterative_scan.value}")
+        )
+
+    async def _aset_iterative_scan(self, session: AsyncSession):
+        assert self._async_engine, "This method must be called with async_mode"
+
+        if self._iterative_scan is None or self._embedding_index is None:
+            return
+
+        await session.execute(
+            text(f"SET {self._embedding_index.value}.iterative_scan = {self._iterative_scan.value}")
+        )
 
     def similarity_search_by_vector(
         self,
