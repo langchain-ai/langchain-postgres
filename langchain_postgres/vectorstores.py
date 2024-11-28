@@ -422,6 +422,7 @@ class PGVector(VectorStore):
         async_mode: bool = False,
         iterative_scan: Optional[IterativeScan] = None,
         max_scan_tuples: Optional[int] = None,
+        scan_mem_multiplier: Optional[int] = None,
     ) -> None:
         """Initialize the PGVector store.
         For an async version, use `PGVector.acreate()` instead.
@@ -471,6 +472,7 @@ class PGVector(VectorStore):
         self._async_init = False
         self._iterative_scan = iterative_scan
         self._max_scan_tuples = max_scan_tuples
+        self._scan_mem_multiplier = scan_mem_multiplier
 
         if self._embedding_length is None and self._embedding_index is not None:
             raise ValueError(
@@ -528,6 +530,11 @@ class PGVector(VectorStore):
         if self._max_scan_tuples is not None and self._embedding_index != EmbeddingIndexType.hnsw:
             raise ValueError(
                 "max_scan_tuples is not supported without embedding_index=hnsw"
+            )
+
+        if self._scan_mem_multiplier is not None and self._embedding_index != EmbeddingIndexType.hnsw:
+            raise ValueError(
+                "scan_mem_multiplier is not supported without embedding_index=hnsw"
             )
 
     def __post_init__(
@@ -1480,6 +1487,7 @@ class PGVector(VectorStore):
         with self._make_sync_session() as session:  # type: ignore[arg-type]
             self._set_iterative_scan(session)
             self._set_max_scan_tuples(session)
+            self._set_scan_mem_multiplier(session)
 
             collection = self.get_collection(session)
 
@@ -1507,6 +1515,7 @@ class PGVector(VectorStore):
         async with self._make_async_session() as session:  # type: ignore[arg-type]
             await self._aset_iterative_scan(session)
             await self._aset_max_scan_tuples(session)
+            await self._aset_scan_mem_multiplier(session)
 
             collection = await self.aget_collection(session)
 
@@ -1623,6 +1632,26 @@ class PGVector(VectorStore):
 
         await session.execute(
             text(f"SET hnsw.max_scan_tuples = {self._max_scan_tuples}")
+        )
+
+    def _set_scan_mem_multiplier(self, session: Session):
+        assert not self._async_engine, "This method must be called without async_mode"
+
+        if self._scan_mem_multiplier is None or self._embedding_index != EmbeddingIndexType.hnsw:
+            return
+
+        session.execute(
+            text(f"SET hnsw.scan_mem_multiplier = {self._scan_mem_multiplier}")
+        )
+
+    async def _aset_scan_mem_multiplier(self, session: AsyncSession):
+        assert self._async_engine, "This method must be called with async_mode"
+
+        if self._scan_mem_multiplier is None or self._embedding_index != EmbeddingIndexType.hnsw:
+            return
+
+        await session.execute(
+            text(f"SET hnsw.scan_mem_multiplier = {self._scan_mem_multiplier}")
         )
 
 
