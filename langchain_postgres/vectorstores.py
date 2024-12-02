@@ -1068,6 +1068,7 @@ class PGVector(VectorStore):
         query: str,
         k: int = 4,
         filter: Optional[dict] = None,
+        full_text_search: Optional[List[str]] = None,
         **kwargs: Any,
     ) -> List[Document]:
         """Run similarity search with PGVector with distance.
@@ -1086,6 +1087,7 @@ class PGVector(VectorStore):
             embedding=embedding,
             k=k,
             filter=filter,
+            full_text_search=full_text_search,
         )
 
     def similarity_search_with_score(
@@ -2094,6 +2096,7 @@ class PGVector(VectorStore):
         fetch_k: int = 20,
         lambda_mult: float = 0.5,
         filter: Optional[Dict[str, str]] = None,
+        full_text_search: Optional[List[str]] = None,
         **kwargs: Any,
     ) -> List[Tuple[Document, float]]:
         """Return docs selected using the maximal marginal relevance with score
@@ -2118,7 +2121,12 @@ class PGVector(VectorStore):
                 relevance to the query and score for each.
         """
         assert not self._async_engine, "This method must be called without async_mode"
-        results = self.__query_collection(embedding=embedding, k=fetch_k, filter=filter)
+        results = self.__query_collection(
+            embedding=embedding,
+            k=fetch_k,
+            filter=filter,
+            full_text_search=full_text_search,
+        )
 
         embedding_list = [result.EmbeddingStore.embedding for result in results]
 
@@ -2140,6 +2148,7 @@ class PGVector(VectorStore):
         fetch_k: int = 20,
         lambda_mult: float = 0.5,
         filter: Optional[Dict[str, str]] = None,
+        full_text_search: Optional[List[str]] = None,
         **kwargs: Any,
     ) -> List[Tuple[Document, float]]:
         """Return docs selected using the maximal marginal relevance with score
@@ -2166,7 +2175,11 @@ class PGVector(VectorStore):
         await self.__apost_init__()  # Lazy async init
         async with self._make_async_session() as session:
             results = await self.__aquery_collection(
-                session=session, embedding=embedding, k=fetch_k, filter=filter
+                session=session,
+                embedding=embedding,
+                k=fetch_k,
+                filter=filter,
+                full_text_search=full_text_search,
             )
 
             embedding_list = [result.EmbeddingStore.embedding for result in results]
@@ -2266,6 +2279,7 @@ class PGVector(VectorStore):
         fetch_k: int = 20,
         lambda_mult: float = 0.5,
         filter: Optional[dict] = None,
+        full_text_search: Optional[List[str]] = None,
         **kwargs: Any,
     ) -> List[Tuple[Document, float]]:
         """Return docs selected using the maximal marginal relevance with score.
@@ -2295,6 +2309,7 @@ class PGVector(VectorStore):
             fetch_k=fetch_k,
             lambda_mult=lambda_mult,
             filter=filter,
+            full_text_search=full_text_search,
             **kwargs,
         )
         return docs
@@ -2306,6 +2321,7 @@ class PGVector(VectorStore):
         fetch_k: int = 20,
         lambda_mult: float = 0.5,
         filter: Optional[dict] = None,
+        full_text_search: Optional[List[str]] = None,
         **kwargs: Any,
     ) -> List[Tuple[Document, float]]:
         """Return docs selected using the maximal marginal relevance with score.
@@ -2336,6 +2352,7 @@ class PGVector(VectorStore):
             fetch_k=fetch_k,
             lambda_mult=lambda_mult,
             filter=filter,
+            full_text_search=full_text_search,
             **kwargs,
         )
         return docs
@@ -2347,6 +2364,7 @@ class PGVector(VectorStore):
         fetch_k: int = 20,
         lambda_mult: float = 0.5,
         filter: Optional[Dict[str, str]] = None,
+        full_text_search: Optional[List[str]] = None,
         **kwargs: Any,
     ) -> List[Document]:
         """Return docs selected using the maximal marginal relevance
@@ -2375,6 +2393,7 @@ class PGVector(VectorStore):
             fetch_k=fetch_k,
             lambda_mult=lambda_mult,
             filter=filter,
+            full_text_search=full_text_search,
             **kwargs,
         )
 
@@ -2387,6 +2406,7 @@ class PGVector(VectorStore):
         fetch_k: int = 20,
         lambda_mult: float = 0.5,
         filter: Optional[Dict[str, str]] = None,
+        full_text_search: Optional[List[str]] = None,
         **kwargs: Any,
     ) -> List[Document]:
         """Return docs selected using the maximal marginal relevance
@@ -2417,6 +2437,7 @@ class PGVector(VectorStore):
                 fetch_k=fetch_k,
                 lambda_mult=lambda_mult,
                 filter=filter,
+                full_text_search=full_text_search,
                 **kwargs,
             )
         )
