@@ -102,6 +102,8 @@ def _get_embedding_collection_store(
     vector_dimension: Optional[int] = None,
     embedding_index: Optional[EmbeddingIndexType] = None,
     embedding_index_ops: Optional[str] = None,
+    ef_construction: Optional[int] = None,
+    m: Optional[int] = None,
 ) -> Any:
     global _classes
     if _classes is not None:
@@ -225,6 +227,19 @@ def _get_embedding_collection_store(
             )
         )
 
+        optional_index_params = {}
+
+        if m is not None or ef_construction is not None:
+            optional_index_params = {
+                "postgresql_with": {}
+            }
+
+            if m is not None:
+                optional_index_params["postgresql_with"]["m"] = m
+
+            if ef_construction is not None:
+                optional_index_params["postgresql_with"]["ef_construction"] = ef_construction
+
         __table_args__ = (
             sqlalchemy.Index(
                 "ix_cmetadata_gin",
@@ -242,6 +257,7 @@ def _get_embedding_collection_store(
                 "embedding",
                 postgresql_using=embedding_index.value,
                 postgresql_ops={"embedding": embedding_index_ops},
+                **optional_index_params,
             ) if embedding_index is not None else None,
         )
 
@@ -425,6 +441,8 @@ class PGVector(VectorStore):
         iterative_scan: Optional[IterativeScan] = None,
         max_scan_tuples: Optional[int] = None,
         scan_mem_multiplier: Optional[int] = None,
+        ef_construction: Optional[int] = None,
+        m: Optional[int] = None,
     ) -> None:
         """Initialize the PGVector store.
         For an async version, use `PGVector.acreate()` instead.
@@ -475,6 +493,8 @@ class PGVector(VectorStore):
         self._iterative_scan = iterative_scan
         self._max_scan_tuples = max_scan_tuples
         self._scan_mem_multiplier = scan_mem_multiplier
+        self._ef_construction = ef_construction
+        self._m = m
 
         if self._embedding_length is None and self._embedding_index is not None:
             raise ValueError(
@@ -539,6 +559,16 @@ class PGVector(VectorStore):
                 "scan_mem_multiplier is not supported without embedding_index=hnsw"
             )
 
+        if self._embedding_index != EmbeddingIndexType.hnsw and self._ef_construction is not None:
+            raise ValueError(
+                "ef_construction is not supported without embedding_index=hnsw"
+            )
+
+        if self._embedding_index != EmbeddingIndexType.hnsw and self._m is not None:
+            raise ValueError(
+                "m is not supported without embedding_index=hnsw"
+            )
+
     def __post_init__(
         self,
     ) -> None:
@@ -550,6 +580,8 @@ class PGVector(VectorStore):
             vector_dimension=self._embedding_length,
             embedding_index=self._embedding_index,
             embedding_index_ops=self._embedding_index_ops,
+            ef_construction=self._ef_construction,
+            m=self._m,
         )
         
         self.CollectionStore = CollectionStore
