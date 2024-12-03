@@ -592,7 +592,7 @@ class PGVector(VectorStore):
                 "binary_quantization is not supported without embedding_index=hnsw"
             )
 
-        if self._binary_quantization is True and (self._embedding_index_ops != "bit_hamming_ops" or self._embedding_index_ops != "bit_jaccard_ops"):
+        if self._binary_quantization is True and self._embedding_index_ops in ["bit_hamming_ops", "bit_jaccard_ops"]:
             raise ValueError(
                 "binary_quantization is only supported with bit_hamming_ops or bit_jaccard_ops"
             )
