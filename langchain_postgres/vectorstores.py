@@ -29,6 +29,7 @@ from langchain_core.documents import Document
 from langchain_core.embeddings import Embeddings
 from langchain_core.utils import get_from_dict_or_env
 from langchain_core.vectorstores import VectorStore
+from pgvector.sqlalchemy import BIT, VECTOR
 from sqlalchemy import SQLColumnExpression, cast, create_engine, delete, func, select, text
 from sqlalchemy.dialects.postgresql import JSON, JSONB, JSONPATH, UUID, TSVECTOR, insert
 from sqlalchemy.engine import Connection, Engine
@@ -55,6 +56,8 @@ class DistanceStrategy(str, enum.Enum):
     EUCLIDEAN = "l2"
     COSINE = "cosine"
     MAX_INNER_PRODUCT = "inner"
+    HAMMING = "hamming"
+    JACCARD = "jaccard"
 
 
 DEFAULT_DISTANCE_STRATEGY = DistanceStrategy.COSINE
@@ -200,34 +203,37 @@ def _get_embedding_collection_store(
             created = True
             return collection, created
 
-    def create_index():
+    def _create_optional_index_params():
+        if not (m or ef_construction):
+            return {}
+
+        return {
+            "postgresql_with": {
+                k: v for k, v in {
+                    "m": m,
+                    "ef_construction": ef_construction
+                }.items() if v is not None
+            }
+        }
+
+    def _create_index(embedding):
         if embedding_index is None:
             return None
 
-        optional_index_params = {}
-
-        if m is not None or ef_construction is not None:
-            optional_index_params = {
-                "postgresql_with": {}
-            }
-
-            if m is not None:
-                optional_index_params["postgresql_with"]["m"] = m
-
-            if ef_construction is not None:
-                optional_index_params["postgresql_with"]["ef_construction"] = ef_construction
+        optional_index_params = _create_optional_index_params()
 
         if binary_quantization:
              return sqlalchemy.Index(
                 f"ix_embedding_{embedding_index.value}",
-                text(f"(binary_quantize(embedding)::bit({embedding_length})) {embedding_index_ops}"),
+                 cast(func.binary_quantize(embedding), BIT(embedding_length)).label('embedding'),
                 postgresql_using=embedding_index.value,
+                postgresql_ops={"embedding": embedding_index_ops},
                 **optional_index_params,
             )
 
         return sqlalchemy.Index(
             f"ix_embedding_{embedding_index.value}",
-            "embedding",
+            embedding,
             postgresql_using=embedding_index.value,
             postgresql_ops={"embedding": embedding_index_ops},
             **optional_index_params,
@@ -274,7 +280,7 @@ def _get_embedding_collection_store(
                 "document_vector",
                 postgresql_using="gin",
             ),
-            create_index()
+            _create_index(embedding)
         )
 
     _classes = (EmbeddingStore, CollectionStore)
@@ -460,6 +466,7 @@ class PGVector(VectorStore):
         ef_construction: Optional[int] = None,
         m: Optional[int] = None,
         binary_quantization: Optional[bool] = None,
+        binary_limit: Optional[int] = None,
     ) -> None:
         """Initialize the PGVector store.
         For an async version, use `PGVector.acreate()` instead.
@@ -513,6 +520,7 @@ class PGVector(VectorStore):
         self._ef_construction = ef_construction
         self._m = m
         self._binary_quantization = binary_quantization
+        self._binary_limit = binary_limit
 
         if self._embedding_length is None and self._embedding_index is not None:
             raise ValueError(
@@ -592,14 +600,19 @@ class PGVector(VectorStore):
                 "binary_quantization is not supported without embedding_index=hnsw"
             )
 
-        if self._binary_quantization is True and self._embedding_index_ops not in ["bit_hamming_ops", "bit_jaccard_ops"]:
+        if self._binary_quantization is True and self._embedding_index_ops not in ["bit_hamming_ops"]:
             raise ValueError(
-                "binary_quantization is only supported with bit_hamming_ops or bit_jaccard_ops"
+                "binary_quantization is only supported with bit_hamming_ops"
             )
 
         if self._binary_quantization is True and self._embedding_length is None:
             raise ValueError(
                 "embedding_length must be provided when using binary_quantization"
+            )
+
+        if self._binary_quantization is True and self._binary_limit is None:
+            raise ValueError(
+                "binary_limit must be provided when using binary_quantization"
             )
 
     def __post_init__(
@@ -1613,6 +1626,119 @@ class PGVector(VectorStore):
         if not collection:
             raise ValueError("Collection not found")
 
+        if self._binary_quantization:
+            return self._build_binary_quantization_query(
+                collection=collection,
+                embedding=embedding,
+                k=k,
+                filter=filter,
+                full_text_search=full_text_search
+            )
+
+        stmt = self._build_base_query(
+            collection=collection,
+            embedding=embedding,
+            k=k,
+            filter=filter,
+            full_text_search=full_text_search
+        )
+
+        if self._iterative_scan == IterativeScan.relaxed_order:
+            stmt = self._build_iterative_scan_query(stmt)
+
+        return stmt
+
+    def _build_binary_quantization_query(
+        self,
+        collection: Any,
+        embedding: List[float],
+        k: int,
+        filter: Optional[Dict[str, str]] = None,
+        full_text_search: Optional[List[str]] = None
+    ):
+        filter_by = self._build_filter(collection, filter, full_text_search)
+
+        distance = cast(
+            func.binary_quantize(self.EmbeddingStore.embedding),
+            BIT(self._embedding_length),
+        ).hamming_distance(
+            func.binary_quantize(
+                cast(
+                    embedding,
+                    VECTOR(self._embedding_length),
+                )
+            )
+        )
+
+        sub = (
+            select(self.EmbeddingStore)
+            .filter(*filter_by)
+            .order_by(
+                distance
+            )
+            .limit(self._binary_limit)
+            .subquery()
+        )
+
+        EmbeddingStoreAlias = aliased(self.EmbeddingStore, sub)
+        embedding_store_bundle = Bundle(
+            'EmbeddingStore',
+            *[getattr(EmbeddingStoreAlias, c.key) for c in self.EmbeddingStore.__table__.columns]
+        )
+
+        return (
+            select(
+                embedding_store_bundle,
+                self.distance_strategy(embedding).label("distance"),
+            )
+            .order_by(sqlalchemy.asc("distance"))
+            .limit(k)
+        )
+
+
+    def _build_base_query(
+        self,
+        collection: Any,
+        embedding: List[float],
+        k: int,
+        filter: Optional[Dict[str, str]] = None,
+        full_text_search: Optional[List[str]] = None
+    ):
+        filter_by = self._build_filter(collection, filter, full_text_search)
+
+        return (
+            select(
+                self.EmbeddingStore,
+                self.distance_strategy(embedding).label("distance"),
+            )
+            .filter(*filter_by)
+            .order_by(sqlalchemy.asc("distance"))
+            .limit(k)
+        )
+
+    def _build_iterative_scan_query(self, stmt):
+        cte = stmt.cte("relaxed_results").prefix_with("MATERIALIZED")
+
+        EmbeddingStoreAlias = aliased(self.EmbeddingStore, cte)
+        embedding_store_bundle = Bundle(
+            'EmbeddingStore',
+            *[getattr(EmbeddingStoreAlias, c.key) for c in self.EmbeddingStore.__table__.columns]
+        )
+
+        return (
+            select(
+                embedding_store_bundle,
+                cte.c.distance
+            )
+            .order_by(text("distance"))
+        )
+
+    def _build_filter(
+        self,
+        collection: Any,
+        filter: Optional[Dict[str, str]] = None,
+        full_text_search: Optional[List[str]] = None
+    ):
         filter_by = [self.EmbeddingStore.collection_id == collection.uuid]
 
         if filter:
@@ -1630,40 +1756,7 @@ class PGVector(VectorStore):
                 text(f"document_vector @@ to_tsquery('{' | '.join(full_text_search)}')")
             )
 
-        _type = self.EmbeddingStore
-
-        stmt = (
-            select(
-                self.EmbeddingStore,
-                self.distance_strategy(embedding).label("distance"),
-            )
-            .filter(*filter_by)
-            .order_by(sqlalchemy.asc("distance"))
-            .join(
-                self.CollectionStore,
-                self.EmbeddingStore.collection_id == self.CollectionStore.uuid,
-            )
-            .limit(k)
-        )
-
-        if self._iterative_scan == IterativeScan.relaxed_order:
-            cte = stmt.cte("relaxed_results").prefix_with("MATERIALIZED")
-
-            EmbeddingStoreAlias = aliased(self.EmbeddingStore, cte)
-            embedding_store_bundle = Bundle(
-                'EmbeddingStore',
-                *[getattr(EmbeddingStoreAlias, c.key) for c in self.EmbeddingStore.__table__.columns]
-            )
-
-            stmt = (
-                select(
-                    embedding_store_bundle,
-                    cte.c.distance
-                )
-                .order_by(text("distance"))
-            )
-
-        return stmt
+        return filter_by
 
     def _set_iterative_scan(self, session: Session):
         assert not self._async_engine, "This method must be called without async_mode"
