@@ -200,6 +200,39 @@ def _get_embedding_collection_store(
             created = True
             return collection, created
 
+    def create_index():
+        if embedding_index is None:
+            return None
+
+        optional_index_params = {}
+
+        if m is not None or ef_construction is not None:
+            optional_index_params = {
+                "postgresql_with": {}
+            }
+
+            if m is not None:
+                optional_index_params["postgresql_with"]["m"] = m
+
+            if ef_construction is not None:
+                optional_index_params["postgresql_with"]["ef_construction"] = ef_construction
+
+        if binary_quantization:
+             return sqlalchemy.Index(
+                f"ix_embedding_{embedding_index.value}",
+                text(f"binary_quantize(embedding)::bit({embedding_length}) {embedding_index_ops}"),
+                postgresql_using=embedding_index.value,
+                **optional_index_params,
+            )
+
+        return sqlalchemy.Index(
+            f"ix_embedding_{embedding_index.value}",
+            "embedding",
+            postgresql_using=embedding_index.value,
+            postgresql_ops={"embedding": embedding_index_ops},
+            **optional_index_params,
+        )
+
     class EmbeddingStore(Base):
         """Embedding store."""
 
@@ -229,21 +262,6 @@ def _get_embedding_collection_store(
             )
         )
 
-        optional_index_params = {}
-
-        if m is not None or ef_construction is not None:
-            optional_index_params = {
-                "postgresql_with": {}
-            }
-
-            if m is not None:
-                optional_index_params["postgresql_with"]["m"] = m
-
-            if ef_construction is not None:
-                optional_index_params["postgresql_with"]["ef_construction"] = ef_construction
-
-        embedding_index_column = "binary_quantize(embedding)::bit({embedding_length})" if binary_quantization else "embedding"
-
         __table_args__ = (
             sqlalchemy.Index(
                 "ix_cmetadata_gin",
@@ -256,13 +274,7 @@ def _get_embedding_collection_store(
                 "document_vector",
                 postgresql_using="gin",
             ),
-            sqlalchemy.Index(
-                f"ix_embedding_{embedding_index.value}",
-                text(embedding_index_column),
-                postgresql_using=embedding_index.value,
-                postgresql_ops={embedding_index_column: embedding_index_ops},
-                **optional_index_params,
-            ) if embedding_index is not None else None,
+            create_index()
         )
 
     _classes = (EmbeddingStore, CollectionStore)
