@@ -220,7 +220,7 @@ def _get_embedding_collection_store(
         if binary_quantization:
              return sqlalchemy.Index(
                 f"ix_embedding_{embedding_index.value}",
-                text(f"binary_quantize(embedding)::bit({embedding_length}) {embedding_index_ops}"),
+                text(f"(binary_quantize(embedding)::bit({embedding_length})) {embedding_index_ops}"),
                 postgresql_using=embedding_index.value,
                 **optional_index_params,
             )
