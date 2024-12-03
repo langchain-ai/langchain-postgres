@@ -1186,17 +1186,12 @@ class PGVector(VectorStore):
 
     @property
     def distance_strategy(self) -> Any:
-        return self._build_distance_strategy()
-
-    def _build_distance_strategy(self,  column=None):
-        _column = column or self.EmbeddingStore.embedding
-
         if self._distance_strategy == DistanceStrategy.EUCLIDEAN:
-            return _column.l2_distance
+            return self.EmbeddingStore.embedding.l2_distance
         elif self._distance_strategy == DistanceStrategy.COSINE:
-            return _column.cosine_distance
+            return self.EmbeddingStore.embedding.cosine_distance
         elif self._distance_strategy == DistanceStrategy.MAX_INNER_PRODUCT:
-            return _column.max_inner_product
+            return self.EmbeddingStore.embedding.max_inner_product
         else:
             raise ValueError(
                 f"Got unexpected value for distance: {self._distance_strategy}. "
@@ -1694,7 +1689,7 @@ class PGVector(VectorStore):
         return (
             select(
                 embedding_store_bundle,
-                self._build_distance_strategy(embedding_store_bundle.c.emedding)(embedding).label("distance")
+                sub.c.emedding.type.as_type(VECTOR(1024)).distance(embedding).label("distance"),
             )
             .order_by(sqlalchemy.asc("distance"))
             .limit(k)
