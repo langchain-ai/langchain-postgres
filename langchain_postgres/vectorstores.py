@@ -1686,6 +1686,8 @@ class PGVector(VectorStore):
             *[getattr(EmbeddingStoreAlias, c.key) for c in self.EmbeddingStore.__table__.columns]
         )
 
+        raise Exception(sub.c.keys())
+
         return (
             select(
                 embedding_store_bundle,
