@@ -242,7 +242,7 @@ def _get_embedding_collection_store(
             if ef_construction is not None:
                 optional_index_params["postgresql_with"]["ef_construction"] = ef_construction
 
-        embedding_index_column = text(f"binary_quantize(embedding)::bit({embedding_length})") if binary_quantization else "embedding"
+        embedding_index_column = "binary_quantize(embedding)::bit({embedding_length})" if binary_quantization else "embedding"
 
         __table_args__ = (
             sqlalchemy.Index(
@@ -258,7 +258,7 @@ def _get_embedding_collection_store(
             ),
             sqlalchemy.Index(
                 f"ix_embedding_{embedding_index.value}",
-                embedding_index_column,
+                text(embedding_index_column),
                 postgresql_using=embedding_index.value,
                 postgresql_ops={embedding_index_column: embedding_index_ops},
                 **optional_index_params,
