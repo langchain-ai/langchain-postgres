@@ -1689,7 +1689,7 @@ class PGVector(VectorStore):
         return (
             select(
                 embedding_store_bundle,
-                self.distance_strategy(embedding).label("distance"),
+                embedding_store_bundle.c.embedding.binary_distance(embedding).label("distance"),
             )
             .order_by(sqlalchemy.asc("distance"))
             .limit(k)
