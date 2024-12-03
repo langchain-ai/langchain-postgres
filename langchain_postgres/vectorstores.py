@@ -1677,7 +1677,7 @@ class PGVector(VectorStore):
                 distance
             )
             .limit(self._binary_limit)
-            .subquery()
+            .subquery(name="binary_result")
         )
 
         EmbeddingStoreAlias = aliased(self.EmbeddingStore, sub)
