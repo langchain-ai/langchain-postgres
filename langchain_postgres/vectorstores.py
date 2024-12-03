@@ -104,6 +104,8 @@ def _get_embedding_collection_store(
     embedding_index_ops: Optional[str] = None,
     ef_construction: Optional[int] = None,
     m: Optional[int] = None,
+    binary_quantization: Optional[bool] = None,
+    embedding_length: Optional[int] = None,
 ) -> Any:
     global _classes
     if _classes is not None:
@@ -240,6 +242,8 @@ def _get_embedding_collection_store(
             if ef_construction is not None:
                 optional_index_params["postgresql_with"]["ef_construction"] = ef_construction
 
+        embedding_index_column = text(f"binary_quantize(embedding)::bit({embedding_length})") if binary_quantization else "embedding"
+
         __table_args__ = (
             sqlalchemy.Index(
                 "ix_cmetadata_gin",
@@ -254,9 +258,9 @@ def _get_embedding_collection_store(
             ),
             sqlalchemy.Index(
                 f"ix_embedding_{embedding_index.value}",
-                "embedding",
+                embedding_index_column,
                 postgresql_using=embedding_index.value,
-                postgresql_ops={"embedding": embedding_index_ops},
+                postgresql_ops={embedding_index_column: embedding_index_ops},
                 **optional_index_params,
             ) if embedding_index is not None else None,
         )
@@ -443,6 +447,7 @@ class PGVector(VectorStore):
         scan_mem_multiplier: Optional[int] = None,
         ef_construction: Optional[int] = None,
         m: Optional[int] = None,
+        binary_quantization: Optional[bool] = None,
     ) -> None:
         """Initialize the PGVector store.
         For an async version, use `PGVector.acreate()` instead.
@@ -495,6 +500,7 @@ class PGVector(VectorStore):
         self._scan_mem_multiplier = scan_mem_multiplier
         self._ef_construction = ef_construction
         self._m = m
+        self._binary_quantization = binary_quantization
 
         if self._embedding_length is None and self._embedding_index is not None:
             raise ValueError(
@@ -569,6 +575,21 @@ class PGVector(VectorStore):
                 "m is not supported without embedding_index=hnsw"
             )
 
+        if self._binary_quantization is True and self._embedding_index != EmbeddingIndexType.hnsw:
+            raise ValueError(
+                "binary_quantization is not supported without embedding_index=hnsw"
+            )
+
+        if self._binary_quantization is True and (self._embedding_index_ops != "bit_hamming_ops" or self._embedding_index_ops != "bit_jaccard_ops"):
+            raise ValueError(
+                "binary_quantization is only supported with bit_hamming_ops or bit_jaccard_ops"
+            )
+
+        if self._binary_quantization is True and self._embedding_length is None:
+            raise ValueError(
+                "embedding_length must be provided when using binary_quantization"
+            )
+
     def __post_init__(
         self,
     ) -> None:
@@ -582,6 +603,8 @@ class PGVector(VectorStore):
             embedding_index_ops=self._embedding_index_ops,
             ef_construction=self._ef_construction,
             m=self._m,
+            binary_quantization=self._binary_quantization,
+            embedding_length=self._embedding_length,
         )
         
         self.CollectionStore = CollectionStore
