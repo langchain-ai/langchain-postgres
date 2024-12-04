@@ -1189,7 +1189,7 @@ class PGVector(VectorStore):
         return self._build_distance_strategy()
 
     def _build_distance_strategy(self, column: Optional[sqlalchemy.Column] = None):
-        _column = column or self.EmbeddingStore.embedding
+        _column = column if column is not None else self.EmbeddingStore.embedding
 
         if self._distance_strategy == DistanceStrategy.EUCLIDEAN:
             return _column.l2_distance
