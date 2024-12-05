@@ -712,9 +712,6 @@ class PGVector(VectorStore):
     def create_tables_if_not_exists(self) -> None:
         with self._make_sync_session() as session:
             if self._enable_partitioning:
-                if self._check_if_table_exists(session, self.CollectionStore):
-                    return
-
                 self._create_tables_with_partition_if_not_exists(session)
                 return
 
@@ -726,16 +723,16 @@ class PGVector(VectorStore):
 
         if self._enable_partitioning:
             async with self._make_async_session() as session:
-                if await self._acreate_tables_with_partition_if_not_exists(session):
-                    return
-
-                await self._acheck_if_table_exists(session, self.CollectionStore)
+                await self._acreate_tables_with_partition_if_not_exists(session)
                 return
 
         async with self._async_engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
 
     def _create_tables_with_partition_if_not_exists(self, session: Session) -> None:
+        if self._check_if_table_exists(session, self.CollectionStore):
+            return
+
         collection_table_ddl = self._compile_table_ddl(self.CollectionStore)
         collection_index_ddls = self._compile_index_ddls(self.CollectionStore)
 
@@ -753,6 +750,9 @@ class PGVector(VectorStore):
         session.commit()
 
     async def _acreate_tables_with_partition_if_not_exists(self, session: Session | AsyncSession) -> None:
+        if await self._acheck_if_table_exists(session, self.CollectionStore):
+            return
+
         collection_table_ddl = self._compile_table_ddl(self.CollectionStore)
         collection_index_ddls = self._compile_index_ddls(self.CollectionStore)
 
