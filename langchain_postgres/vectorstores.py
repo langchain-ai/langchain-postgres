@@ -491,7 +491,7 @@ class PGVector(VectorStore):
         m: Optional[int] = None,
         binary_quantization: Optional[bool] = None,
         binary_limit: Optional[int] = None,
-        enable_partition: Optional[bool] = None,
+        enable_partitioning: Optional[bool] = None,
     ) -> None:
         """Initialize the PGVector store.
         For an async version, use `PGVector.acreate()` instead.
@@ -546,7 +546,7 @@ class PGVector(VectorStore):
         self._m = m
         self._binary_quantization = binary_quantization
         self._binary_limit = binary_limit
-        self._enable_partition = enable_partition
+        self._enable_partitioning = enable_partitioning
 
         if self._embedding_length is None and self._embedding_index is not None:
             raise ValueError(
@@ -656,7 +656,7 @@ class PGVector(VectorStore):
             m=self._m,
             binary_quantization=self._binary_quantization,
             embedding_length=self._embedding_length,
-            partition=self._enable_partition,
+            partition=self._enable_partitioning,
         )
         
         self.CollectionStore = CollectionStore
@@ -680,7 +680,7 @@ class PGVector(VectorStore):
             m=self._m,
             binary_quantization=self._binary_quantization,
             embedding_length=self._embedding_length,
-            partition=self._enable_partition,
+            partition=self._enable_partitioning,
         )
         
         self.CollectionStore = CollectionStore
@@ -711,7 +711,7 @@ class PGVector(VectorStore):
 
     def create_tables_if_not_exists(self) -> None:
         with self._make_sync_session() as session:
-            if self._enable_partition:
+            if self._enable_partitioning:
                 self._create_tables_with_partition(session)
                 return
 
@@ -721,7 +721,7 @@ class PGVector(VectorStore):
     async def acreate_tables_if_not_exists(self) -> None:
         assert self._async_engine, "This method must be called with async_mode"
 
-        if self._enable_partition:
+        if self._enable_partitioning:
             async with self._make_async_session as session:
                 await self._acreate_tables_with_partition(session)
                 return
