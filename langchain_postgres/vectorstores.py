@@ -186,7 +186,7 @@ def _get_embedding_collection_store(
                 ddl = cls._create_partition_ddl(collection.uuid)
                 session.execute(text(ddl))
                 session.commit()
-                
+
             created = True
             return collection, created
 
@@ -769,7 +769,12 @@ class PGVector(VectorStore):
     def _compile_index_ddls(self, table: Any) -> str:
         ddls = []
 
-        for index in list(table.__table_args__):
+        table_args = getattr(table, "__table_args__", None)
+
+        if not table_args:
+            return ddls
+
+        for index in list(table_args):
             ddl = str(CreateIndex(index).compile(dialect=sqlalchemy.dialects.postgresql.dialect()))
             ddls.append(ddl)
 
