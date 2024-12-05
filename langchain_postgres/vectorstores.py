@@ -774,8 +774,9 @@ class PGVector(VectorStore):
         return inspector.has_table(table.__tablename__)
 
     async def _acheck_if_table_exists(self, session: AsyncSession, table: Any) -> bool:
-        inspector = await session.get_bind().connect()
-        return await inspector.run_sync(lambda sync_conn: sqlalchemy.inspect(sync_conn).has_table(table.____tablename__))
+        return await session.run_sync(
+            lambda sync_session: sqlalchemy.inspect(sync_session.bind).has_table(table.__tablename__)
+        )
 
     def _compile_table_ddl(self, table: Any) -> str:
         return str(CreateTable(table.__table__).compile(dialect=sqlalchemy.dialects.postgresql.dialect()))
