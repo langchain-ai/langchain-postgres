@@ -712,7 +712,10 @@ class PGVector(VectorStore):
     def create_tables_if_not_exists(self) -> None:
         with self._make_sync_session() as session:
             if self._enable_partitioning:
-                self._create_tables_with_partition(session)
+                if self._check_if_table_exists(session, self.CollectionStore):
+                    return
+
+                self._create_tables_with_partition_if_not_exists(session)
                 return
 
             Base.metadata.create_all(session.get_bind())
@@ -723,13 +726,16 @@ class PGVector(VectorStore):
 
         if self._enable_partitioning:
             async with self._make_async_session as session:
-                await self._acreate_tables_with_partition(session)
+                if await self._acreate_tables_with_partition_if_not_exists(session):
+                    return
+
+                await self._acheck_if_table_exists(session, self.CollectionStore)
                 return
 
         async with self._async_engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
 
-    def _create_tables_with_partition(self, session: Session) -> None:
+    def _create_tables_with_partition_if_not_exists(self, session: Session) -> None:
         collection_table_ddl = self._compile_table_ddl(self.CollectionStore)
         collection_index_ddls = self._compile_index_ddls(self.CollectionStore)
 
@@ -746,7 +752,7 @@ class PGVector(VectorStore):
 
         session.commit()
 
-    async def _acreate_tables_with_partition(self, session: Session | AsyncSession) -> None:
+    async def _acreate_tables_with_partition_if_not_exists(self, session: Session | AsyncSession) -> None:
         collection_table_ddl = self._compile_table_ddl(self.CollectionStore)
         collection_index_ddls = self._compile_index_ddls(self.CollectionStore)
 
@@ -762,6 +768,14 @@ class PGVector(VectorStore):
             await session.execute(text(ddl))
 
         await session.commit()
+
+    def _check_if_table_exists(self, session: Session, table: Any) -> bool:
+        inspector = sqlalchemy.inspect(session.get_bind())
+        return inspector.has_table(table.__tablename__)
+
+    async def _acheck_if_table_exists(self, session: AsyncSession, table: Any) -> bool:
+        inspector = await session.get_bind().connect()
+        return await inspector.run_sync(lambda sync_conn: sqlalchemy.inspect(sync_conn).has_table(table.____tablename__))
 
     def _compile_table_ddl(self, table: Any) -> str:
         return str(CreateTable(table.__table__).compile(dialect=sqlalchemy.dialects.postgresql.dialect()))
