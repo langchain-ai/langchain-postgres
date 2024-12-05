@@ -725,7 +725,7 @@ class PGVector(VectorStore):
         assert self._async_engine, "This method must be called with async_mode"
 
         if self._enable_partitioning:
-            async with self._make_async_session as session:
+            async with self._make_async_session() as session:
                 if await self._acreate_tables_with_partition_if_not_exists(session):
                     return
 
