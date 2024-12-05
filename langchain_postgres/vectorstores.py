@@ -183,7 +183,7 @@ def _get_embedding_collection_store(
             session.refresh(collection)
 
             if partition:
-                ddl = cls._create_partition_ddl(collection.uuid)
+                ddl = cls._create_partition_ddl(str(collection.uuid))
                 session.execute(text(ddl))
                 session.commit()
 
@@ -212,7 +212,7 @@ def _get_embedding_collection_store(
             await session.refresh(collection)
 
             if partition:
-                ddl = cls._create_partition_ddl(collection.uuid)
+                ddl = cls._create_partition_ddl(str(collection.uuid))
                 await session.execute(text(ddl))
                 await session.commit()
 
