@@ -268,7 +268,7 @@ def _get_embedding_collection_store(
         __tablename__ = "langchain_pg_embedding"
 
         id = sqlalchemy.Column(
-            sqlalchemy.String, nullable=True, primary_key=True, unique=True
+            sqlalchemy.String, nullable=True, primary_key=True
         )
 
         collection_id = sqlalchemy.Column(
@@ -769,12 +769,14 @@ class PGVector(VectorStore):
     def _compile_index_ddls(self, table: Any) -> str:
         ddls = []
 
-        table_args = getattr(table, "__table_args__", None)
+        table_args = getattr(table, "__table_args__", [])
 
-        if not table_args:
+        indexes = [arg for arg in list(table_args) if isinstance(arg, sqlalchemy.Index)]
+
+        if not indexes:
             return ddls
 
-        for index in list(table_args):
+        for index in indexes:
             ddl = str(CreateIndex(index).compile(dialect=sqlalchemy.dialects.postgresql.dialect()))
             ddls.append(ddl)
 
