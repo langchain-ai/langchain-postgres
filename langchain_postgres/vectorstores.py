@@ -46,6 +46,7 @@ from sqlalchemy.orm import (
     scoped_session,
     sessionmaker, aliased, Bundle,
 )
+from sqlalchemy.sql.ddl import CreateTable, CreateIndex
 
 from langchain_postgres._utils import maximal_marginal_relevance
 
@@ -109,6 +110,7 @@ def _get_embedding_collection_store(
     m: Optional[int] = None,
     binary_quantization: Optional[bool] = None,
     embedding_length: Optional[int] = None,
+    partition: Optional[bool] = None,
 ) -> Any:
     global _classes
     if _classes is not None:
@@ -178,6 +180,13 @@ def _get_embedding_collection_store(
             collection = cls(name=name, cmetadata=cmetadata)
             session.add(collection)
             session.commit()
+            session.refresh(collection)
+
+            if partition:
+                ddl = cls._create_partition_ddl(collection.uuid)
+                session.execute(text(ddl))
+                session.commit()
+                
             created = True
             return collection, created
 
@@ -200,8 +209,22 @@ def _get_embedding_collection_store(
             collection = cls(name=name, cmetadata=cmetadata)
             session.add(collection)
             await session.commit()
+            await session.refresh(collection)
+
+            if partition:
+                ddl = cls._create_partition_ddl(collection.uuid)
+                await session.execute(text(ddl))
+                await session.commit()
+
             created = True
             return collection, created
+
+        @classmethod
+        def _create_partition_ddl(cls, uuid: str):
+            return f"""
+                CREATE TABLE {EmbeddingStore.__tablename__}_{uuid.replace('-', '_')}
+                PARTITION OF {EmbeddingStore.__tablename__} FOR VALUES IN ('{uuid}')
+            """
 
     def _create_optional_index_params():
         if not (m or ef_construction):
@@ -245,7 +268,7 @@ def _get_embedding_collection_store(
         __tablename__ = "langchain_pg_embedding"
 
         id = sqlalchemy.Column(
-            sqlalchemy.String, nullable=True, primary_key=True, index=True, unique=True
+            sqlalchemy.String, nullable=True, primary_key=True, unique=True
         )
 
         collection_id = sqlalchemy.Column(
@@ -254,6 +277,7 @@ def _get_embedding_collection_store(
                 f"{CollectionStore.__tablename__}.uuid",
                 ondelete="CASCADE",
             ),
+            primary_key=True if partition else False,
         )
         collection = relationship(CollectionStore, back_populates="embeddings")
 
@@ -467,6 +491,7 @@ class PGVector(VectorStore):
         m: Optional[int] = None,
         binary_quantization: Optional[bool] = None,
         binary_limit: Optional[int] = None,
+        enable_partition: Optional[bool] = None,
     ) -> None:
         """Initialize the PGVector store.
         For an async version, use `PGVector.acreate()` instead.
@@ -521,6 +546,7 @@ class PGVector(VectorStore):
         self._m = m
         self._binary_quantization = binary_quantization
         self._binary_limit = binary_limit
+        self._enable_partition = enable_partition
 
         if self._embedding_length is None and self._embedding_index is not None:
             raise ValueError(
@@ -630,6 +656,7 @@ class PGVector(VectorStore):
             m=self._m,
             binary_quantization=self._binary_quantization,
             embedding_length=self._embedding_length,
+            partition=self._enable_partition,
         )
         
         self.CollectionStore = CollectionStore
@@ -649,6 +676,11 @@ class PGVector(VectorStore):
             vector_dimension=self._embedding_length,
             embedding_index=self._embedding_index,
             embedding_index_ops=self._embedding_index_ops,
+            ef_construction=self._ef_construction,
+            m=self._m,
+            binary_quantization=self._binary_quantization,
+            embedding_length=self._embedding_length,
+            partition=self._enable_partition,
         )
         
         self.CollectionStore = CollectionStore
@@ -679,13 +711,69 @@ class PGVector(VectorStore):
 
     def create_tables_if_not_exists(self) -> None:
         with self._make_sync_session() as session:
+            if self._enable_partition:
+                self._create_tables_with_partition(session)
+                return
+
             Base.metadata.create_all(session.get_bind())
             session.commit()
 
     async def acreate_tables_if_not_exists(self) -> None:
         assert self._async_engine, "This method must be called with async_mode"
+
+        if self._enable_partition:
+            async with self._make_async_session as session:
+                await self._acreate_tables_with_partition(session)
+                return
+
         async with self._async_engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
+
+    def _create_tables_with_partition(self, session: Session) -> None:
+        collection_table_ddl = self._compile_table_ddl(self.CollectionStore)
+        collection_index_ddls = self._compile_index_ddls(self.CollectionStore)
+
+        session.execute(text(collection_table_ddl))
+        for ddl in collection_index_ddls:
+            session.execute(text(ddl))
+
+        embedding_table_ddl = f"{self._compile_table_ddl(self.EmbeddingStore).strip()} PARTITION BY LIST (collection_id)"
+        embedding_index_ddls = self._compile_index_ddls(self.EmbeddingStore)
+
+        session.execute(text(embedding_table_ddl))
+        for ddl in embedding_index_ddls:
+            session.execute(text(ddl))
+
+        session.commit()
+
+    async def _acreate_tables_with_partition(self, session: Session | AsyncSession) -> None:
+        collection_table_ddl = self._compile_table_ddl(self.CollectionStore)
+        collection_index_ddls = self._compile_index_ddls(self.CollectionStore)
+
+        await session.execute(text(collection_table_ddl))
+        for ddl in collection_index_ddls:
+            await session.execute(text(ddl))
+
+        embedding_table_ddl = f"{self._compile_table_ddl(self.EmbeddingStore).strip()} PARTITION BY LIST (collection_id)"
+        embedding_index_ddls = self._compile_index_ddls(self.EmbeddingStore)
+
+        await session.execute(text(embedding_table_ddl))
+        for ddl in embedding_index_ddls:
+            await session.execute(text(ddl))
+
+        await session.commit()
+
+    def _compile_table_ddl(self, table: Any) -> str:
+        return str(CreateTable(table.__table__).compile(dialect=sqlalchemy.dialects.postgresql.dialect()))
+
+    def _compile_index_ddls(self, table: Any) -> str:
+        ddls = []
+
+        for index in list(table.__table_args__):
+            ddl = str(CreateIndex(index).compile(dialect=sqlalchemy.dialects.postgresql.dialect()))
+            ddls.append(ddl)
+
+        return ddls
 
     def drop_tables(self) -> None:
         with self._make_sync_session() as session:
