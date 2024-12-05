@@ -819,12 +819,18 @@ class PGVector(VectorStore):
             return
         session.delete(collection)
 
+        if self._enable_partitioning:
+            self._delete_partition(session, str(collection.uuid))
+
     async def _adelete_collection(self, session: AsyncSession) -> None:
         collection = await self.aget_collection(session)
         if not collection:
             self.logger.warning("Collection not found")
             return
         await session.delete(collection)
+
+        if self._enable_partitioning:
+            await self._adelete_partition(session, str(collection.uuid))
 
     def delete_collection(self) -> None:
         with self._make_sync_session() as session:
@@ -833,6 +839,10 @@ class PGVector(VectorStore):
                 self.logger.warning("Collection not found")
                 return
             session.delete(collection)
+
+            if self._enable_partitioning:
+                self._delete_partition(session, str(collection.uuid))
+
             session.commit()
 
     async def adelete_collection(self) -> None:
@@ -843,7 +853,20 @@ class PGVector(VectorStore):
                 self.logger.warning("Collection not found")
                 return
             await session.delete(collection)
+
+            if self._enable_partitioning:
+                await self._adelete_partition(session, str(collection.uuid))
+
             await session.commit()
+
+    def _delete_partition(self, session: Session, uuid: str):
+        session.execute(text(f"DROP TABLE {self._compute_partition_table_name(uuid)}"))
+
+    async def _adelete_partition(self, session: AsyncSession, uuid: str):
+        await session.execute(text(f"DROP TABLE {self._compute_partition_table_name(uuid)}"))
+
+    def _compute_partition_table_name(self, uuid: str) -> str:
+        return f"{self.EmbeddingStore.__tablename__}_{uuid.replace('-', '_')}"
 
     def delete(
         self,
