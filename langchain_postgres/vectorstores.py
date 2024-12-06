@@ -224,7 +224,6 @@ def _get_embedding_collection_store(
             return f"""
                 CREATE TABLE {EmbeddingStore.__tablename__}_{uuid.replace('-', '_')}
                 PARTITION OF {EmbeddingStore.__tablename__} FOR VALUES IN ('{uuid}')
-                WITH (VISIBLE = false)
             """
 
     def _create_optional_index_params():
