@@ -1084,8 +1084,13 @@ class PGVector(VectorStore):
                 )
             ]
             stmt = insert(self.EmbeddingStore).values(data)
+
+            index_elements = ["id"]
+            if self._enable_partitioning:
+                index_elements.append("collection_id")
+
             on_conflict_stmt = stmt.on_conflict_do_update(
-                index_elements=["id"],
+                index_elements=index_elements,
                 # Conflict detection based on these columns
                 set_={
                     "embedding": stmt.excluded.embedding,
@@ -1143,8 +1148,13 @@ class PGVector(VectorStore):
                 )
             ]
             stmt = insert(self.EmbeddingStore).values(data)
+
+            index_elements = ["id"]
+            if self._enable_partitioning:
+                index_elements.append("collection_id")
+
             on_conflict_stmt = stmt.on_conflict_do_update(
-                index_elements=["id"],
+                index_elements=index_elements,
                 # Conflict detection based on these columns
                 set_={
                     "embedding": stmt.excluded.embedding,
