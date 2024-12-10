@@ -31,6 +31,186 @@ pip install -U langchain-postgres
 
 ## Usage
 
+### HNSW index
+
+```python
+from langchain_postgres import PGVector, EmbeddingIndexType
+
+PGVector(
+    collection_name="test_collection",
+    embeddings=FakeEmbedding(),
+    connection=CONNECTION_STRING,
+    embedding_length=1536,
+    embedding_index=EmbeddingIndexType.hnsw,
+    embedding_index_ops="vector_cosine_ops",
+)
+```
+
+- Embedding length is required for HNSW index.
+- Allowed values for `embedding_index_ops` are described in the [pgvector HNSW](https://github.com/pgvector/pgvector?tab=readme-ov-file#hnsw).
+
+Can set `ef_construction` and `m` parameters for HNSW index.
+Refer to the [pgvector HNSW Index Options](https://github.com/pgvector/pgvector?tab=readme-ov-file#index-options) to better understand these parameters.
+
+```python
+from langchain_postgres import PGVector, EmbeddingIndexType
+
+PGVector(
+    collection_name="test_collection",
+    embeddings=FakeEmbedding(),
+    connection=CONNECTION_STRING,
+    embedding_length=1536,
+    embedding_index=EmbeddingIndexType.hnsw,
+    embedding_index_ops="vector_cosine_ops",
+    ef_construction=200,
+    m=48,
+)
+```
+
+### IVFFlat index
+
+```python
+from langchain_postgres import PGVector, EmbeddingIndexType
+
+PGVector(
+    collection_name="test_collection",
+    embeddings=FakeEmbedding(),
+    connection=CONNECTION_STRING,
+    embedding_length=1536,
+    embedding_index=EmbeddingIndexType.ivfflat,
+    embedding_index_ops="vector_cosine_ops",
+)
+```
+
+- Embedding length is required for HNSW index.
+- Allowed values for `embedding_index_ops` are described in the [pgvector IVFFlat](https://github.com/pgvector/pgvector?tab=readme-ov-file#ivfflat).
+
+### Binary Quantization
+
+```python
+from langchain_postgres import PGVector, EmbeddingIndexType
+
+PGVector(
+    collection_name="test_collection",
+    embeddings=FakeEmbedding(),
+    connection=CONNECTION_STRING,
+    embedding_length=1536,
+    embedding_index=EmbeddingIndexType.hnsw,
+    embedding_index_ops="bit_hamming_ops",
+    binary_quantization=True,
+    binary_limit=200,
+)
+```
+
+- Works only with HNSW index with `bit_hamming_ops`.
+- `binary_limit` increases the limit in the inner binary search. A higher value will increase the recall at the cost of speed.
+
+Refer to the [pgvector Binary Quantization](https://github.com/pgvector/pgvector?tab=readme-ov-file#binary-quantization) to better understand.
+
+### Partitioning
+
+```python
+from langchain_postgres import PGVector
+
+PGVector(
+    collection_name="test_collection",
+    embeddings=FakeEmbedding(),
+    connection=CONNECTION_STRING,
+    enable_partitioning=True,
+)
+```
+
+- Create partitions of `langchain_pg_embedding` table by `collection_id`. Useful with a large number of embeddings with different collection.
+
+Refer to the [pgvector Partitioning](https://github.com/pgvector/pgvector?tab=readme-ov-file#filtering)
+
+### Iterative Scan
+
+```python
+from langchain_postgres import PGVector, EmbeddingIndexType, IterativeScan
+
+PGVector(
+    collection_name="test_collection",
+    embeddings=FakeEmbedding(),
+    connection=CONNECTION_STRING,
+    embedding_length=1536,
+    embedding_index=EmbeddingIndexType.hnsw,
+    embedding_index_ops="vector_cosine_ops",
+    iterative_scan=IterativeScan.relaxed_order
+)
+```
+
+- `iterative_scan` can be set to `IterativeScan.relaxed_order` or `IterativeScan.strict_order` or disabled with `IterativeScan.off`.
+- Requires an HNSW or IVFFlat index.
+
+Refer to the [pgvector Iterative Scan](https://github.com/pgvector/pgvector?tab=readme-ov-file#iterative-index-scans) to better understand.
+
+### Iterative Scan Options for HNSW index
+
+```python
+from langchain_postgres import PGVector, EmbeddingIndexType, IterativeScan
+
+PGVector(
+    collection_name="test_collection",
+    embeddings=FakeEmbedding(),
+    connection=CONNECTION_STRING,
+    embedding_length=1536,
+    embedding_index=EmbeddingIndexType.hnsw,
+    embedding_index_ops="vector_cosine_ops",
+    iterative_scan=IterativeScan.relaxed_order,
+    max_scan_tuples=40000,
+    scan_mem_multiplier=2
+)
+```
+
+- `max_scan_tuples` control when the scan ends when `iterative_scan` is enabled.
+- `scan_mem_multiplier` specify the max amount of memory to use for the scan.
+
+Refer to the [pgvector Iterative Scan Options](https://github.com/pgvector/pgvector?tab=readme-ov-file#iterative-scan-options) to better understand.
+
+### Full Text Search
+
+Can be used by specifying `full_text_search` parameter.
+
+```python
+from langchain_postgres import PGVector
+
+vectorstore = PGVector(
+    collection_name="test_collection",
+    embeddings=FakeEmbedding(),
+    connection=CONNECTION_STRING,
+)
+
+vectorstore.similarity_search(
+    "hello world",
+    full_text_search=["foo", "bar & baz"]
+)
+```
+
+This adds the following statement to the `WHERE` clause:
+```sql
+AND document_vector @@ to_tsquery('foo | bar & baz')
+```
+
+Can be used with retrievers like this: 
+```python
+from langchain_postgres import PGVector
+
+vectorstore = PGVector(
+    collection_name="test_collection",
+    embeddings=FakeEmbedding(),
+    connection=CONNECTION_STRING,
+)
+
+retriever = vectorstore.as_retriever(
+    search_kwargs={
+        "full_text_search": ["foo", "bar & baz"]
+    }
+)
+```
+
+Refer to Postgres [Full Text Search](https://www.postgresql.org/docs/current/textsearch.html) for more information.
+
 ### ChatMessageHistory
 
 The chat message history abstraction helps to persist chat message history 
