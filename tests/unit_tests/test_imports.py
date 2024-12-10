@@ -5,6 +5,8 @@ EXPECTED_ALL = [
     "PGVector",
     "PGVectorTranslator",
     "PostgresChatMessageHistory",
+    "EmbeddingIndexType",
+    "IterativeScan"
 ]
 
 

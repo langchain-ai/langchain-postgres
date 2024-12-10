@@ -233,8 +233,8 @@ def _get_embedding_collection_store(
         return {
             "postgresql_with": {
                 k: v for k, v in {
+                    "ef_construction": ef_construction,
                     "m": m,
-                    "ef_construction": ef_construction
                 }.items() if v is not None
             }
         }
@@ -588,17 +588,10 @@ class PGVector(VectorStore):
         if not use_jsonb:
             # Replace with a deprecation warning.
             raise NotImplementedError("use_jsonb=False is no longer supported.")
-        if not self.async_mode:
-            self.__post_init__()
 
         if self._embedding_index is None and self._iterative_scan is not None:
             raise ValueError(
                 "iterative_scan is not supported without embedding_index"
-            )
-
-        if self._iterative_scan == IterativeScan.strict_order and self._embedding_index == EmbeddingIndexType.ivfflat:
-            raise ValueError(
-                "iterative_scan=strict_order is not supported with embedding_index=ivfflat"
             )
 
         if self._max_scan_tuples is not None and self._embedding_index != EmbeddingIndexType.hnsw:
@@ -631,15 +624,13 @@ class PGVector(VectorStore):
                 "binary_quantization is only supported with bit_hamming_ops"
             )
 
-        if self._binary_quantization is True and self._embedding_length is None:
-            raise ValueError(
-                "embedding_length must be provided when using binary_quantization"
-            )
-
         if self._binary_quantization is True and self._binary_limit is None:
             raise ValueError(
                 "binary_limit must be provided when using binary_quantization"
             )
+
+        if not self.async_mode:
+            self.__post_init__()
 
     def __post_init__(
         self,
@@ -1286,6 +1277,7 @@ class PGVector(VectorStore):
         query: str,
         k: int = 4,
         filter: Optional[dict] = None,
+        full_text_search: Optional[List[str]] = None
     ) -> List[Tuple[Document, float]]:
         """Return docs most similar to query.
 
@@ -1300,7 +1292,7 @@ class PGVector(VectorStore):
         assert not self._async_engine, "This method must be called without async_mode"
         embedding = self.embeddings.embed_query(query)
         docs = self.similarity_search_with_score_by_vector(
-            embedding=embedding, k=k, filter=filter
+            embedding=embedding, k=k, filter=filter, full_text_search=full_text_search
         )
         return docs
 
@@ -1309,6 +1301,7 @@ class PGVector(VectorStore):
         query: str,
         k: int = 4,
         filter: Optional[dict] = None,
+        full_text_search: Optional[List[str]] = None
     ) -> List[Tuple[Document, float]]:
         """Return docs most similar to query.
 
@@ -1323,7 +1316,7 @@ class PGVector(VectorStore):
         await self.__apost_init__()  # Lazy async init
         embedding = await self.embeddings.aembed_query(query)
         docs = await self.asimilarity_search_with_score_by_vector(
-            embedding=embedding, k=k, filter=filter
+            embedding=embedding, k=k, filter=filter, full_text_search=full_text_search
         )
         return docs
 
