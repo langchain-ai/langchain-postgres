@@ -3,6 +3,7 @@ import contextlib
 from typing import Any, AsyncGenerator, Dict, Generator, List, Optional
 
 import pytest
+from _pytest.monkeypatch import MonkeyPatch
 from langchain_core.documents import Document
 from langchain_core.embeddings import Embeddings
 from sqlalchemy import select
@@ -26,8 +27,8 @@ ADA_TOKEN_COUNT = 1536
 
 
 @pytest.fixture(autouse=True)
-def patch_document(monkeypatch):
-    def eq(self, other):
+def patch_document(monkeypatch: MonkeyPatch) -> None:
+    def eq(self: Any, other: Any) -> bool:
         return (
             self.page_content == other.page_content and self.metadata == other.metadata
         )

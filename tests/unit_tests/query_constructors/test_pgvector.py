@@ -1,3 +1,5 @@
+# type: ignore
+
 import os
 import re
 from typing import Dict, Tuple
@@ -38,8 +40,8 @@ EmbeddingStore, CollectionStore = _get_embedding_collection_store()
 
 
 @pytest.fixture(scope="function")
-def drop_tables():
-    def drop():
+def drop_tables() -> None:
+    def drop() -> None:
         with sync_session() as session:
             session.execute(text("DROP SCHEMA public CASCADE"))
             session.execute(text("CREATE SCHEMA public"))
@@ -65,7 +67,7 @@ def drop_tables():
     drop()
 
 
-def normalize_sql(query):
+def normalize_sql(query) -> str:
     # Remove new lines, tabs, and multiple spaces
     query = re.sub(r"\s+", " ", query).strip()
     # Normalize space around commas
@@ -76,7 +78,7 @@ def normalize_sql(query):
     return query
 
 
-def get_index_definition(index_name):
+def get_index_definition(index_name) -> sqlalchemy.sql.text:
     query = f"""
         SELECT indexdef
         FROM pg_indexes
@@ -512,13 +514,15 @@ def test_partitioning() -> None:
 
         assert result.fetchone() == (EmbeddingStore.__tablename__, "l", "collection_id")
 
-        result = session.execute(
-            text(
-                f"""
+        query = f"""
             SELECT indexname
             FROM pg_indexes
             WHERE tablename = '{EmbeddingStore.__tablename__}'
         """
+
+        result = session.execute(
+            text(
+                query
             )
         )
 

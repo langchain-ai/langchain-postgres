@@ -4,8 +4,8 @@ from contextlib import asynccontextmanager, contextmanager
 
 import psycopg
 from sqlalchemy import create_engine
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine, AsyncSession as SqlAlchemyAsyncSession
+from sqlalchemy.orm import sessionmaker, Session as SqlAlchemySession
 from typing_extensions import AsyncGenerator, Generator
 
 # Env variables match the default settings in the docker-compose file
@@ -59,7 +59,7 @@ def syncpg_client() -> Generator[psycopg.Connection, None, None]:
 
 
 @asynccontextmanager
-async def async_session() -> AsyncGenerator[psycopg.AsyncConnection, None]:
+async def async_session() -> AsyncGenerator[SqlAlchemyAsyncSession, None]:
     engine = create_async_engine(VECTORSTORE_CONNECTION_STRING)
     AsyncSession = async_sessionmaker(bind=engine)
 
@@ -71,7 +71,7 @@ async def async_session() -> AsyncGenerator[psycopg.AsyncConnection, None]:
 
 
 @contextmanager
-def sync_session() -> Generator[psycopg.Connection, None, None]:
+def sync_session() -> Generator[SqlAlchemySession, None, None]:
     engine = create_engine(VECTORSTORE_CONNECTION_STRING)
     Session = sessionmaker(bind=engine)
 

@@ -29,7 +29,7 @@ from langchain_core.documents import Document
 from langchain_core.embeddings import Embeddings
 from langchain_core.utils import get_from_dict_or_env
 from langchain_core.vectorstores import VectorStore
-from pgvector.sqlalchemy import BIT, VECTOR
+from pgvector.sqlalchemy import BIT, VECTOR  # type: ignore
 from sqlalchemy import (
     SQLColumnExpression,
     cast,
@@ -230,13 +230,13 @@ def _get_embedding_collection_store(
             return collection, created
 
         @classmethod
-        def _create_partition_ddl(cls, uuid: str):
+        def _create_partition_ddl(cls, uuid: str) -> str:
             return f"""
                 CREATE TABLE {EmbeddingStore.__tablename__}_{uuid.replace('-', '_')}
                 PARTITION OF {EmbeddingStore.__tablename__} FOR VALUES IN ('{uuid}')
             """
 
-    def _create_optional_index_params():
+    def _create_optional_index_params() -> dict:
         if not (m or ef_construction):
             return {}
 
@@ -251,7 +251,7 @@ def _get_embedding_collection_store(
             }
         }
 
-    def _create_index(embedding):
+    def _create_index(embedding: sqlalchemy.Column) -> Optional[sqlalchemy.Index]:
         if embedding_index is None:
             return None
 
@@ -767,7 +767,7 @@ class PGVector(VectorStore):
         session.commit()
 
     async def _acreate_tables_with_partition_if_not_exists(
-        self, session: Session | AsyncSession
+        self, session: AsyncSession
     ) -> None:
         if await self._acheck_if_table_exists(session, self.CollectionStore):
             return
@@ -775,9 +775,9 @@ class PGVector(VectorStore):
         collection_table_ddl = self._compile_table_ddl(self.CollectionStore)
         collection_index_ddls = self._compile_index_ddls(self.CollectionStore)
 
-        await session.execute(text(collection_table_ddl))
+        await session.execute(text(collection_table_ddl))  # type: ignore
         for ddl in collection_index_ddls:
-            await session.execute(text(ddl))
+            await session.execute(text(ddl))  # type: ignore
 
         compiled_ddl = self._compile_table_ddl(self.EmbeddingStore).strip()
 
@@ -786,11 +786,11 @@ class PGVector(VectorStore):
         """
         embedding_index_ddls = self._compile_index_ddls(self.EmbeddingStore)
 
-        await session.execute(text(embedding_table_ddl))
+        await session.execute(text(embedding_table_ddl))  # type: ignore
         for ddl in embedding_index_ddls:
-            await session.execute(text(ddl))
+            await session.execute(text(ddl))  # type: ignore
 
-        await session.commit()
+        await session.commit() # type: ignore
 
     def _check_if_table_exists(self, session: Session, table: Any) -> bool:
         inspector = sqlalchemy.inspect(session.get_bind())
@@ -798,7 +798,7 @@ class PGVector(VectorStore):
 
     async def _acheck_if_table_exists(self, session: AsyncSession, table: Any) -> bool:
         return await session.run_sync(
-            lambda sync_session: sqlalchemy.inspect(sync_session.bind).has_table(
+            lambda sync_session: sqlalchemy.inspect(sync_session.bind).has_table(  # type: ignore
                 table.__tablename__
             )
         )
@@ -810,8 +810,8 @@ class PGVector(VectorStore):
             )
         )
 
-    def _compile_index_ddls(self, table: Any) -> str:
-        ddls = []
+    def _compile_index_ddls(self, table: Any) -> List[str]:
+        ddls: List[str] = []
 
         table_args = getattr(table, "__table_args__", [])
 
@@ -907,10 +907,10 @@ class PGVector(VectorStore):
 
             await session.commit()
 
-    def _delete_partition(self, session: Session, uuid: str):
+    def _delete_partition(self, session: Session, uuid: str) -> None:
         session.execute(text(f"DROP TABLE {self._compute_partition_table_name(uuid)}"))
 
-    async def _adelete_partition(self, session: AsyncSession, uuid: str):
+    async def _adelete_partition(self, session: AsyncSession, uuid: str) -> None:
         await session.execute(
             text(f"DROP TABLE {self._compute_partition_table_name(uuid)}")
         )
@@ -1368,7 +1368,7 @@ class PGVector(VectorStore):
     def distance_strategy(self) -> Any:
         return self._build_distance_strategy()
 
-    def _build_distance_strategy(self, column: Optional[sqlalchemy.Column] = None):
+    def _build_distance_strategy(self, column: Optional[sqlalchemy.Column] = None) -> Any:
         _column = column if column is not None else self.EmbeddingStore.embedding
 
         if self._distance_strategy == DistanceStrategy.EUCLIDEAN:
@@ -1813,7 +1813,7 @@ class PGVector(VectorStore):
         k: int,
         filter: Optional[Dict[str, str]] = None,
         full_text_search: Optional[List[str]] = None,
-    ):
+    ) -> Any:
         if not collection:
             raise ValueError("Collection not found")
 
@@ -1846,7 +1846,7 @@ class PGVector(VectorStore):
         k: int,
         filter: Optional[Dict[str, str]] = None,
         full_text_search: Optional[List[str]] = None,
-    ):
+    ) -> Any:
         filter_by = self._build_filter(collection, filter, full_text_search)
 
         distance = cast(
@@ -1870,7 +1870,7 @@ class PGVector(VectorStore):
         )
 
         EmbeddingStoreAlias = aliased(self.EmbeddingStore, sub)
-        embedding_store_bundle = Bundle(
+        embedding_store_bundle: Bundle = Bundle(
             "EmbeddingStore",
             *[
                 getattr(EmbeddingStoreAlias, c.key)
@@ -1881,7 +1881,7 @@ class PGVector(VectorStore):
         return (
             select(
                 embedding_store_bundle,
-                self._build_distance_strategy(sub.c["embedding"])(embedding).label(
+                self._build_distance_strategy(sub.c["embedding"])(embedding).label(  # type: ignore
                     "distance"
                 ),
             )
@@ -1896,7 +1896,7 @@ class PGVector(VectorStore):
         k: int,
         filter: Optional[Dict[str, str]] = None,
         full_text_search: Optional[List[str]] = None,
-    ):
+    ) -> Any:
         filter_by = self._build_filter(collection, filter, full_text_search)
 
         return (
@@ -1909,11 +1909,11 @@ class PGVector(VectorStore):
             .limit(k)
         )
 
-    def _build_iterative_scan_query(self, stmt):
+    def _build_iterative_scan_query(self, stmt: Any) -> Any:
         cte = stmt.cte("relaxed_results").prefix_with("MATERIALIZED")
 
         EmbeddingStoreAlias = aliased(self.EmbeddingStore, cte)
-        embedding_store_bundle = Bundle(
+        embedding_store_bundle: Bundle = Bundle(
             "EmbeddingStore",
             *[
                 getattr(EmbeddingStoreAlias, c.key)
@@ -1928,7 +1928,7 @@ class PGVector(VectorStore):
         collection: Any,
         filter: Optional[Dict[str, str]] = None,
         full_text_search: Optional[List[str]] = None,
-    ):
+    ) -> List[SQLColumnExpression]:
         filter_by = [self.EmbeddingStore.collection_id == collection.uuid]
 
         if filter:
@@ -1948,7 +1948,7 @@ class PGVector(VectorStore):
 
         return filter_by
 
-    def _set_iterative_scan(self, session: Session):
+    def _set_iterative_scan(self, session: Session) -> None:
         assert not self._async_engine, "This method must be called without async_mode"
 
         if self._iterative_scan is None or self._embedding_index is None:
@@ -1961,7 +1961,7 @@ class PGVector(VectorStore):
 
         session.execute(text(stmt))
 
-    async def _aset_iterative_scan(self, session: AsyncSession):
+    async def _aset_iterative_scan(self, session: AsyncSession) -> None:
         assert self._async_engine, "This method must be called with async_mode"
 
         if self._iterative_scan is None or self._embedding_index is None:
@@ -1974,7 +1974,7 @@ class PGVector(VectorStore):
 
         await session.execute(text(stmt))
 
-    def _set_max_scan_tuples(self, session: Session):
+    def _set_max_scan_tuples(self, session: Session) -> None:
         assert not self._async_engine, "This method must be called without async_mode"
 
         if (
@@ -1985,7 +1985,7 @@ class PGVector(VectorStore):
 
         session.execute(text(f"SET hnsw.max_scan_tuples = {self._max_scan_tuples}"))
 
-    async def _aset_max_scan_tuples(self, session: AsyncSession):
+    async def _aset_max_scan_tuples(self, session: AsyncSession) -> None:
         assert self._async_engine, "This method must be called with async_mode"
 
         if (
@@ -1998,7 +1998,7 @@ class PGVector(VectorStore):
             text(f"SET hnsw.max_scan_tuples = {self._max_scan_tuples}")
         )
 
-    def _set_scan_mem_multiplier(self, session: Session):
+    def _set_scan_mem_multiplier(self, session: Session) -> None:
         assert not self._async_engine, "This method must be called without async_mode"
 
         if (
@@ -2011,7 +2011,7 @@ class PGVector(VectorStore):
             text(f"SET hnsw.scan_mem_multiplier = {self._scan_mem_multiplier}")
         )
 
-    async def _aset_scan_mem_multiplier(self, session: AsyncSession):
+    async def _aset_scan_mem_multiplier(self, session: AsyncSession) -> None:
         assert self._async_engine, "This method must be called with async_mode"
 
         if (
