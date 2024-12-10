@@ -536,6 +536,15 @@ class PGVector(VectorStore):
             create_extension: If True, will create the vector extension if it
                 doesn't exist. disabling creation is useful when using ReadOnly
                 Databases.
+            iterative_scan: Enables iterative scan. Required index
+            max_scan_tuples: Maximum number of tuples to scan. Required HNSW index
+            scan_mem_multiplier: Max memory to use during scan. Required HNSW index
+            ef_construction: HNSW index parameter.
+            m: HNSW index parameter.
+            binary_quantization: Enable binary quantization. Required HNSW index with bit_hamming_ops
+            binary_limit: Inner limit for binary quantization. Is mandatory when using binary_quantization
+            enable_partitioning: Enables partitioning of langchain_pg_embedding by collection_id.
+
         """
         self.async_mode = async_mode
         self.embedding_function = embeddings
