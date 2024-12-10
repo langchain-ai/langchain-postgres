@@ -51,13 +51,13 @@ ruff = "^0.1.8"
 [tool.poetry.group.typing.dependencies]
 mypy = "^1.7.1"
 
-#[tool.ruff.lint]
-#select = [
-#  "E",    # pycodestyle
-#  "F",    # pyflakes
-#  "I",    # isort
-#  "T201", # print
-#]
+[tool.ruff.lint]
+select = [
+  "E",    # pycodestyle
+  "F",    # pyflakes
+  "I",    # isort
+  "T201", # print
+]
 
 [tool.mypy]
 disallow_untyped_defs = "True"

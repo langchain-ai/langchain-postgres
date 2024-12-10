@@ -392,7 +392,7 @@ def test_ef_construction_and_m():
             WHERE tablename = '{EmbeddingStore.__tablename__}' AND indexname = 'ix_embedding_hnsw'
         """))
 
-        assert result.fetchone()[0] == f"CREATE INDEX ix_embedding_hnsw ON public.{EmbeddingStore.__tablename__} USING hnsw (embedding vector_cosine_ops) WITH (ef_construction='256', m='16')"
+        assert result.fetchone()[0] == f"CREATE INDEX ix_embedding_hnsw ON public.{EmbeddingStore.__tablename__} USING hnsw (embedding vector_cosine_ops) WITH (m='16', ef_construction='256')"
 
 
 @pytest.mark.usefixtures("drop_tables")
@@ -417,7 +417,7 @@ def test_binary_quantization_with_ef_construction_and_m():
             WHERE tablename = '{EmbeddingStore.__tablename__}' AND indexname = 'ix_embedding_hnsw'
         """))
 
-        assert result.fetchone()[0] == f"CREATE INDEX ix_embedding_hnsw ON public.{EmbeddingStore.__tablename__} USING hnsw (((binary_quantize(embedding))::bit(1536)) bit_hamming_ops) WITH (ef_construction='256', m='16')"
+        assert result.fetchone()[0] == f"CREATE INDEX ix_embedding_hnsw ON public.{EmbeddingStore.__tablename__} USING hnsw (((binary_quantize(embedding))::bit(1536)) bit_hamming_ops) WITH (m='16', ef_construction='256')"
 
 
 get_partitioned_table = text(f"""

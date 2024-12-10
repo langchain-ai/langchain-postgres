@@ -233,8 +233,8 @@ def _get_embedding_collection_store(
         return {
             "postgresql_with": {
                 k: v for k, v in {
-                    "ef_construction": ef_construction,
                     "m": m,
+                    "ef_construction": ef_construction,
                 }.items() if v is not None
             }
         }

@@ -90,7 +90,7 @@ jobs:
         shell: bash
         run: |
           echo "Running tests, installing dependencies with poetry..."
-          poetry install --with test,lint,typing,docs
+          poetry install --with test,lint,typing
       - name: Run tests
         run: make test
         env:
