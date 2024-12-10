@@ -19,7 +19,7 @@ class TestSync(VectorStoreIntegrationTests):
 
     @property
     def has_async(self) -> bool:
-        return False
+        return False  # Skip async tests for sync vector store
 
 
 class TestAsync(VectorStoreIntegrationTests):
@@ -34,4 +34,4 @@ class TestAsync(VectorStoreIntegrationTests):
 
     @property
     def has_sync(self) -> bool:
-        return False
+        return False  # Skip sync tests for async vector store
