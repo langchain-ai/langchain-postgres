@@ -790,7 +790,7 @@ class PGVector(VectorStore):
         for ddl in embedding_index_ddls:
             await session.execute(text(ddl))  # type: ignore
 
-        await session.commit() # type: ignore
+        await session.commit()  # type: ignore
 
     def _check_if_table_exists(self, session: Session, table: Any) -> bool:
         inspector = sqlalchemy.inspect(session.get_bind())
@@ -1368,7 +1368,9 @@ class PGVector(VectorStore):
     def distance_strategy(self) -> Any:
         return self._build_distance_strategy()
 
-    def _build_distance_strategy(self, column: Optional[sqlalchemy.Column] = None) -> Any:
+    def _build_distance_strategy(
+        self, column: Optional[sqlalchemy.Column] = None
+    ) -> Any:
         _column = column if column is not None else self.EmbeddingStore.embedding
 
         if self._distance_strategy == DistanceStrategy.EUCLIDEAN:

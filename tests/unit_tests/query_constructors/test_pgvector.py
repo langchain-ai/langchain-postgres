@@ -520,11 +520,7 @@ def test_partitioning() -> None:
             WHERE tablename = '{EmbeddingStore.__tablename__}'
         """
 
-        result = session.execute(
-            text(
-                query
-            )
-        )
+        result = session.execute(text(query))
 
         assert result.scalars().fetchall() == [
             "langchain_pg_embedding_pkey",

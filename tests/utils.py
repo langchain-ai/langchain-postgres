@@ -4,8 +4,15 @@ from contextlib import asynccontextmanager, contextmanager
 
 import psycopg
 from sqlalchemy import create_engine
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine, AsyncSession as SqlAlchemyAsyncSession
-from sqlalchemy.orm import sessionmaker, Session as SqlAlchemySession
+from sqlalchemy.ext.asyncio import (
+    AsyncSession as SqlAlchemyAsyncSession,
+)
+from sqlalchemy.ext.asyncio import (
+    async_sessionmaker,
+    create_async_engine,
+)
+from sqlalchemy.orm import Session as SqlAlchemySession
+from sqlalchemy.orm import sessionmaker
 from typing_extensions import AsyncGenerator, Generator
 
 # Env variables match the default settings in the docker-compose file
