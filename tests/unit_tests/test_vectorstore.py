@@ -28,7 +28,9 @@ ADA_TOKEN_COUNT = 1536
 @pytest.fixture(autouse=True)
 def patch_document(monkeypatch):
     def eq(self, other):
-        return self.page_content == other.page_content and self.metadata == other.metadata
+        return (
+            self.page_content == other.page_content and self.metadata == other.metadata
+        )
 
     monkeypatch.setattr(Document, "__eq__", eq)
 
@@ -160,9 +162,7 @@ def test_pgvector_with_metadatas_with_scores() -> None:
         pre_delete_collection=True,
     )
     output = docsearch.similarity_search_with_score("foo", k=1)
-    assert output == [
-        (Document(page_content="foo", metadata={"page": "0"}), 0.0)
-    ]
+    assert output == [(Document(page_content="foo", metadata={"page": "0"}), 0.0)]
 
 
 @pytest.mark.asyncio
@@ -179,9 +179,7 @@ async def test_async_pgvector_with_metadatas_with_scores() -> None:
         pre_delete_collection=True,
     )
     output = await docsearch.asimilarity_search_with_score("foo", k=1)
-    assert output == [
-        (Document(page_content="foo", metadata={"page": "0"}), 0.0)
-    ]
+    assert output == [(Document(page_content="foo", metadata={"page": "0"}), 0.0)]
 
 
 def test_pgvector_with_filter_match() -> None:
@@ -197,9 +195,7 @@ def test_pgvector_with_filter_match() -> None:
         pre_delete_collection=True,
     )
     output = docsearch.similarity_search_with_score("foo", k=1, filter={"page": "0"})
-    assert output == [
-        (Document(page_content="foo", metadata={"page": "0"}), 0.0)
-    ]
+    assert output == [(Document(page_content="foo", metadata={"page": "0"}), 0.0)]
 
 
 @pytest.mark.asyncio
@@ -218,9 +214,7 @@ async def test_async_pgvector_with_filter_match() -> None:
     output = await docsearch.asimilarity_search_with_score(
         "foo", k=1, filter={"page": "0"}
     )
-    assert output == [
-        (Document(page_content="foo", metadata={"page": "0"}), 0.0)
-    ]
+    assert output == [(Document(page_content="foo", metadata={"page": "0"}), 0.0)]
 
 
 def test_pgvector_with_filter_distant_match() -> None:
@@ -316,9 +310,7 @@ def test_pgvector_with_full_text() -> None:
         pre_delete_collection=True,
     )
     output = docsearch.similarity_search("foo", k=1, full_text_search=["bar & baz"])
-    assert output == [
-        Document(page_content="foo bar baz", metadata={"page": "1"})
-    ]
+    assert output == [Document(page_content="foo bar baz", metadata={"page": "1"})]
 
 
 def test_pgvector_with_full_text_no_match() -> None:
@@ -350,10 +342,10 @@ async def test_async_pgvector_with_full_text() -> None:
         connection=CONNECTION_STRING,
         pre_delete_collection=True,
     )
-    output = await docsearch.asimilarity_search("foo", k=1, full_text_search=["bar & baz"])
-    assert output == [
-        Document(page_content="foo bar baz", metadata={"page": "1"})
-    ]
+    output = await docsearch.asimilarity_search(
+        "foo", k=1, full_text_search=["bar & baz"]
+    )
+    assert output == [Document(page_content="foo bar baz", metadata={"page": "1"})]
 
 
 @pytest.mark.asyncio
@@ -369,7 +361,9 @@ async def test_async_pgvector_with_full_text_no_match() -> None:
         connection=CONNECTION_STRING,
         pre_delete_collection=True,
     )
-    output = await docsearch.asimilarity_search("foo", k=1, full_text_search=["bar & baz"])
+    output = await docsearch.asimilarity_search(
+        "foo", k=1, full_text_search=["bar & baz"]
+    )
     assert output == []
 
 
@@ -385,12 +379,14 @@ def test_pgvector_with_full_text_with_scores() -> None:
         connection=CONNECTION_STRING,
         pre_delete_collection=True,
     )
-    output = docsearch.similarity_search_with_score("foo", k=1, full_text_search=["bar & baz"])
+    output = docsearch.similarity_search_with_score(
+        "foo", k=1, full_text_search=["bar & baz"]
+    )
     assert output == [
-       (
-           Document(page_content="foo bar baz", metadata={"page": "1"}),
-           0.000325573832493542
-       )
+        (
+            Document(page_content="foo bar baz", metadata={"page": "1"}),
+            0.000325573832493542,
+        )
     ]
 
 
@@ -406,7 +402,9 @@ def test_pgvector_with_full_text_with_scores_no_match() -> None:
         connection=CONNECTION_STRING,
         pre_delete_collection=True,
     )
-    output = docsearch.similarity_search_with_score("foo", k=1, full_text_search=["bar & baz"])
+    output = docsearch.similarity_search_with_score(
+        "foo", k=1, full_text_search=["bar & baz"]
+    )
     assert output == []
 
 
@@ -423,11 +421,13 @@ async def test_async_pgvector_with_full_text_with_scores() -> None:
         connection=CONNECTION_STRING,
         pre_delete_collection=True,
     )
-    output = await docsearch.asimilarity_search_with_score("foo", k=1, full_text_search=["bar & baz"])
+    output = await docsearch.asimilarity_search_with_score(
+        "foo", k=1, full_text_search=["bar & baz"]
+    )
     assert output == [
         (
             Document(page_content="foo bar baz", metadata={"page": "1"}),
-            0.000325573832493542
+            0.000325573832493542,
         )
     ]
 
@@ -445,7 +445,9 @@ async def test_async_pgvector_with_full_text_with_scores_no_match() -> None:
         connection=CONNECTION_STRING,
         pre_delete_collection=True,
     )
-    output = await docsearch.asimilarity_search_with_score("foo", k=1, full_text_search=["bar & baz"])
+    output = await docsearch.asimilarity_search_with_score(
+        "foo", k=1, full_text_search=["bar & baz"]
+    )
     assert output == []
 
 

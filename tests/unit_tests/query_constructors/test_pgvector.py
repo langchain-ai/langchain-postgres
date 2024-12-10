@@ -13,17 +13,23 @@ from langchain_core.structured_query import (
 )
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine
-
-from langchain_postgres import PGVectorTranslator, PGVector, EmbeddingIndexType, vectorstores
-from langchain_postgres.vectorstores import _get_embedding_collection_store, IterativeScan
-from tests.unit_tests.test_vectorstore import FakeEmbeddingsWithAdaDimension
-from tests.utils import sync_session, async_session
-
-from tests.utils import VECTORSTORE_CONNECTION_STRING as CONNECTION_STRING
-
 from sqlalchemy.orm import (
     declarative_base,
 )
+
+from langchain_postgres import (
+    EmbeddingIndexType,
+    PGVector,
+    PGVectorTranslator,
+    vectorstores,
+)
+from langchain_postgres.vectorstores import (
+    IterativeScan,
+    _get_embedding_collection_store,
+)
+from tests.unit_tests.test_vectorstore import FakeEmbeddingsWithAdaDimension
+from tests.utils import VECTORSTORE_CONNECTION_STRING as CONNECTION_STRING
+from tests.utils import async_session, sync_session
 
 DEFAULT_TRANSLATOR = PGVectorTranslator()
 
@@ -31,13 +37,21 @@ DEFAULT_TRANSLATOR = PGVectorTranslator()
 EmbeddingStore, CollectionStore = _get_embedding_collection_store()
 
 
-@pytest.fixture(scope='function')
+@pytest.fixture(scope="function")
 def drop_tables():
     def drop():
         with sync_session() as session:
             session.execute(text("DROP SCHEMA public CASCADE"))
             session.execute(text("CREATE SCHEMA public"))
-            session.execute(text(f"GRANT ALL ON SCHEMA public TO {os.environ.get('POSTGRES_USER', 'langchain')}"))
+            session.execute(
+                text(
+                    f"""
+                        GRANT ALL 
+                        ON SCHEMA public 
+                        TO {os.environ.get('POSTGRES_USER', 'langchain')}
+                    """
+                )
+            )
             session.execute(text("GRANT ALL ON SCHEMA public TO public"))
             session.commit()
 
@@ -49,6 +63,28 @@ def drop_tables():
     yield
 
     drop()
+
+
+def normalize_sql(query):
+    # Remove new lines, tabs, and multiple spaces
+    query = re.sub(r"\s+", " ", query).strip()
+    # Normalize space around commas
+    query = re.sub(r"\s*,\s*", ", ", query)
+    # Normalize space around parentheses
+    query = re.sub(r"\(\s*", "(", query)
+    query = re.sub(r"\s*\)", ")", query)
+    return query
+
+
+def get_index_definition(index_name):
+    query = f"""
+        SELECT indexdef
+        FROM pg_indexes
+        WHERE tablename = '{EmbeddingStore.__tablename__}'
+        AND indexname = '{index_name}'
+    """
+
+    return text(query)
 
 
 def test_visit_comparison() -> None:
@@ -124,7 +160,7 @@ def test_visit_structured_query() -> None:
     assert expected == actual
 
 
-def test_embedding_index_without_length():
+def test_embedding_index_without_length() -> None:
     with pytest.raises(ValueError):
         PGVector(
             collection_name="test_collection",
@@ -135,7 +171,7 @@ def test_embedding_index_without_length():
         )
 
 
-def test_embedding_index_without_ops():
+def test_embedding_index_without_ops() -> None:
     with pytest.raises(ValueError):
         PGVector(
             collection_name="test_collection",
@@ -147,7 +183,7 @@ def test_embedding_index_without_ops():
 
 
 @pytest.mark.usefixtures("drop_tables")
-def test_embedding_index_hnsw():
+def test_embedding_index_hnsw() -> None:
     PGVector(
         collection_name="test_collection",
         embeddings=FakeEmbeddingsWithAdaDimension(),
@@ -158,18 +194,20 @@ def test_embedding_index_hnsw():
     )
 
     with sync_session() as session:
-        result = session.execute(text(f"""
-            SELECT indexdef
-            FROM pg_indexes
-            WHERE tablename = '{EmbeddingStore.__tablename__}' AND indexname = 'ix_embedding_hnsw'
-        """))
+        result = session.execute(get_index_definition("ix_embedding_hnsw"))
 
-        assert result.fetchone()[0] == f"CREATE INDEX ix_embedding_hnsw ON public.{EmbeddingStore.__tablename__} USING hnsw (embedding vector_cosine_ops)"
+        expected = f"""
+            CREATE INDEX ix_embedding_hnsw
+            ON public.{EmbeddingStore.__tablename__}
+            USING hnsw (embedding vector_cosine_ops)
+        """
+
+        assert normalize_sql(result.fetchone()[0]) == normalize_sql(expected)
 
 
 @pytest.mark.asyncio
 @pytest.mark.usefixtures("drop_tables")
-async def test_embedding_index_hnsw_async():
+async def test_embedding_index_hnsw_async() -> None:
     pgvector = PGVector(
         collection_name="test_collection",
         embeddings=FakeEmbeddingsWithAdaDimension(),
@@ -177,23 +215,25 @@ async def test_embedding_index_hnsw_async():
         embedding_index=EmbeddingIndexType.hnsw,
         embedding_index_ops="vector_cosine_ops",
         connection=create_async_engine(CONNECTION_STRING),
-        async_mode=True
+        async_mode=True,
     )
 
     await pgvector.__apost_init__()
 
     async with async_session() as session:
-        result = await session.execute(text(f"""
-            SELECT indexdef
-            FROM pg_indexes
-            WHERE tablename = '{EmbeddingStore.__tablename__}' AND indexname = 'ix_embedding_hnsw'
-        """))
+        result = await session.execute(get_index_definition("ix_embedding_hnsw"))
 
-        assert result.fetchone()[0] == f"CREATE INDEX ix_embedding_hnsw ON public.{EmbeddingStore.__tablename__} USING hnsw (embedding vector_cosine_ops)"
+        expected = f"""
+            CREATE INDEX ix_embedding_hnsw 
+            ON public.{EmbeddingStore.__tablename__} 
+            USING hnsw (embedding vector_cosine_ops)
+        """
+
+        assert normalize_sql(result.fetchone()[0]) == normalize_sql(expected)
 
 
 @pytest.mark.usefixtures("drop_tables")
-def test_embedding_index_ivfflat():
+def test_embedding_index_ivfflat() -> None:
     PGVector(
         collection_name="test_collection",
         embeddings=FakeEmbeddingsWithAdaDimension(),
@@ -204,18 +244,20 @@ def test_embedding_index_ivfflat():
     )
 
     with sync_session() as session:
-        result = session.execute(text(f"""
-            SELECT indexdef
-            FROM pg_indexes
-            WHERE tablename = '{EmbeddingStore.__tablename__}' AND indexname = 'ix_embedding_ivfflat'
-        """))
+        result = session.execute(get_index_definition("ix_embedding_ivfflat"))
 
-        assert result.fetchone()[0] == f"CREATE INDEX ix_embedding_ivfflat ON public.{EmbeddingStore.__tablename__} USING ivfflat (embedding vector_cosine_ops)"
+        expected = f"""
+            CREATE INDEX ix_embedding_ivfflat 
+            ON public.{EmbeddingStore.__tablename__} 
+            USING ivfflat (embedding vector_cosine_ops)
+        """
+
+        assert normalize_sql(result.fetchone()[0]) == normalize_sql(expected)
 
 
 @pytest.mark.asyncio
 @pytest.mark.usefixtures("drop_tables")
-async def test_embedding_index_ivfflat_async():
+async def test_embedding_index_ivfflat_async() -> None:
     pgvector = PGVector(
         collection_name="test_collection",
         embeddings=FakeEmbeddingsWithAdaDimension(),
@@ -223,22 +265,24 @@ async def test_embedding_index_ivfflat_async():
         embedding_index=EmbeddingIndexType.ivfflat,
         embedding_index_ops="vector_cosine_ops",
         connection=create_async_engine(CONNECTION_STRING),
-        async_mode=True
+        async_mode=True,
     )
 
     await pgvector.__apost_init__()
 
     async with async_session() as session:
-        result = await session.execute(text(f"""
-            SELECT indexdef
-            FROM pg_indexes
-            WHERE tablename = '{EmbeddingStore.__tablename__}' AND indexname = 'ix_embedding_ivfflat'
-        """))
+        result = await session.execute(get_index_definition("ix_embedding_ivfflat"))
 
-        assert result.fetchone()[0] == f"CREATE INDEX ix_embedding_ivfflat ON public.{EmbeddingStore.__tablename__} USING ivfflat (embedding vector_cosine_ops)"
+        expected = f"""
+            CREATE INDEX ix_embedding_ivfflat 
+            ON public.{EmbeddingStore.__tablename__} 
+            USING ivfflat (embedding vector_cosine_ops)
+        """
+
+        assert normalize_sql(result.fetchone()[0]) == normalize_sql(expected)
 
 
-def test_binary_quantization_without_hnsw():
+def test_binary_quantization_without_hnsw() -> None:
     with pytest.raises(ValueError):
         PGVector(
             collection_name="test_collection",
@@ -248,11 +292,11 @@ def test_binary_quantization_without_hnsw():
             embedding_index=EmbeddingIndexType.ivfflat,
             embedding_index_ops="bit_hamming_ops",
             binary_quantization=True,
-            binary_limit=200
+            binary_limit=200,
         )
 
 
-def test_binary_quantization_without_hamming_ops():
+def test_binary_quantization_without_hamming_ops() -> None:
     with pytest.raises(ValueError):
         PGVector(
             collection_name="test_collection",
@@ -262,11 +306,11 @@ def test_binary_quantization_without_hamming_ops():
             embedding_index=EmbeddingIndexType.hnsw,
             binary_quantization=True,
             embedding_index_ops="vector_cosine_ops",
-            binary_limit=200
+            binary_limit=200,
         )
 
 
-def test_binary_quantization_without_binary_limit():
+def test_binary_quantization_without_binary_limit() -> None:
     with pytest.raises(ValueError):
         PGVector(
             collection_name="test_collection",
@@ -280,7 +324,7 @@ def test_binary_quantization_without_binary_limit():
 
 
 @pytest.mark.usefixtures("drop_tables")
-def test_binary_quantization_index():
+def test_binary_quantization_index() -> None:
     PGVector(
         collection_name="test_collection",
         embeddings=FakeEmbeddingsWithAdaDimension(),
@@ -289,20 +333,22 @@ def test_binary_quantization_index():
         embedding_index=EmbeddingIndexType.hnsw,
         embedding_index_ops="bit_hamming_ops",
         binary_quantization=True,
-        binary_limit=200
+        binary_limit=200,
     )
 
     with sync_session() as session:
-        result = session.execute(text(f"""
-            SELECT indexdef
-            FROM pg_indexes
-            WHERE tablename = '{EmbeddingStore.__tablename__}' AND indexname = 'ix_embedding_hnsw'
-        """))
+        result = session.execute(get_index_definition("ix_embedding_hnsw"))
 
-        assert result.fetchone()[0] == f"CREATE INDEX ix_embedding_hnsw ON public.{EmbeddingStore.__tablename__} USING hnsw (((binary_quantize(embedding))::bit(1536)) bit_hamming_ops)"
+        expected = f"""
+            CREATE INDEX ix_embedding_hnsw 
+            ON public.{EmbeddingStore.__tablename__} 
+            USING hnsw (((binary_quantize(embedding))::bit(1536)) bit_hamming_ops)
+        """
+
+        assert normalize_sql(result.fetchone()[0]) == normalize_sql(expected)
 
 
-def test_ef_construction_without_hnsw():
+def test_ef_construction_without_hnsw() -> None:
     with pytest.raises(ValueError):
         PGVector(
             collection_name="test_collection",
@@ -315,7 +361,7 @@ def test_ef_construction_without_hnsw():
         )
 
 
-def test_m_without_hnsw():
+def test_m_without_hnsw() -> None:
     with pytest.raises(ValueError):
         PGVector(
             collection_name="test_collection",
@@ -329,7 +375,7 @@ def test_m_without_hnsw():
 
 
 @pytest.mark.usefixtures("drop_tables")
-def test_ef_construction():
+def test_ef_construction() -> None:
     PGVector(
         collection_name="test_collection",
         embeddings=FakeEmbeddingsWithAdaDimension(),
@@ -341,17 +387,19 @@ def test_ef_construction():
     )
 
     with sync_session() as session:
-        result = session.execute(text(f"""
-            SELECT indexdef
-            FROM pg_indexes
-            WHERE tablename = '{EmbeddingStore.__tablename__}' AND indexname = 'ix_embedding_hnsw'
-        """))
+        result = session.execute(get_index_definition("ix_embedding_hnsw"))
 
-        assert result.fetchone()[0] == f"CREATE INDEX ix_embedding_hnsw ON public.{EmbeddingStore.__tablename__} USING hnsw (embedding vector_cosine_ops) WITH (ef_construction='256')"
+        expected = f"""
+            CREATE INDEX ix_embedding_hnsw 
+            ON public.{EmbeddingStore.__tablename__} 
+            USING hnsw (embedding vector_cosine_ops) WITH (ef_construction='256')
+        """
+
+        assert normalize_sql(result.fetchone()[0]) == normalize_sql(expected)
 
 
 @pytest.mark.usefixtures("drop_tables")
-def test_m():
+def test_m() -> None:
     PGVector(
         collection_name="test_collection",
         embeddings=FakeEmbeddingsWithAdaDimension(),
@@ -363,17 +411,19 @@ def test_m():
     )
 
     with sync_session() as session:
-        result = session.execute(text(f"""
-            SELECT indexdef
-            FROM pg_indexes
-            WHERE tablename = '{EmbeddingStore.__tablename__}' AND indexname = 'ix_embedding_hnsw'
-        """))
+        result = session.execute(get_index_definition("ix_embedding_hnsw"))
 
-        assert result.fetchone()[0] == f"CREATE INDEX ix_embedding_hnsw ON public.{EmbeddingStore.__tablename__} USING hnsw (embedding vector_cosine_ops) WITH (m='16')"
+        expected = f"""
+            CREATE INDEX ix_embedding_hnsw
+             ON public.{EmbeddingStore.__tablename__} 
+             USING hnsw (embedding vector_cosine_ops) WITH (m='16')
+        """
+
+        assert normalize_sql(result.fetchone()[0]) == normalize_sql(expected)
 
 
 @pytest.mark.usefixtures("drop_tables")
-def test_ef_construction_and_m():
+def test_ef_construction_and_m() -> None:
     PGVector(
         collection_name="test_collection",
         embeddings=FakeEmbeddingsWithAdaDimension(),
@@ -386,17 +436,20 @@ def test_ef_construction_and_m():
     )
 
     with sync_session() as session:
-        result = session.execute(text(f"""
-            SELECT indexdef
-            FROM pg_indexes
-            WHERE tablename = '{EmbeddingStore.__tablename__}' AND indexname = 'ix_embedding_hnsw'
-        """))
+        result = session.execute(get_index_definition("ix_embedding_hnsw"))
 
-        assert result.fetchone()[0] == f"CREATE INDEX ix_embedding_hnsw ON public.{EmbeddingStore.__tablename__} USING hnsw (embedding vector_cosine_ops) WITH (m='16', ef_construction='256')"
+        expected = f"""
+            CREATE INDEX ix_embedding_hnsw 
+            ON public.{EmbeddingStore.__tablename__} 
+            USING hnsw (embedding vector_cosine_ops) 
+            WITH (m='16', ef_construction='256')
+        """
+
+        assert normalize_sql(result.fetchone()[0]) == normalize_sql(expected)
 
 
 @pytest.mark.usefixtures("drop_tables")
-def test_binary_quantization_with_ef_construction_and_m():
+def test_binary_quantization_with_ef_construction_and_m() -> None:
     PGVector(
         collection_name="test_collection",
         embeddings=FakeEmbeddingsWithAdaDimension(),
@@ -407,20 +460,24 @@ def test_binary_quantization_with_ef_construction_and_m():
         binary_quantization=True,
         binary_limit=200,
         ef_construction=256,
-        m=16
+        m=16,
     )
 
     with sync_session() as session:
-        result = session.execute(text(f"""
-            SELECT indexdef
-            FROM pg_indexes
-            WHERE tablename = '{EmbeddingStore.__tablename__}' AND indexname = 'ix_embedding_hnsw'
-        """))
+        result = session.execute(get_index_definition("ix_embedding_hnsw"))
 
-        assert result.fetchone()[0] == f"CREATE INDEX ix_embedding_hnsw ON public.{EmbeddingStore.__tablename__} USING hnsw (((binary_quantize(embedding))::bit(1536)) bit_hamming_ops) WITH (m='16', ef_construction='256')"
+        expected = f"""
+            CREATE INDEX ix_embedding_hnsw 
+            ON public.{EmbeddingStore.__tablename__} 
+            USING hnsw (((binary_quantize(embedding))::bit(1536)) bit_hamming_ops) 
+            WITH (m='16', ef_construction='256')
+        """
+
+        assert normalize_sql(result.fetchone()[0]) == normalize_sql(expected)
 
 
-get_partitioned_table = text(f"""
+get_partitioned_table = text(
+    f"""
     SELECT 
         c.relname AS table_name,
         p.partstrat AS partition_strategy,
@@ -430,14 +487,16 @@ get_partitioned_table = text(f"""
     JOIN 
         pg_partitioned_table p ON c.oid = p.partrelid
     LEFT JOIN 
-        pg_attribute ON pg_attribute.attrelid = p.partrelid AND pg_attribute.attnum = ANY(p.partattrs)
+        pg_attribute ON pg_attribute.attrelid = p.partrelid 
+        AND pg_attribute.attnum = ANY(p.partattrs)
     WHERE 
         c.relname = '{EmbeddingStore.__tablename__}'
-""")
+"""
+)
 
 
 @pytest.mark.usefixtures("drop_tables")
-def test_partitioning():
+def test_partitioning() -> None:
     PGVector(
         collection_name="test_collection",
         embeddings=FakeEmbeddingsWithAdaDimension(),
@@ -445,26 +504,35 @@ def test_partitioning():
         embedding_length=1536,
         embedding_index=EmbeddingIndexType.hnsw,
         embedding_index_ops="vector_cosine_ops",
-        enable_partitioning=True
+        enable_partitioning=True,
     )
 
     with sync_session() as session:
         result = session.execute(get_partitioned_table)
 
-        assert result.fetchone() == (EmbeddingStore.__tablename__, 'l', 'collection_id')
+        assert result.fetchone() == (EmbeddingStore.__tablename__, "l", "collection_id")
 
-        result = session.execute(text(f"""
+        result = session.execute(
+            text(
+                f"""
             SELECT indexname
             FROM pg_indexes
             WHERE tablename = '{EmbeddingStore.__tablename__}'
-        """))
+        """
+            )
+        )
 
-        assert result.scalars().fetchall() == ['langchain_pg_embedding_pkey', 'ix_cmetadata_gin', 'ix_document_vector_gin', 'ix_embedding_hnsw']
+        assert result.scalars().fetchall() == [
+            "langchain_pg_embedding_pkey",
+            "ix_cmetadata_gin",
+            "ix_document_vector_gin",
+            "ix_embedding_hnsw",
+        ]
 
 
 @pytest.mark.asyncio
 @pytest.mark.usefixtures("drop_tables")
-async def test_partitioning_async():
+async def test_partitioning_async() -> None:
     pgvector = PGVector(
         collection_name="test_collection",
         embeddings=FakeEmbeddingsWithAdaDimension(),
@@ -473,7 +541,7 @@ async def test_partitioning_async():
         embedding_index=EmbeddingIndexType.hnsw,
         embedding_index_ops="vector_cosine_ops",
         enable_partitioning=True,
-        async_mode=True
+        async_mode=True,
     )
 
     await pgvector.__apost_init__()
@@ -481,29 +549,38 @@ async def test_partitioning_async():
     async with async_session() as session:
         result = await session.execute(get_partitioned_table)
 
-        assert result.fetchone() == (EmbeddingStore.__tablename__, 'l', 'collection_id')
+        assert result.fetchone() == (EmbeddingStore.__tablename__, "l", "collection_id")
 
-        result = await session.execute(text(f"""
+        query = f"""
             SELECT indexname
             FROM pg_indexes
             WHERE tablename = '{EmbeddingStore.__tablename__}'
-        """))
+        """
 
-        assert result.scalars().fetchall() == ['langchain_pg_embedding_pkey', 'ix_cmetadata_gin', 'ix_document_vector_gin', 'ix_embedding_hnsw']
+        result = await session.execute(text(query))
+
+        assert result.scalars().fetchall() == [
+            "langchain_pg_embedding_pkey",
+            "ix_cmetadata_gin",
+            "ix_document_vector_gin",
+            "ix_embedding_hnsw",
+        ]
 
 
-get_partitions = text(f"""
+get_partitions = text(
+    f"""
     SELECT c.relname as partitioned_table_name,
            pg_get_expr(c.relpartbound, c.oid) as partition_bound
     FROM pg_class c
     JOIN pg_inherits i ON c.oid = i.inhrelid
     JOIN pg_class pc ON i.inhparent = pc.oid
     WHERE pc.relname = '{EmbeddingStore.__tablename__}'
-""")
+"""
+)
 
 
 @pytest.mark.usefixtures("drop_tables")
-def test_partitions_creation():
+def test_partitions_creation() -> None:
     pgvector = PGVector(
         collection_name="test_collection1",
         embeddings=FakeEmbeddingsWithAdaDimension(),
@@ -527,21 +604,30 @@ def test_partitions_creation():
     with sync_session() as session:
         result = session.execute(get_partitions)
 
+        collection1_underscored = str(collection1.uuid).replace("-", "_")
+        collection2_underscored = str(collection2.uuid).replace("-", "_")
+
         assert result.fetchall() == [
-            (f"{EmbeddingStore.__tablename__}_{str(collection1.uuid).replace('-', '_')}", f"FOR VALUES IN ('{str(collection1.uuid)}')"),
-            (f"{EmbeddingStore.__tablename__}_{str(collection2.uuid).replace('-', '_')}", f"FOR VALUES IN ('{str(collection2.uuid)}')")
+            (
+                f"{EmbeddingStore.__tablename__}_{collection1_underscored}",
+                f"FOR VALUES IN ('{str(collection1.uuid)}')",
+            ),
+            (
+                f"{EmbeddingStore.__tablename__}_{collection2_underscored}",
+                f"FOR VALUES IN ('{str(collection2.uuid)}')",
+            ),
         ]
 
 
 @pytest.mark.asyncio
 @pytest.mark.usefixtures("drop_tables")
-async def test_partitions_creation_async():
+async def test_partitions_creation_async() -> None:
     pgvector = PGVector(
         collection_name="test_collection1",
         embeddings=FakeEmbeddingsWithAdaDimension(),
         connection=create_async_engine(CONNECTION_STRING),
         enable_partitioning=True,
-        async_mode=True
+        async_mode=True,
     )
     await pgvector.__apost_init__()
 
@@ -553,7 +639,7 @@ async def test_partitions_creation_async():
         embeddings=FakeEmbeddingsWithAdaDimension(),
         connection=create_async_engine(CONNECTION_STRING),
         enable_partitioning=True,
-        async_mode=True
+        async_mode=True,
     )
     await pgvector.__apost_init__()
 
@@ -563,14 +649,23 @@ async def test_partitions_creation_async():
     async with async_session() as session:
         result = await session.execute(get_partitions)
 
+        collection1_underscored = str(collection1.uuid).replace("-", "_")
+        collection2_underscored = str(collection2.uuid).replace("-", "_")
+
         assert result.fetchall() == [
-            (f"{EmbeddingStore.__tablename__}_{str(collection1.uuid).replace('-', '_')}", f"FOR VALUES IN ('{str(collection1.uuid)}')"),
-            (f"{EmbeddingStore.__tablename__}_{str(collection2.uuid).replace('-', '_')}", f"FOR VALUES IN ('{str(collection2.uuid)}')")
+            (
+                f"{EmbeddingStore.__tablename__}_{collection1_underscored}",
+                f"FOR VALUES IN ('{str(collection1.uuid)}')",
+            ),
+            (
+                f"{EmbeddingStore.__tablename__}_{collection2_underscored}",
+                f"FOR VALUES IN ('{str(collection2.uuid)}')",
+            ),
         ]
 
 
 @pytest.mark.usefixtures("drop_tables")
-def test_partitions_deletion():
+def test_partitions_deletion() -> None:
     pgvector = PGVector(
         collection_name="test_collection1",
         embeddings=FakeEmbeddingsWithAdaDimension(),
@@ -588,13 +683,13 @@ def test_partitions_deletion():
 
 @pytest.mark.asyncio
 @pytest.mark.usefixtures("drop_tables")
-async def test_partitions_deletion_async():
+async def test_partitions_deletion_async() -> None:
     pgvector = PGVector(
         collection_name="test_collection1",
         embeddings=FakeEmbeddingsWithAdaDimension(),
         connection=create_async_engine(CONNECTION_STRING),
         enable_partitioning=True,
-        async_mode=True
+        async_mode=True,
     )
     await pgvector.__apost_init__()
 
@@ -606,18 +701,18 @@ async def test_partitions_deletion_async():
         assert result.fetchall() == []
 
 
-def test_iterative_scan_without_index():
+def test_iterative_scan_without_index() -> None:
     with pytest.raises(ValueError):
         PGVector(
             collection_name="test_collection1",
             embeddings=FakeEmbeddingsWithAdaDimension(),
             connection=CONNECTION_STRING,
-            iterative_scan=IterativeScan.off
+            iterative_scan=IterativeScan.off,
         )
 
 
 @pytest.mark.usefixtures("drop_tables")
-def test_iterative_scan():
+def test_iterative_scan() -> None:
     with sync_session() as session:
         with pytest.raises(sqlalchemy.exc.ProgrammingError):
             session.execute(text("SHOW hnsw.iterative_scan"))
@@ -673,7 +768,7 @@ def test_iterative_scan():
 
 @pytest.mark.asyncio
 @pytest.mark.usefixtures("drop_tables")
-async def test_iterative_scan_async():
+async def test_iterative_scan_async() -> None:
     pgvector = PGVector(
         collection_name="test_collection1",
         embeddings=FakeEmbeddingsWithAdaDimension(),
@@ -682,7 +777,7 @@ async def test_iterative_scan_async():
         embedding_index_ops="vector_cosine_ops",
         embedding_length=1536,
         iterative_scan=IterativeScan.strict_order,
-        async_mode=True
+        async_mode=True,
     )
 
     await pgvector.__apost_init__()
@@ -694,18 +789,18 @@ async def test_iterative_scan_async():
         assert result.fetchone()[0] == "strict_order"
 
 
-def test_max_scan_tuples_without_hnsw():
+def test_max_scan_tuples_without_hnsw() -> None:
     with pytest.raises(ValueError):
         PGVector(
             collection_name="test_collection1",
             embeddings=FakeEmbeddingsWithAdaDimension(),
             connection=CONNECTION_STRING,
-            max_scan_tuples=200
+            max_scan_tuples=200,
         )
 
 
 @pytest.mark.usefixtures("drop_tables")
-def test_max_scan_tuples():
+def test_max_scan_tuples() -> None:
     with sync_session() as session:
         with pytest.raises(sqlalchemy.exc.ProgrammingError):
             session.execute(text("SHOW hnsw.max_scan_tuples"))
@@ -717,7 +812,7 @@ def test_max_scan_tuples():
         embedding_index=EmbeddingIndexType.hnsw,
         embedding_index_ops="vector_cosine_ops",
         embedding_length=1536,
-        max_scan_tuples=200
+        max_scan_tuples=200,
     )
 
     with sync_session() as session:
@@ -729,7 +824,7 @@ def test_max_scan_tuples():
 
 @pytest.mark.asyncio
 @pytest.mark.usefixtures("drop_tables")
-async def test_max_scan_tuples_async():
+async def test_max_scan_tuples_async() -> None:
     pgvector = PGVector(
         collection_name="test_collection1",
         embeddings=FakeEmbeddingsWithAdaDimension(),
@@ -738,7 +833,7 @@ async def test_max_scan_tuples_async():
         embedding_index_ops="vector_cosine_ops",
         embedding_length=1536,
         max_scan_tuples=200,
-        async_mode=True
+        async_mode=True,
     )
 
     await pgvector.__apost_init__()
@@ -750,18 +845,18 @@ async def test_max_scan_tuples_async():
         assert result.fetchone()[0] == "200"
 
 
-def test_scan_mem_multiplier_without_hnsw():
+def test_scan_mem_multiplier_without_hnsw() -> None:
     with pytest.raises(ValueError):
         PGVector(
             collection_name="test_collection1",
             embeddings=FakeEmbeddingsWithAdaDimension(),
             connection=CONNECTION_STRING,
-            scan_mem_multiplier=200
+            scan_mem_multiplier=200,
         )
 
 
 @pytest.mark.usefixtures("drop_tables")
-def test_scan_mem_multiplier():
+def test_scan_mem_multiplier() -> None:
     with sync_session() as session:
         with pytest.raises(sqlalchemy.exc.ProgrammingError):
             session.execute(text("SHOW hnsw.scan_mem_multiplier"))
@@ -773,7 +868,7 @@ def test_scan_mem_multiplier():
         embedding_index=EmbeddingIndexType.hnsw,
         embedding_index_ops="vector_cosine_ops",
         embedding_length=1536,
-        scan_mem_multiplier=2
+        scan_mem_multiplier=2,
     )
 
     with sync_session() as session:
@@ -785,7 +880,7 @@ def test_scan_mem_multiplier():
 
 @pytest.mark.asyncio
 @pytest.mark.usefixtures("drop_tables")
-async def test_scan_mem_multiplier_async():
+async def test_scan_mem_multiplier_async() -> None:
     pgvector = PGVector(
         collection_name="test_collection1",
         embeddings=FakeEmbeddingsWithAdaDimension(),
@@ -794,7 +889,7 @@ async def test_scan_mem_multiplier_async():
         embedding_index_ops="vector_cosine_ops",
         embedding_length=1536,
         scan_mem_multiplier=2,
-        async_mode=True
+        async_mode=True,
     )
 
     await pgvector.__apost_init__()
@@ -806,19 +901,8 @@ async def test_scan_mem_multiplier_async():
         assert result.fetchone()[0] == "2"
 
 
-def normalize_sql(query):
-    # Remove new lines, tabs, and multiple spaces
-    query = re.sub(r'\s+', ' ', query).strip()
-    # Normalize space around commas
-    query = re.sub(r'\s*,\s*', ', ', query)
-    # Normalize space around parentheses
-    query = re.sub(r'\(\s*', '(', query)
-    query = re.sub(r'\s*\)', ')', query)
-    return query
-
-
 @pytest.mark.usefixtures("drop_tables")
-def test_binary_quantization_query():
+def test_binary_quantization_query() -> None:
     pgvector = PGVector(
         collection_name="test_collection1",
         embeddings=FakeEmbeddingsWithAdaDimension(),
@@ -827,7 +911,7 @@ def test_binary_quantization_query():
         embedding_index=EmbeddingIndexType.hnsw,
         embedding_index_ops="bit_hamming_ops",
         binary_quantization=True,
-        binary_limit=200
+        binary_limit=200,
     )
 
     with sync_session() as session:
@@ -868,10 +952,15 @@ def test_binary_quantization_query():
                     langchain_pg_embedding
                 WHERE
                     langchain_pg_embedding.collection_id = %(collection_id_1)s::UUID
-                    AND jsonb_path_match(langchain_pg_embedding.cmetadata, CAST(%(param_1)s AS JSONPATH), CAST(%(param_2)s AS JSONB))
+                    AND jsonb_path_match(
+                        langchain_pg_embedding.cmetadata, 
+                        CAST(%(param_1)s AS JSONPATH
+                    ), CAST(%(param_2)s AS JSONB))
                     AND document_vector @@ to_tsquery('word1 | word2 & word3')
                 ORDER BY
-                    CAST(binary_quantize(langchain_pg_embedding.embedding) AS BIT(3)) <~> binary_quantize(CAST(%(param_3)s AS VECTOR(3)))
+                    CAST(
+                        binary_quantize(langchain_pg_embedding.embedding) AS BIT(3)
+                    ) <~> binary_quantize(CAST(%(param_3)s AS VECTOR(3)))
                 LIMIT
                     %(param_4)s
             ) AS binary_result
@@ -883,18 +972,18 @@ def test_binary_quantization_query():
 
     assert normalize_sql(query) == normalize_sql(expected_query)
     assert params == {
-        'embedding_1': [1.0, 0.0, -1.0],
-        'collection_id_1': collection.uuid,
-        'param_1': '$.test_key == $value',
-        'param_2': {'value': 'test_value'},
-        'param_3': [1.0, 0.0, -1.0],
-        'param_4': 200,
-        'param_5': 20
+        "embedding_1": [1.0, 0.0, -1.0],
+        "collection_id_1": collection.uuid,
+        "param_1": "$.test_key == $value",
+        "param_2": {"value": "test_value"},
+        "param_3": [1.0, 0.0, -1.0],
+        "param_4": 200,
+        "param_5": 20,
     }
 
 
 @pytest.mark.usefixtures("drop_tables")
-def test_relaxed_order_query():
+def test_relaxed_order_query() -> None:
     pgvector = PGVector(
         collection_name="test_collection1",
         embeddings=FakeEmbeddingsWithAdaDimension(),
@@ -902,7 +991,7 @@ def test_relaxed_order_query():
         embedding_length=3,
         embedding_index=EmbeddingIndexType.hnsw,
         embedding_index_ops="vector_cosine_ops",
-        iterative_scan=IterativeScan.relaxed_order
+        iterative_scan=IterativeScan.relaxed_order,
     )
 
     with sync_session() as session:
@@ -962,9 +1051,9 @@ def test_relaxed_order_query():
 
     assert normalize_sql(query) == normalize_sql(expected_query)
     assert params == {
-        'embedding_1': [1.0, 0.0, -1.0],
-        'collection_id_1': collection.uuid,
-        'param_1': '$.test_key == $value',
-        'param_2': {'value': 'test_value'},
-        'param_3': 20
+        "embedding_1": [1.0, 0.0, -1.0],
+        "collection_id_1": collection.uuid,
+        "param_1": "$.test_key == $value",
+        "param_2": {"value": "test_value"},
+        "param_3": 20,
     }

@@ -30,8 +30,16 @@ from langchain_core.embeddings import Embeddings
 from langchain_core.utils import get_from_dict_or_env
 from langchain_core.vectorstores import VectorStore
 from pgvector.sqlalchemy import BIT, VECTOR
-from sqlalchemy import SQLColumnExpression, cast, create_engine, delete, func, select, text
-from sqlalchemy.dialects.postgresql import JSON, JSONB, JSONPATH, UUID, TSVECTOR, insert
+from sqlalchemy import (
+    SQLColumnExpression,
+    cast,
+    create_engine,
+    delete,
+    func,
+    select,
+    text,
+)
+from sqlalchemy.dialects.postgresql import JSON, JSONB, JSONPATH, TSVECTOR, UUID, insert
 from sqlalchemy.engine import Connection, Engine
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
@@ -40,13 +48,15 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 from sqlalchemy.orm import (
+    Bundle,
     Session,
+    aliased,
     declarative_base,
     relationship,
     scoped_session,
-    sessionmaker, aliased, Bundle,
+    sessionmaker,
 )
-from sqlalchemy.sql.ddl import CreateTable, CreateIndex
+from sqlalchemy.sql.ddl import CreateIndex, CreateTable
 
 from langchain_postgres._utils import maximal_marginal_relevance
 
@@ -232,10 +242,12 @@ def _get_embedding_collection_store(
 
         return {
             "postgresql_with": {
-                k: v for k, v in {
+                k: v
+                for k, v in {
                     "m": m,
                     "ef_construction": ef_construction,
-                }.items() if v is not None
+                }.items()
+                if v is not None
             }
         }
 
@@ -246,9 +258,11 @@ def _get_embedding_collection_store(
         optional_index_params = _create_optional_index_params()
 
         if binary_quantization:
-             return sqlalchemy.Index(
+            return sqlalchemy.Index(
                 f"ix_embedding_{embedding_index.value}",
-                 cast(func.binary_quantize(embedding), BIT(embedding_length)).label('embedding'),
+                cast(func.binary_quantize(embedding), BIT(embedding_length)).label(
+                    "embedding"
+                ),
                 postgresql_using=embedding_index.value,
                 postgresql_ops={"embedding": embedding_index_ops},
                 **optional_index_params,
@@ -267,9 +281,7 @@ def _get_embedding_collection_store(
 
         __tablename__ = "langchain_pg_embedding"
 
-        id = sqlalchemy.Column(
-            sqlalchemy.String, nullable=True, primary_key=True
-        )
+        id = sqlalchemy.Column(sqlalchemy.String, nullable=True, primary_key=True)
 
         collection_id = sqlalchemy.Column(
             UUID(as_uuid=True),
@@ -289,7 +301,7 @@ def _get_embedding_collection_store(
             sqlalchemy.Computed(
                 "to_tsvector('english', document)",
                 persisted=True,
-            )
+            ),
         )
 
         __table_args__ = (
@@ -304,7 +316,7 @@ def _get_embedding_collection_store(
                 "document_vector",
                 postgresql_using="gin",
             ),
-            _create_index(embedding)
+            _create_index(embedding),
         )
 
     _classes = (EmbeddingStore, CollectionStore)
@@ -338,7 +350,7 @@ class IterativeScan(enum.Enum):
     off = "off"
     strict_order = "strict_order"
     relaxed_order = "relaxed_order"
-   
+
 
 class PGVector(VectorStore):
     """Postgres vector store integration.
@@ -552,7 +564,7 @@ class PGVector(VectorStore):
             raise ValueError(
                 "embedding_length must be provided when using embedding_index"
             )
-            
+
         if self._embedding_index is not None and self._embedding_index_ops is None:
             raise ValueError(
                 "embedding_index_ops must be provided when using embedding_index"
@@ -590,36 +602,46 @@ class PGVector(VectorStore):
             raise NotImplementedError("use_jsonb=False is no longer supported.")
 
         if self._embedding_index is None and self._iterative_scan is not None:
-            raise ValueError(
-                "iterative_scan is not supported without embedding_index"
-            )
+            raise ValueError("iterative_scan is not supported without embedding_index")
 
-        if self._max_scan_tuples is not None and self._embedding_index != EmbeddingIndexType.hnsw:
+        if (
+            self._max_scan_tuples is not None
+            and self._embedding_index != EmbeddingIndexType.hnsw
+        ):
             raise ValueError(
                 "max_scan_tuples is not supported without embedding_index=hnsw"
             )
 
-        if self._scan_mem_multiplier is not None and self._embedding_index != EmbeddingIndexType.hnsw:
+        if (
+            self._scan_mem_multiplier is not None
+            and self._embedding_index != EmbeddingIndexType.hnsw
+        ):
             raise ValueError(
                 "scan_mem_multiplier is not supported without embedding_index=hnsw"
             )
 
-        if self._embedding_index != EmbeddingIndexType.hnsw and self._ef_construction is not None:
+        if (
+            self._embedding_index != EmbeddingIndexType.hnsw
+            and self._ef_construction is not None
+        ):
             raise ValueError(
                 "ef_construction is not supported without embedding_index=hnsw"
             )
 
         if self._embedding_index != EmbeddingIndexType.hnsw and self._m is not None:
-            raise ValueError(
-                "m is not supported without embedding_index=hnsw"
-            )
+            raise ValueError("m is not supported without embedding_index=hnsw")
 
-        if self._binary_quantization is True and self._embedding_index != EmbeddingIndexType.hnsw:
+        if (
+            self._binary_quantization is True
+            and self._embedding_index != EmbeddingIndexType.hnsw
+        ):
             raise ValueError(
                 "binary_quantization is not supported without embedding_index=hnsw"
             )
 
-        if self._binary_quantization is True and self._embedding_index_ops not in ["bit_hamming_ops"]:
+        if self._binary_quantization is True and self._embedding_index_ops not in [
+            "bit_hamming_ops"
+        ]:
             raise ValueError(
                 "binary_quantization is only supported with bit_hamming_ops"
             )
@@ -649,7 +671,7 @@ class PGVector(VectorStore):
             embedding_length=self._embedding_length,
             partition=self._enable_partitioning,
         )
-        
+
         self.CollectionStore = CollectionStore
         self.EmbeddingStore = EmbeddingStore
         self.create_tables_if_not_exists()
@@ -673,7 +695,7 @@ class PGVector(VectorStore):
             embedding_length=self._embedding_length,
             partition=self._enable_partitioning,
         )
-        
+
         self.CollectionStore = CollectionStore
         self.EmbeddingStore = EmbeddingStore
         if self.create_extension:
@@ -731,7 +753,11 @@ class PGVector(VectorStore):
         for ddl in collection_index_ddls:
             session.execute(text(ddl))
 
-        embedding_table_ddl = f"{self._compile_table_ddl(self.EmbeddingStore).strip()} PARTITION BY LIST (collection_id)"
+        compiled_ddl = self._compile_table_ddl(self.EmbeddingStore).strip()
+
+        embedding_table_ddl = f"""
+            {compiled_ddl} PARTITION BY LIST (collection_id)
+        """
         embedding_index_ddls = self._compile_index_ddls(self.EmbeddingStore)
 
         session.execute(text(embedding_table_ddl))
@@ -740,7 +766,9 @@ class PGVector(VectorStore):
 
         session.commit()
 
-    async def _acreate_tables_with_partition_if_not_exists(self, session: Session | AsyncSession) -> None:
+    async def _acreate_tables_with_partition_if_not_exists(
+        self, session: Session | AsyncSession
+    ) -> None:
         if await self._acheck_if_table_exists(session, self.CollectionStore):
             return
 
@@ -751,7 +779,11 @@ class PGVector(VectorStore):
         for ddl in collection_index_ddls:
             await session.execute(text(ddl))
 
-        embedding_table_ddl = f"{self._compile_table_ddl(self.EmbeddingStore).strip()} PARTITION BY LIST (collection_id)"
+        compiled_ddl = self._compile_table_ddl(self.EmbeddingStore).strip()
+
+        embedding_table_ddl = f"""
+            {compiled_ddl} PARTITION BY LIST (collection_id)
+        """
         embedding_index_ddls = self._compile_index_ddls(self.EmbeddingStore)
 
         await session.execute(text(embedding_table_ddl))
@@ -766,11 +798,17 @@ class PGVector(VectorStore):
 
     async def _acheck_if_table_exists(self, session: AsyncSession, table: Any) -> bool:
         return await session.run_sync(
-            lambda sync_session: sqlalchemy.inspect(sync_session.bind).has_table(table.__tablename__)
+            lambda sync_session: sqlalchemy.inspect(sync_session.bind).has_table(
+                table.__tablename__
+            )
         )
 
     def _compile_table_ddl(self, table: Any) -> str:
-        return str(CreateTable(table.__table__).compile(dialect=sqlalchemy.dialects.postgresql.dialect()))
+        return str(
+            CreateTable(table.__table__).compile(
+                dialect=sqlalchemy.dialects.postgresql.dialect()
+            )
+        )
 
     def _compile_index_ddls(self, table: Any) -> str:
         ddls = []
@@ -783,7 +821,11 @@ class PGVector(VectorStore):
             return ddls
 
         for index in indexes:
-            ddl = str(CreateIndex(index).compile(dialect=sqlalchemy.dialects.postgresql.dialect()))
+            ddl = str(
+                CreateIndex(index).compile(
+                    dialect=sqlalchemy.dialects.postgresql.dialect()
+                )
+            )
             ddls.append(ddl)
 
         return ddls
@@ -869,7 +911,9 @@ class PGVector(VectorStore):
         session.execute(text(f"DROP TABLE {self._compute_partition_table_name(uuid)}"))
 
     async def _adelete_partition(self, session: AsyncSession, uuid: str):
-        await session.execute(text(f"DROP TABLE {self._compute_partition_table_name(uuid)}"))
+        await session.execute(
+            text(f"DROP TABLE {self._compute_partition_table_name(uuid)}")
+        )
 
     def _compute_partition_table_name(self, uuid: str) -> str:
         return f"{self.EmbeddingStore.__tablename__}_{uuid.replace('-', '_')}"
@@ -1277,7 +1321,7 @@ class PGVector(VectorStore):
         query: str,
         k: int = 4,
         filter: Optional[dict] = None,
-        full_text_search: Optional[List[str]] = None
+        full_text_search: Optional[List[str]] = None,
     ) -> List[Tuple[Document, float]]:
         """Return docs most similar to query.
 
@@ -1301,7 +1345,7 @@ class PGVector(VectorStore):
         query: str,
         k: int = 4,
         filter: Optional[dict] = None,
-        full_text_search: Optional[List[str]] = None
+        full_text_search: Optional[List[str]] = None,
     ) -> List[Tuple[Document, float]]:
         """Return docs most similar to query.
 
@@ -1347,7 +1391,9 @@ class PGVector(VectorStore):
         full_text_search: Optional[List[str]] = None,
     ) -> List[Tuple[Document, float]]:
         assert not self._async_engine, "This method must be called without async_mode"
-        results = self.__query_collection(embedding=embedding, k=k, filter=filter, full_text_search=full_text_search)
+        results = self.__query_collection(
+            embedding=embedding, k=k, filter=filter, full_text_search=full_text_search
+        )
 
         return self._results_to_docs_and_scores(results)
 
@@ -1361,7 +1407,11 @@ class PGVector(VectorStore):
         await self.__apost_init__()  # Lazy async init
         async with self._make_async_session() as session:  # type: ignore[arg-type]
             results = await self.__aquery_collection(
-                session=session, embedding=embedding, k=k, filter=filter, full_text_search=full_text_search
+                session=session,
+                embedding=embedding,
+                k=k,
+                filter=filter,
+                full_text_search=full_text_search,
             )
 
             return self._results_to_docs_and_scores(results)
@@ -1706,7 +1756,7 @@ class PGVector(VectorStore):
         embedding: List[float],
         k: int = 4,
         filter: Optional[Dict[str, str]] = None,
-        full_text_search: Optional[List[str]] = None
+        full_text_search: Optional[List[str]] = None,
     ) -> Sequence[Any]:
         """Query the collection."""
         with self._make_sync_session() as session:  # type: ignore[arg-type]
@@ -1721,7 +1771,7 @@ class PGVector(VectorStore):
                 embedding=embedding,
                 k=k,
                 filter=filter,
-                full_text_search=full_text_search
+                full_text_search=full_text_search,
             )
 
             results: Sequence[Any] = session.execute(stmt).all()
@@ -1749,7 +1799,7 @@ class PGVector(VectorStore):
                 embedding=embedding,
                 k=k,
                 filter=filter,
-                full_text_search=full_text_search
+                full_text_search=full_text_search,
             )
 
             results: Sequence[Any] = (await session.execute(stmt)).all()
@@ -1762,7 +1812,7 @@ class PGVector(VectorStore):
         embedding: List[float],
         k: int,
         filter: Optional[Dict[str, str]] = None,
-        full_text_search: Optional[List[str]] = None
+        full_text_search: Optional[List[str]] = None,
     ):
         if not collection:
             raise ValueError("Collection not found")
@@ -1773,7 +1823,7 @@ class PGVector(VectorStore):
                 embedding=embedding,
                 k=k,
                 filter=filter,
-                full_text_search=full_text_search
+                full_text_search=full_text_search,
             )
 
         stmt = self._build_base_query(
@@ -1781,7 +1831,7 @@ class PGVector(VectorStore):
             embedding=embedding,
             k=k,
             filter=filter,
-            full_text_search=full_text_search
+            full_text_search=full_text_search,
         )
 
         if self._iterative_scan == IterativeScan.relaxed_order:
@@ -1795,7 +1845,7 @@ class PGVector(VectorStore):
         embedding: List[float],
         k: int,
         filter: Optional[Dict[str, str]] = None,
-        full_text_search: Optional[List[str]] = None
+        full_text_search: Optional[List[str]] = None,
     ):
         filter_by = self._build_filter(collection, filter, full_text_search)
 
@@ -1814,28 +1864,30 @@ class PGVector(VectorStore):
         sub = (
             select(self.EmbeddingStore)
             .filter(*filter_by)
-            .order_by(
-                distance
-            )
+            .order_by(distance)
             .limit(self._binary_limit)
             .subquery(name="binary_result")
         )
 
         EmbeddingStoreAlias = aliased(self.EmbeddingStore, sub)
         embedding_store_bundle = Bundle(
-            'EmbeddingStore',
-            *[getattr(EmbeddingStoreAlias, c.key) for c in self.EmbeddingStore.__table__.columns]
+            "EmbeddingStore",
+            *[
+                getattr(EmbeddingStoreAlias, c.key)
+                for c in self.EmbeddingStore.__table__.columns
+            ],
         )
 
         return (
             select(
                 embedding_store_bundle,
-                self._build_distance_strategy(sub.c['embedding'])(embedding).label("distance")
+                self._build_distance_strategy(sub.c["embedding"])(embedding).label(
+                    "distance"
+                ),
             )
             .order_by(sqlalchemy.asc("distance"))
             .limit(k)
         )
-
 
     def _build_base_query(
         self,
@@ -1843,7 +1895,7 @@ class PGVector(VectorStore):
         embedding: List[float],
         k: int,
         filter: Optional[Dict[str, str]] = None,
-        full_text_search: Optional[List[str]] = None
+        full_text_search: Optional[List[str]] = None,
     ):
         filter_by = self._build_filter(collection, filter, full_text_search)
 
@@ -1862,23 +1914,20 @@ class PGVector(VectorStore):
 
         EmbeddingStoreAlias = aliased(self.EmbeddingStore, cte)
         embedding_store_bundle = Bundle(
-            'EmbeddingStore',
-            *[getattr(EmbeddingStoreAlias, c.key) for c in self.EmbeddingStore.__table__.columns]
+            "EmbeddingStore",
+            *[
+                getattr(EmbeddingStoreAlias, c.key)
+                for c in self.EmbeddingStore.__table__.columns
+            ],
         )
 
-        return (
-            select(
-                embedding_store_bundle,
-                cte.c.distance
-            )
-            .order_by(text("distance"))
-        )
+        return select(embedding_store_bundle, cte.c.distance).order_by(text("distance"))
 
     def _build_filter(
         self,
         collection: Any,
         filter: Optional[Dict[str, str]] = None,
-        full_text_search: Optional[List[str]] = None
+        full_text_search: Optional[List[str]] = None,
     ):
         filter_by = [self.EmbeddingStore.collection_id == collection.uuid]
 
@@ -1905,9 +1954,12 @@ class PGVector(VectorStore):
         if self._iterative_scan is None or self._embedding_index is None:
             return
 
-        session.execute(
-            text(f"SET {self._embedding_index.value}.iterative_scan = {self._iterative_scan.value}")
-        )
+        index = self._embedding_index.value
+        iterative_scan = self._iterative_scan.value
+
+        stmt = f"SET {index}.iterative_scan = {iterative_scan}"
+
+        session.execute(text(stmt))
 
     async def _aset_iterative_scan(self, session: AsyncSession):
         assert self._async_engine, "This method must be called with async_mode"
@@ -1915,24 +1967,31 @@ class PGVector(VectorStore):
         if self._iterative_scan is None or self._embedding_index is None:
             return
 
-        await session.execute(
-            text(f"SET {self._embedding_index.value}.iterative_scan = {self._iterative_scan.value}")
-        )
+        index = self._embedding_index.value
+        iterative_scan = self._iterative_scan.value
+
+        stmt = f"SET {index}.iterative_scan = {iterative_scan}"
+
+        await session.execute(text(stmt))
 
     def _set_max_scan_tuples(self, session: Session):
         assert not self._async_engine, "This method must be called without async_mode"
 
-        if self._max_scan_tuples is None or self._embedding_index != EmbeddingIndexType.hnsw:
+        if (
+            self._max_scan_tuples is None
+            or self._embedding_index != EmbeddingIndexType.hnsw
+        ):
             return
 
-        session.execute(
-            text(f"SET hnsw.max_scan_tuples = {self._max_scan_tuples}")
-        )
+        session.execute(text(f"SET hnsw.max_scan_tuples = {self._max_scan_tuples}"))
 
     async def _aset_max_scan_tuples(self, session: AsyncSession):
         assert self._async_engine, "This method must be called with async_mode"
 
-        if self._max_scan_tuples is None or self._embedding_index != EmbeddingIndexType.hnsw:
+        if (
+            self._max_scan_tuples is None
+            or self._embedding_index != EmbeddingIndexType.hnsw
+        ):
             return
 
         await session.execute(
@@ -1942,7 +2001,10 @@ class PGVector(VectorStore):
     def _set_scan_mem_multiplier(self, session: Session):
         assert not self._async_engine, "This method must be called without async_mode"
 
-        if self._scan_mem_multiplier is None or self._embedding_index != EmbeddingIndexType.hnsw:
+        if (
+            self._scan_mem_multiplier is None
+            or self._embedding_index != EmbeddingIndexType.hnsw
+        ):
             return
 
         session.execute(
@@ -1952,13 +2014,15 @@ class PGVector(VectorStore):
     async def _aset_scan_mem_multiplier(self, session: AsyncSession):
         assert self._async_engine, "This method must be called with async_mode"
 
-        if self._scan_mem_multiplier is None or self._embedding_index != EmbeddingIndexType.hnsw:
+        if (
+            self._scan_mem_multiplier is None
+            or self._embedding_index != EmbeddingIndexType.hnsw
+        ):
             return
 
         await session.execute(
             text(f"SET hnsw.scan_mem_multiplier = {self._scan_mem_multiplier}")
         )
-
 
     def similarity_search_by_vector(
         self,
@@ -1974,8 +2038,9 @@ class PGVector(VectorStore):
             embedding: Embedding to look up documents similar to.
             k: Number of Documents to return. Defaults to 4.
             filter (Optional[Dict[str, str]]): Filter by metadata. Defaults to None.
-            full_text_search: filter by full text search only if one or more words are present in the document.
-                If passed (string1 & string2) then the document should contain both string1 and string2.
+            full_text_search: filter by full text search only if one or more words
+                are present in the document. If passed (string1 & string2) then the
+                document should contain both string1 and string2.
 
         Returns:
             List of Documents most similar to the query vector.
@@ -2000,8 +2065,9 @@ class PGVector(VectorStore):
             embedding: Embedding to look up documents similar to.
             k: Number of Documents to return. Defaults to 4.
             filter (Optional[Dict[str, str]]): Filter by metadata. Defaults to None.
-            full_text_search: filter by full text search only if one or more words are present in the document.
-                If passed (string1 & string2) then the document should contain both string1 and string2.
+            full_text_search: filter by full text search only if one or more words
+                are present in the document. If passed (string1 & string2) then the
+                document should contain both string1 and string2.
 
         Returns:
             List of Documents most similar to the query vector.
