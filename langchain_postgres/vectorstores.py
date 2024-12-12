@@ -538,12 +538,14 @@ class PGVector(VectorStore):
                 Databases.
             iterative_scan: Enables iterative scan. Required index
             max_scan_tuples: Maximum number of tuples to scan. Required HNSW index
-            scan_mem_multiplier: Max memory to use during scan. Required HNSW index
-            ef_construction: HNSW index parameter.
+                scan_mem_multiplier: Max memory to use during scan. Required HNSW index
+                ef_construction: HNSW index parameter.
             m: HNSW index parameter.
-            binary_quantization: Enable binary quantization. Required HNSW index with bit_hamming_ops
-            binary_limit: Inner limit for binary quantization. Is mandatory when using binary_quantization
-            enable_partitioning: Enables partitioning of langchain_pg_embedding by collection_id.
+            binary_quantization: Enable binary quantization. Required HNSW index with
+                bit_hamming_ops
+            binary_limit: Inner limit for binary quantization. Is mandatory when using
+                binary_quantization enable_partitioning: Enables partitioning of
+                langchain_pg_embedding by collection_id.
 
         """
         self.async_mode = async_mode
@@ -1953,11 +1955,16 @@ class PGVector(VectorStore):
                 filter_by.extend(filter_clauses)
 
         if full_text_search:
-            filter_by.append(
-                text(f"document_vector @@ to_tsquery('{' | '.join(full_text_search)}')")
-            )
+            filter_by.append(self._build_full_text_search_filter(full_text_search))
 
         return filter_by
+
+    def _build_full_text_search_filter(
+        self, keywords: List[str]
+    ) -> SQLColumnExpression:
+        return self.EmbeddingStore.document_vector.op("@@")(
+            func.to_tsquery(" | ".join(list(map(lambda x: x.strip(), keywords))))
+        )
 
     def _set_iterative_scan(self, session: Session) -> None:
         assert not self._async_engine, "This method must be called without async_mode"

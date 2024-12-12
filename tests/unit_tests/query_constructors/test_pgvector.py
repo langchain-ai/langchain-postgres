@@ -956,7 +956,10 @@ def test_binary_quantization_query() -> None:
                         langchain_pg_embedding.cmetadata, 
                         CAST(%(param_1)s AS JSONPATH
                     ), CAST(%(param_2)s AS JSONB))
-                    AND document_vector @@ to_tsquery('word1 | word2 & word3')
+                    AND (
+                        langchain_pg_embedding.document_vector 
+                        @@ to_tsquery(%(to_tsquery_1)s)
+                    )
                 ORDER BY
                     CAST(
                         binary_quantize(langchain_pg_embedding.embedding) AS BIT(3)
@@ -976,6 +979,7 @@ def test_binary_quantization_query() -> None:
         "collection_id_1": collection.uuid,
         "param_1": "$.test_key == $value",
         "param_2": {"value": "test_value"},
+        "to_tsquery_1": "word1 | word2 & word3",
         "param_3": [1.0, 0.0, -1.0],
         "param_4": 200,
         "param_5": 20,
@@ -1029,7 +1033,10 @@ def test_relaxed_order_query() -> None:
                     CAST(%(param_1)s AS JSONPATH),
                     CAST(%(param_2)s AS JSONB)
                 )
-                AND document_vector @@ to_tsquery('word1 | word2 & word3')
+                AND (
+                    langchain_pg_embedding.document_vector 
+                    @@ to_tsquery(%(to_tsquery_1)s)
+                )
             ORDER BY
                 distance ASC
             LIMIT
@@ -1055,5 +1062,29 @@ def test_relaxed_order_query() -> None:
         "collection_id_1": collection.uuid,
         "param_1": "$.test_key == $value",
         "param_2": {"value": "test_value"},
+        "to_tsquery_1": "word1 | word2 & word3",
         "param_3": 20,
     }
+
+
+@pytest.mark.usefixtures("drop_tables")
+def test_build_full_text_search_filter() -> None:
+    pgvector = PGVector(
+        collection_name="test_collection1",
+        embeddings=FakeEmbeddingsWithAdaDimension(),
+        connection=CONNECTION_STRING,
+    )
+
+    stmt = pgvector._build_full_text_search_filter(keywords=["word1", "word2 & word3"])
+
+    compiled = stmt.compile(dialect=sqlalchemy.dialects.postgresql.dialect())
+
+    query = str(compiled)
+    params = compiled.params
+
+    expected_query = """
+        langchain_pg_embedding.document_vector @@ to_tsquery(%(to_tsquery_1)s)
+    """
+
+    assert normalize_sql(query) == normalize_sql(expected_query)
+    assert params == {"to_tsquery_1": "word1 | word2 & word3"}
