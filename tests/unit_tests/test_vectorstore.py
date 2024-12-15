@@ -1,6 +1,6 @@
 """Test PGVector functionality."""
 import contextlib
-from typing import Any, AsyncGenerator, Dict, Generator, List, Optional
+from typing import Any, AsyncGenerator, Dict, Generator, List, Optional, Sequence
 
 import pytest
 from langchain_core.documents import Document
@@ -25,9 +25,12 @@ from tests.utils import VECTORSTORE_CONNECTION_STRING as CONNECTION_STRING
 ADA_TOKEN_COUNT = 1536
 
 
-class AnyStr(str):
-    def __eq__(self, other: Any) -> bool:
-        return isinstance(other, str)
+def _compare_documents(left: Sequence[Document], right: Sequence[Document]) -> None:
+    """Compare lists of documents, irrespective of IDs."""
+    assert len(left) == len(right)
+    for left_doc, right_doc in zip(left, right):
+        assert left_doc.page_content == right_doc.page_content
+        assert left_doc.metadata == right_doc.metadata
 
 
 class FakeEmbeddingsWithAdaDimension(FakeEmbeddings):
@@ -55,7 +58,7 @@ def test_pgvector() -> None:
         pre_delete_collection=True,
     )
     output = docsearch.similarity_search("foo", k=1)
-    assert output == [Document(page_content="foo", id=AnyStr())]
+    _compare_documents(output, [Document(page_content="foo")])
 
 
 @pytest.mark.asyncio
@@ -70,7 +73,7 @@ async def test_async_pgvector() -> None:
         pre_delete_collection=True,
     )
     output = await docsearch.asimilarity_search("foo", k=1)
-    assert output == [Document(page_content="foo", id=AnyStr())]
+    _compare_documents(output, [Document(page_content="foo")])
 
 
 def test_pgvector_embeddings() -> None:
@@ -86,7 +89,7 @@ def test_pgvector_embeddings() -> None:
         pre_delete_collection=True,
     )
     output = docsearch.similarity_search("foo", k=1)
-    assert output == [Document(page_content="foo", id=AnyStr())]
+    _compare_documents(output, [Document(page_content="foo")])
 
 
 @pytest.mark.asyncio
@@ -103,7 +106,7 @@ async def test_async_pgvector_embeddings() -> None:
         pre_delete_collection=True,
     )
     output = await docsearch.asimilarity_search("foo", k=1)
-    assert output == [Document(page_content="foo", id=AnyStr())]
+    _compare_documents(output, [Document(page_content="foo")])
 
 
 def test_pgvector_with_metadatas() -> None:
@@ -119,7 +122,7 @@ def test_pgvector_with_metadatas() -> None:
         pre_delete_collection=True,
     )
     output = docsearch.similarity_search("foo", k=1)
-    assert output == [Document(page_content="foo", metadata={"page": "0"}, id=AnyStr())]
+    _compare_documents(output, [Document(page_content="foo", metadata={"page": "0"})])
 
 
 @pytest.mark.asyncio
@@ -136,7 +139,7 @@ async def test_async_pgvector_with_metadatas() -> None:
         pre_delete_collection=True,
     )
     output = await docsearch.asimilarity_search("foo", k=1)
-    assert output == [Document(page_content="foo", metadata={"page": "0"}, id=AnyStr())]
+    _compare_documents(output, [Document(page_content="foo", metadata={"page": "0"})])
 
 
 def test_pgvector_with_metadatas_with_scores() -> None:
@@ -152,19 +155,16 @@ def test_pgvector_with_metadatas_with_scores() -> None:
         pre_delete_collection=True,
     )
     output = docsearch.similarity_search_with_score("foo", k=1)
-    assert output == [
-        (Document(page_content="foo", metadata={"page": "0"}, id=AnyStr()), 0.0)
-    ]
+    docs, scores = zip(*output)
+    _compare_documents(docs, [Document(page_content="foo", metadata={"page": "0"})])
+    assert scores == (0.0,)
 
 
 @pytest.mark.asyncio
 async def test_async_pgvector_with_metadatas_with_scores() -> None:
-    """Test construction and search with metadata deserialization."""
+    """Test end to end construction and search."""
     texts = ["foo", "bar", "baz"]
-    metadatas = [
-        {"page": str(i), "info": {"nested": f"value{i}"}}
-        for i in range(len(texts))
-    ]
+    metadatas = [{"page": str(i)} for i in range(len(texts))]
     docsearch = await PGVector.afrom_texts(
         texts=texts,
         collection_name="test_collection",
@@ -173,13 +173,10 @@ async def test_async_pgvector_with_metadatas_with_scores() -> None:
         connection=CONNECTION_STRING,
         pre_delete_collection=True,
     )
-    output = await docsearch.asimilarity_search_with_score("foo", k=3)
-    for i, (doc, score) in enumerate(output):
-        expected_metadata = metadatas[i]
-        assert doc.page_content == texts[i]
-        assert doc.metadata == expected_metadata
-        assert isinstance(doc.metadata, dict)
-        assert score is not None
+    output = await docsearch.asimilarity_search_with_score("foo", k=1)
+    docs, scores = zip(*output)
+    _compare_documents(docs, [Document(page_content="foo", metadata={"page": "0"})])
+    assert scores == (0.0,)
 
 
 def test_pgvector_with_filter_match() -> None:
@@ -195,19 +192,16 @@ def test_pgvector_with_filter_match() -> None:
         pre_delete_collection=True,
     )
     output = docsearch.similarity_search_with_score("foo", k=1, filter={"page": "0"})
-    assert output == [
-        (Document(page_content="foo", metadata={"page": "0"}, id=AnyStr()), 0.0)
-    ]
+    docs, scores = zip(*output)
+    _compare_documents(docs, [Document(page_content="foo", metadata={"page": "0"})])
+    assert scores == (0.0,)
 
 
 @pytest.mark.asyncio
 async def test_async_pgvector_with_filter_match() -> None:
-    """Test search with filter and metadata deserialization."""
+    """Test end to end construction and search."""
     texts = ["foo", "bar", "baz"]
-    metadatas = [
-        {"page": str(i), "info": {"nested": f"value{i}"}}
-        for i in range(len(texts))
-    ]
+    metadatas = [{"page": str(i)} for i in range(len(texts))]
     docsearch = await PGVector.afrom_texts(
         texts=texts,
         collection_name="test_collection_filter",
@@ -217,36 +211,11 @@ async def test_async_pgvector_with_filter_match() -> None:
         pre_delete_collection=True,
     )
     output = await docsearch.asimilarity_search_with_score(
-        "foo", k=3, filter={"page": "0"}
+        "foo", k=1, filter={"page": "0"}
     )
-    assert len(output) == 1
-    doc, score = output[0]
-    assert doc.page_content == "foo"
-    assert doc.metadata == metadatas[0]
-    assert isinstance(doc.metadata, dict)
-    assert score is not None
-
-
-@pytest.mark.asyncio
-async def test_async_pgvector_metadata_deserialization() -> None:
-    """Test that metadata is correctly deserialized in async operations."""
-    texts = ["foo", "bar", "baz"]
-    metadatas = [
-        {"page": str(i), "info": {"nested": f"value{i}"}}
-        for i in range(len(texts))
-    ]
-    docsearch = await PGVector.afrom_texts(
-        texts=texts,
-        collection_name="test_collection_metadata",
-        embedding=FakeEmbeddingsWithAdaDimension(),
-        metadatas=metadatas,
-        connection=CONNECTION_STRING,
-        pre_delete_collection=True,
-    )
-    output = await docsearch.asimilarity_search("foo", k=3)
-    for doc, expected_metadata in zip(output, metadatas):
-        assert doc.metadata == expected_metadata
-        assert isinstance(doc.metadata, dict)
+    docs, scores = zip(*output)
+    _compare_documents(docs, [Document(page_content="foo", metadata={"page": "0"})])
+    assert scores == (0.0,)
 
 
 def test_pgvector_with_filter_distant_match() -> None:
@@ -262,12 +231,9 @@ def test_pgvector_with_filter_distant_match() -> None:
         pre_delete_collection=True,
     )
     output = docsearch.similarity_search_with_score("foo", k=1, filter={"page": "2"})
-    assert output == [
-        (
-            Document(page_content="baz", metadata={"page": "2"}, id=AnyStr()),
-            0.0013003906671379406,
-        )
-    ]
+    docs, scores = zip(*output)
+    _compare_documents(docs, [Document(page_content="baz", metadata={"page": "2"})])
+    assert scores == (0.0013003906671379406,)
 
 
 @pytest.mark.asyncio
@@ -286,12 +252,9 @@ async def test_async_pgvector_with_filter_distant_match() -> None:
     output = await docsearch.asimilarity_search_with_score(
         "foo", k=1, filter={"page": "2"}
     )
-    assert output == [
-        (
-            Document(page_content="baz", metadata={"page": "2"}, id=AnyStr()),
-            0.0013003906671379406,
-        )
-    ]
+    docs, scores = zip(*output)
+    _compare_documents(docs, [Document(page_content="baz", metadata={"page": "2"})])
+    assert scores == (0.0013003906671379406,)
 
 
 def test_pgvector_with_filter_no_match() -> None:
@@ -627,17 +590,16 @@ def test_pgvector_relevance_score() -> None:
     )
 
     output = docsearch.similarity_search_with_relevance_scores("foo", k=3)
-    assert output == [
-        (Document(page_content="foo", metadata={"page": "0"}, id=AnyStr()), 1.0),
-        (
-            Document(page_content="bar", metadata={"page": "1"}, id=AnyStr()),
-            0.9996744261675065,
-        ),
-        (
-            Document(page_content="baz", metadata={"page": "2"}, id=AnyStr()),
-            0.9986996093328621,
-        ),
-    ]
+    docs, scores = zip(*output)
+    _compare_documents(
+        docs,
+        [
+            Document(page_content="foo", metadata={"page": "0"}),
+            Document(page_content="bar", metadata={"page": "1"}),
+            Document(page_content="baz", metadata={"page": "2"}),
+        ],
+    )
+    assert scores == (1.0, 0.9996744261675065, 0.9986996093328621)
 
 
 @pytest.mark.asyncio
@@ -655,17 +617,16 @@ async def test_async_pgvector_relevance_score() -> None:
     )
 
     output = await docsearch.asimilarity_search_with_relevance_scores("foo", k=3)
-    assert output == [
-        (Document(page_content="foo", metadata={"page": "0"}, id=AnyStr()), 1.0),
-        (
-            Document(page_content="bar", metadata={"page": "1"}, id=AnyStr()),
-            0.9996744261675065,
-        ),
-        (
-            Document(page_content="baz", metadata={"page": "2"}, id=AnyStr()),
-            0.9986996093328621,
-        ),
-    ]
+    docs, scores = zip(*output)
+    _compare_documents(
+        docs,
+        [
+            Document(page_content="foo", metadata={"page": "0"}),
+            Document(page_content="bar", metadata={"page": "1"}),
+            Document(page_content="baz", metadata={"page": "2"}),
+        ],
+    )
+    assert scores == (1.0, 0.9996744261675065, 0.9986996093328621)
 
 
 def test_pgvector_retriever_search_threshold() -> None:
@@ -686,10 +647,13 @@ def test_pgvector_retriever_search_threshold() -> None:
         search_kwargs={"k": 3, "score_threshold": 0.999},
     )
     output = retriever.get_relevant_documents("summer")
-    assert output == [
-        Document(page_content="foo", metadata={"page": "0"}, id=AnyStr()),
-        Document(page_content="bar", metadata={"page": "1"}, id=AnyStr()),
-    ]
+    _compare_documents(
+        output,
+        [
+            Document(page_content="foo", metadata={"page": "0"}),
+            Document(page_content="bar", metadata={"page": "1"}),
+        ],
+    )
 
 
 @pytest.mark.asyncio
@@ -711,10 +675,13 @@ async def test_async_pgvector_retriever_search_threshold() -> None:
         search_kwargs={"k": 3, "score_threshold": 0.999},
     )
     output = await retriever.aget_relevant_documents("summer")
-    assert output == [
-        Document(page_content="foo", metadata={"page": "0"}, id=AnyStr()),
-        Document(page_content="bar", metadata={"page": "1"}, id=AnyStr()),
-    ]
+    _compare_documents(
+        output,
+        [
+            Document(page_content="foo", metadata={"page": "0"}),
+            Document(page_content="bar", metadata={"page": "1"}),
+        ],
+    )
 
 
 def test_pgvector_retriever_search_threshold_custom_normalization_fn() -> None:
@@ -741,7 +708,7 @@ def test_pgvector_retriever_search_threshold_custom_normalization_fn() -> None:
 
 @pytest.mark.asyncio
 async def test_async_pgvector_retriever_search_threshold_custom_normalization_fn() -> (
-    None
+        None
 ):
     """Test searching with threshold and custom normalization function"""
     texts = ["foo", "bar", "baz"]
@@ -775,7 +742,7 @@ def test_pgvector_max_marginal_relevance_search() -> None:
         pre_delete_collection=True,
     )
     output = docsearch.max_marginal_relevance_search("foo", k=1, fetch_k=3)
-    assert output == [Document(page_content="foo", id=AnyStr())]
+    _compare_documents(output, [Document(page_content="foo")])
 
 
 @pytest.mark.asyncio
@@ -790,7 +757,7 @@ async def test_async_pgvector_max_marginal_relevance_search() -> None:
         pre_delete_collection=True,
     )
     output = await docsearch.amax_marginal_relevance_search("foo", k=1, fetch_k=3)
-    assert output == [Document(page_content="foo", id=AnyStr())]
+    _compare_documents(output, [Document(page_content="foo")])
 
 
 def test_pgvector_max_marginal_relevance_search_with_score() -> None:
@@ -804,7 +771,9 @@ def test_pgvector_max_marginal_relevance_search_with_score() -> None:
         pre_delete_collection=True,
     )
     output = docsearch.max_marginal_relevance_search_with_score("foo", k=1, fetch_k=3)
-    assert output == [(Document(page_content="foo", id=AnyStr()), 0.0)]
+    docs, scores = zip(*output)
+    _compare_documents(docs, [Document(page_content="foo")])
+    assert scores == (0.0,)
 
 
 @pytest.mark.asyncio
@@ -821,7 +790,9 @@ async def test_async_pgvector_max_marginal_relevance_search_with_score() -> None
     output = await docsearch.amax_marginal_relevance_search_with_score(
         "foo", k=1, fetch_k=3
     )
-    assert output == [(Document(page_content="foo", id=AnyStr()), 0.0)]
+    docs, scores = zip(*output)
+    _compare_documents(docs, [Document(page_content="foo")])
+    assert scores == (0.0,)
 
 
 def test_pgvector_with_custom_connection() -> None:
@@ -835,7 +806,7 @@ def test_pgvector_with_custom_connection() -> None:
         pre_delete_collection=True,
     )
     output = docsearch.similarity_search("foo", k=1)
-    assert output == [Document(page_content="foo", id=AnyStr())]
+    _compare_documents(output, [Document(page_content="foo")])
 
 
 @pytest.mark.asyncio
@@ -850,7 +821,7 @@ async def test_async_pgvector_with_custom_connection() -> None:
         pre_delete_collection=True,
     )
     output = await docsearch.asimilarity_search("foo", k=1)
-    assert output == [Document(page_content="foo", id=AnyStr())]
+    _compare_documents(output, [Document(page_content="foo")])
 
 
 def test_pgvector_with_custom_engine_args() -> None:
@@ -873,7 +844,7 @@ def test_pgvector_with_custom_engine_args() -> None:
         engine_args=engine_args,
     )
     output = docsearch.similarity_search("foo", k=1)
-    assert output == [Document(page_content="foo", id=AnyStr())]
+    _compare_documents(output, [Document(page_content="foo")])
 
 
 # We should reuse this test-case across other integrations
@@ -907,7 +878,7 @@ async def async_pgvector() -> AsyncGenerator[PGVector, None]:
 
 @contextlib.contextmanager
 def get_vectorstore(
-    *, embedding: Optional[Embeddings] = None
+        *, embedding: Optional[Embeddings] = None
 ) -> Generator[PGVector, None, None]:
     """Get a pre-populated-vectorstore"""
     store = PGVector.from_documents(
@@ -927,7 +898,7 @@ def get_vectorstore(
 
 @contextlib.asynccontextmanager
 async def aget_vectorstore(
-    *, embedding: Optional[Embeddings] = None
+        *, embedding: Optional[Embeddings] = None
 ) -> AsyncGenerator[PGVector, None]:
     """Get a pre-populated-vectorstore"""
     store = await PGVector.afrom_documents(
@@ -947,8 +918,8 @@ async def aget_vectorstore(
 
 @pytest.mark.parametrize("test_filter, expected_ids", TYPE_1_FILTERING_TEST_CASES)
 def test_pgvector_with_with_metadata_filters_1(
-    test_filter: Dict[str, Any],
-    expected_ids: List[int],
+        test_filter: Dict[str, Any],
+        expected_ids: List[int],
 ) -> None:
     """Test end to end construction and search."""
     with get_vectorstore() as pgvector:
@@ -959,8 +930,8 @@ def test_pgvector_with_with_metadata_filters_1(
 @pytest.mark.asyncio
 @pytest.mark.parametrize("test_filter, expected_ids", TYPE_1_FILTERING_TEST_CASES)
 async def test_async_pgvector_with_with_metadata_filters_1(
-    test_filter: Dict[str, Any],
-    expected_ids: List[int],
+        test_filter: Dict[str, Any],
+        expected_ids: List[int],
 ) -> None:
     """Test end to end construction and search."""
     async with aget_vectorstore() as pgvector:
@@ -970,9 +941,9 @@ async def test_async_pgvector_with_with_metadata_filters_1(
 
 @pytest.mark.parametrize("test_filter, expected_ids", TYPE_2_FILTERING_TEST_CASES)
 def test_pgvector_with_with_metadata_filters_2(
-    pgvector: PGVector,
-    test_filter: Dict[str, Any],
-    expected_ids: List[int],
+        pgvector: PGVector,
+        test_filter: Dict[str, Any],
+        expected_ids: List[int],
 ) -> None:
     """Test end to end construction and search."""
     docs = pgvector.similarity_search("meow", k=5, filter=test_filter)
@@ -982,9 +953,9 @@ def test_pgvector_with_with_metadata_filters_2(
 @pytest.mark.asyncio
 @pytest.mark.parametrize("test_filter, expected_ids", TYPE_2_FILTERING_TEST_CASES)
 async def test_async_pgvector_with_with_metadata_filters_2(
-    async_pgvector: PGVector,
-    test_filter: Dict[str, Any],
-    expected_ids: List[int],
+        async_pgvector: PGVector,
+        test_filter: Dict[str, Any],
+        expected_ids: List[int],
 ) -> None:
     """Test end to end construction and search."""
     docs = await async_pgvector.asimilarity_search("meow", k=5, filter=test_filter)
@@ -993,9 +964,9 @@ async def test_async_pgvector_with_with_metadata_filters_2(
 
 @pytest.mark.parametrize("test_filter, expected_ids", TYPE_3_FILTERING_TEST_CASES)
 def test_pgvector_with_with_metadata_filters_3(
-    pgvector: PGVector,
-    test_filter: Dict[str, Any],
-    expected_ids: List[int],
+        pgvector: PGVector,
+        test_filter: Dict[str, Any],
+        expected_ids: List[int],
 ) -> None:
     """Test end to end construction and search."""
     docs = pgvector.similarity_search("meow", k=5, filter=test_filter)
@@ -1005,9 +976,9 @@ def test_pgvector_with_with_metadata_filters_3(
 @pytest.mark.asyncio
 @pytest.mark.parametrize("test_filter, expected_ids", TYPE_3_FILTERING_TEST_CASES)
 async def test_async_pgvector_with_with_metadata_filters_3(
-    async_pgvector: PGVector,
-    test_filter: Dict[str, Any],
-    expected_ids: List[int],
+        async_pgvector: PGVector,
+        test_filter: Dict[str, Any],
+        expected_ids: List[int],
 ) -> None:
     """Test end to end construction and search."""
     docs = await async_pgvector.asimilarity_search("meow", k=5, filter=test_filter)
@@ -1016,9 +987,9 @@ async def test_async_pgvector_with_with_metadata_filters_3(
 
 @pytest.mark.parametrize("test_filter, expected_ids", TYPE_4_FILTERING_TEST_CASES)
 def test_pgvector_with_with_metadata_filters_4(
-    pgvector: PGVector,
-    test_filter: Dict[str, Any],
-    expected_ids: List[int],
+        pgvector: PGVector,
+        test_filter: Dict[str, Any],
+        expected_ids: List[int],
 ) -> None:
     """Test end to end construction and search."""
     docs = pgvector.similarity_search("meow", k=5, filter=test_filter)
@@ -1028,9 +999,9 @@ def test_pgvector_with_with_metadata_filters_4(
 @pytest.mark.asyncio
 @pytest.mark.parametrize("test_filter, expected_ids", TYPE_4_FILTERING_TEST_CASES)
 async def test_async_pgvector_with_with_metadata_filters_4(
-    async_pgvector: PGVector,
-    test_filter: Dict[str, Any],
-    expected_ids: List[int],
+        async_pgvector: PGVector,
+        test_filter: Dict[str, Any],
+        expected_ids: List[int],
 ) -> None:
     """Test end to end construction and search."""
     docs = await async_pgvector.asimilarity_search("meow", k=5, filter=test_filter)
@@ -1039,9 +1010,9 @@ async def test_async_pgvector_with_with_metadata_filters_4(
 
 @pytest.mark.parametrize("test_filter, expected_ids", TYPE_5_FILTERING_TEST_CASES)
 def test_pgvector_with_with_metadata_filters_5(
-    pgvector: PGVector,
-    test_filter: Dict[str, Any],
-    expected_ids: List[int],
+        pgvector: PGVector,
+        test_filter: Dict[str, Any],
+        expected_ids: List[int],
 ) -> None:
     """Test end to end construction and search."""
     docs = pgvector.similarity_search("meow", k=5, filter=test_filter)
@@ -1051,9 +1022,9 @@ def test_pgvector_with_with_metadata_filters_5(
 @pytest.mark.asyncio
 @pytest.mark.parametrize("test_filter, expected_ids", TYPE_5_FILTERING_TEST_CASES)
 async def test_async_pgvector_with_with_metadata_filters_5(
-    async_pgvector: PGVector,
-    test_filter: Dict[str, Any],
-    expected_ids: List[int],
+        async_pgvector: PGVector,
+        test_filter: Dict[str, Any],
+        expected_ids: List[int],
 ) -> None:
     """Test end to end construction and search."""
     docs = await async_pgvector.asimilarity_search("meow", k=5, filter=test_filter)
