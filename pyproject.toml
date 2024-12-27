@@ -32,7 +32,7 @@ pytest-asyncio = "^0.23.2"
 pytest-socket = "^0.7.0"
 pytest-cov = "^5.0.0"
 pytest-timeout = "^2.3.1"
-langchain-tests = "0.3.1"
+langchain-tests = "0.3.7"
 greenlet = "^3.1.1"
 pytest-watch = "^4.2.0"
 
