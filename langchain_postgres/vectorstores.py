@@ -29,8 +29,17 @@ from langchain_core.documents import Document
 from langchain_core.embeddings import Embeddings
 from langchain_core.utils import get_from_dict_or_env
 from langchain_core.vectorstores import VectorStore
-from sqlalchemy import SQLColumnExpression, cast, create_engine, delete, func, select
-from sqlalchemy.dialects.postgresql import JSON, JSONB, JSONPATH, UUID, insert
+from pgvector.sqlalchemy import BIT, VECTOR  # type: ignore
+from sqlalchemy import (
+    SQLColumnExpression,
+    cast,
+    create_engine,
+    delete,
+    func,
+    select,
+    text,
+)
+from sqlalchemy.dialects.postgresql import JSON, JSONB, JSONPATH, TSVECTOR, UUID, insert
 from sqlalchemy.engine import Connection, Engine
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
@@ -39,12 +48,15 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 from sqlalchemy.orm import (
+    Bundle,
     Session,
+    aliased,
     declarative_base,
     relationship,
     scoped_session,
     sessionmaker,
 )
+from sqlalchemy.sql.ddl import CreateIndex, CreateTable
 
 from langchain_postgres._utils import maximal_marginal_relevance
 
@@ -55,6 +67,8 @@ class DistanceStrategy(str, enum.Enum):
     EUCLIDEAN = "l2"
     COSINE = "cosine"
     MAX_INNER_PRODUCT = "inner"
+    HAMMING = "hamming"
+    JACCARD = "jaccard"
 
 
 DEFAULT_DISTANCE_STRATEGY = DistanceStrategy.COSINE
@@ -98,7 +112,16 @@ SUPPORTED_OPERATORS = (
 )
 
 
-def _get_embedding_collection_store(vector_dimension: Optional[int] = None) -> Any:
+def _get_embedding_collection_store(
+    vector_dimension: Optional[int] = None,
+    embedding_index: Optional[EmbeddingIndexType] = None,
+    embedding_index_ops: Optional[str] = None,
+    ef_construction: Optional[int] = None,
+    m: Optional[int] = None,
+    binary_quantization: Optional[bool] = None,
+    embedding_length: Optional[int] = None,
+    partition: Optional[bool] = None,
+) -> Any:
     global _classes
     if _classes is not None:
         return _classes
@@ -166,7 +189,15 @@ def _get_embedding_collection_store(vector_dimension: Optional[int] = None) -> A
 
             collection = cls(name=name, cmetadata=cmetadata)
             session.add(collection)
+            session.flush()
+            session.refresh(collection)
+
+            if partition:
+                ddl = cls._create_partition_ddl(str(collection.uuid))
+                session.execute(text(ddl))
+
             session.commit()
+
             created = True
             return collection, created
 
@@ -188,18 +219,71 @@ def _get_embedding_collection_store(vector_dimension: Optional[int] = None) -> A
 
             collection = cls(name=name, cmetadata=cmetadata)
             session.add(collection)
+            await session.flush()
+            await session.refresh(collection)
+
+            if partition:
+                ddl = cls._create_partition_ddl(str(collection.uuid))
+                await session.execute(text(ddl))
+                
             await session.commit()
+
             created = True
             return collection, created
+
+        @classmethod
+        def _create_partition_ddl(cls, uuid: str) -> str:
+            return f"""
+                CREATE TABLE {EmbeddingStore.__tablename__}_{uuid.replace('-', '_')}
+                PARTITION OF {EmbeddingStore.__tablename__} FOR VALUES IN ('{uuid}')
+            """
+
+    def _create_optional_index_params() -> dict:
+        if not (m or ef_construction):
+            return {}
+
+        return {
+            "postgresql_with": {
+                k: v
+                for k, v in {
+                    "m": m,
+                    "ef_construction": ef_construction,
+                }.items()
+                if v is not None
+            }
+        }
+
+    def _create_index(embedding: sqlalchemy.Column) -> Optional[sqlalchemy.Index]:
+        if embedding_index is None:
+            return None
+
+        optional_index_params = _create_optional_index_params()
+
+        if binary_quantization:
+            return sqlalchemy.Index(
+                f"ix_embedding_{embedding_index.value}",
+                cast(func.binary_quantize(embedding), BIT(embedding_length)).label(
+                    "embedding"
+                ),
+                postgresql_using=embedding_index.value,
+                postgresql_ops={"embedding": embedding_index_ops},
+                **optional_index_params,
+            )
+
+        return sqlalchemy.Index(
+            f"ix_embedding_{embedding_index.value}",
+            embedding,
+            postgresql_using=embedding_index.value,
+            postgresql_ops={"embedding": embedding_index_ops},
+            **optional_index_params,
+        )
 
     class EmbeddingStore(Base):
         """Embedding store."""
 
         __tablename__ = "langchain_pg_embedding"
 
-        id = sqlalchemy.Column(
-            sqlalchemy.String, nullable=True, primary_key=True, index=True, unique=True
-        )
+        id = sqlalchemy.Column(sqlalchemy.String, nullable=True, primary_key=True)
 
         collection_id = sqlalchemy.Column(
             UUID(as_uuid=True),
@@ -207,12 +291,20 @@ def _get_embedding_collection_store(vector_dimension: Optional[int] = None) -> A
                 f"{CollectionStore.__tablename__}.uuid",
                 ondelete="CASCADE",
             ),
+            primary_key=True if partition else False,
         )
         collection = relationship(CollectionStore, back_populates="embeddings")
 
         embedding: Vector = sqlalchemy.Column(Vector(vector_dimension))
         document = sqlalchemy.Column(sqlalchemy.String, nullable=True)
         cmetadata = sqlalchemy.Column(JSONB, nullable=True)
+        document_vector = sqlalchemy.Column(
+            TSVECTOR,
+            sqlalchemy.Computed(
+                "to_tsvector('english', document)",
+                persisted=True,
+            ),
+        )
 
         __table_args__ = (
             sqlalchemy.Index(
@@ -221,6 +313,12 @@ def _get_embedding_collection_store(vector_dimension: Optional[int] = None) -> A
                 postgresql_using="gin",
                 postgresql_ops={"cmetadata": "jsonb_path_ops"},
             ),
+            sqlalchemy.Index(
+                "ix_document_vector_gin",
+                "document_vector",
+                postgresql_using="gin",
+            ),
+            _create_index(embedding),
         )
 
     _classes = (EmbeddingStore, CollectionStore)
@@ -243,6 +341,17 @@ def _create_vector_extension(conn: Connection) -> None:
 
 
 DBConnection = Union[sqlalchemy.engine.Engine, str]
+
+
+class EmbeddingIndexType(enum.Enum):
+    hnsw = "hnsw"
+    ivfflat = "ivfflat"
+
+
+class IterativeScan(enum.Enum):
+    off = "off"
+    strict_order = "strict_order"
+    relaxed_order = "relaxed_order"
 
 
 class PGVector(VectorStore):
@@ -377,6 +486,8 @@ class PGVector(VectorStore):
         *,
         connection: Union[None, DBConnection, Engine, AsyncEngine, str] = None,
         embedding_length: Optional[int] = None,
+        embedding_index: Optional[EmbeddingIndexType] = None,
+        embedding_index_ops: Optional[str] = None,
         collection_name: str = _LANGCHAIN_DEFAULT_COLLECTION_NAME,
         collection_metadata: Optional[dict] = None,
         distance_strategy: DistanceStrategy = DEFAULT_DISTANCE_STRATEGY,
@@ -387,6 +498,14 @@ class PGVector(VectorStore):
         use_jsonb: bool = True,
         create_extension: bool = True,
         async_mode: bool = False,
+        iterative_scan: Optional[IterativeScan] = None,
+        max_scan_tuples: Optional[int] = None,
+        scan_mem_multiplier: Optional[int] = None,
+        ef_construction: Optional[int] = None,
+        m: Optional[int] = None,
+        binary_quantization: Optional[bool] = None,
+        binary_limit: Optional[int] = None,
+        enable_partitioning: Optional[bool] = None,
     ) -> None:
         """Initialize the PGVector store.
         For an async version, use `PGVector.acreate()` instead.
@@ -399,6 +518,10 @@ class PGVector(VectorStore):
                 NOTE: This is not mandatory. Defining it will prevent vectors of
                 any other size to be added to the embeddings table but, without it,
                 the embeddings can't be indexed.
+            embedding_index: The type of index to use for the embeddings.
+                (default: None)
+            embedding_index_ops: The index operator class to use for the index.
+                (default: None)
             collection_name: The name of the collection to use. (default: langchain)
                 NOTE: This is not the name of the table, but the name of the collection.
                 The tables will be created when initializing the store (if not exists)
@@ -415,10 +538,23 @@ class PGVector(VectorStore):
             create_extension: If True, will create the vector extension if it
                 doesn't exist. disabling creation is useful when using ReadOnly
                 Databases.
+            iterative_scan: Enables iterative scan. Required index
+            max_scan_tuples: Maximum number of tuples to scan. Required HNSW index
+                scan_mem_multiplier: Max memory to use during scan. Required HNSW index
+                ef_construction: HNSW index parameter.
+            m: HNSW index parameter.
+            binary_quantization: Enable binary quantization. Required HNSW index with
+                bit_hamming_ops
+            binary_limit: Inner limit for binary quantization. Is mandatory when using
+                binary_quantization enable_partitioning: Enables partitioning of
+                langchain_pg_embedding by collection_id.
+
         """
         self.async_mode = async_mode
         self.embedding_function = embeddings
         self._embedding_length = embedding_length
+        self._embedding_index = embedding_index
+        self._embedding_index_ops = embedding_index_ops
         self.collection_name = collection_name
         self.collection_metadata = collection_metadata
         self._distance_strategy = distance_strategy
@@ -428,6 +564,24 @@ class PGVector(VectorStore):
         self._engine: Optional[Engine] = None
         self._async_engine: Optional[AsyncEngine] = None
         self._async_init = False
+        self._iterative_scan = iterative_scan
+        self._max_scan_tuples = max_scan_tuples
+        self._scan_mem_multiplier = scan_mem_multiplier
+        self._ef_construction = ef_construction
+        self._m = m
+        self._binary_quantization = binary_quantization
+        self._binary_limit = binary_limit
+        self._enable_partitioning = enable_partitioning
+
+        if self._embedding_length is None and self._embedding_index is not None:
+            raise ValueError(
+                "embedding_length must be provided when using embedding_index"
+            )
+
+        if self._embedding_index is not None and self._embedding_index_ops is None:
+            raise ValueError(
+                "embedding_index_ops must be provided when using embedding_index"
+            )
 
         if isinstance(connection, str):
             if async_mode:
@@ -459,6 +613,57 @@ class PGVector(VectorStore):
         if not use_jsonb:
             # Replace with a deprecation warning.
             raise NotImplementedError("use_jsonb=False is no longer supported.")
+
+        if self._embedding_index is None and self._iterative_scan is not None:
+            raise ValueError("iterative_scan is not supported without embedding_index")
+
+        if (
+            self._max_scan_tuples is not None
+            and self._embedding_index != EmbeddingIndexType.hnsw
+        ):
+            raise ValueError(
+                "max_scan_tuples is not supported without embedding_index=hnsw"
+            )
+
+        if (
+            self._scan_mem_multiplier is not None
+            and self._embedding_index != EmbeddingIndexType.hnsw
+        ):
+            raise ValueError(
+                "scan_mem_multiplier is not supported without embedding_index=hnsw"
+            )
+
+        if (
+            self._embedding_index != EmbeddingIndexType.hnsw
+            and self._ef_construction is not None
+        ):
+            raise ValueError(
+                "ef_construction is not supported without embedding_index=hnsw"
+            )
+
+        if self._embedding_index != EmbeddingIndexType.hnsw and self._m is not None:
+            raise ValueError("m is not supported without embedding_index=hnsw")
+
+        if (
+            self._binary_quantization is True
+            and self._embedding_index != EmbeddingIndexType.hnsw
+        ):
+            raise ValueError(
+                "binary_quantization is not supported without embedding_index=hnsw"
+            )
+
+        if self._binary_quantization is True and self._embedding_index_ops not in [
+            "bit_hamming_ops"
+        ]:
+            raise ValueError(
+                "binary_quantization is only supported with bit_hamming_ops"
+            )
+
+        if self._binary_quantization is True and self._binary_limit is None:
+            raise ValueError(
+                "binary_limit must be provided when using binary_quantization"
+            )
+
         if not self.async_mode:
             self.__post_init__()
 
@@ -470,8 +675,16 @@ class PGVector(VectorStore):
             self.create_vector_extension()
 
         EmbeddingStore, CollectionStore = _get_embedding_collection_store(
-            self._embedding_length
+            vector_dimension=self._embedding_length,
+            embedding_index=self._embedding_index,
+            embedding_index_ops=self._embedding_index_ops,
+            ef_construction=self._ef_construction,
+            m=self._m,
+            binary_quantization=self._binary_quantization,
+            embedding_length=self._embedding_length,
+            partition=self._enable_partitioning,
         )
+
         self.CollectionStore = CollectionStore
         self.EmbeddingStore = EmbeddingStore
         self.create_tables_if_not_exists()
@@ -486,8 +699,16 @@ class PGVector(VectorStore):
         self._async_init = True
 
         EmbeddingStore, CollectionStore = _get_embedding_collection_store(
-            self._embedding_length
+            vector_dimension=self._embedding_length,
+            embedding_index=self._embedding_index,
+            embedding_index_ops=self._embedding_index_ops,
+            ef_construction=self._ef_construction,
+            m=self._m,
+            binary_quantization=self._binary_quantization,
+            embedding_length=self._embedding_length,
+            partition=self._enable_partitioning,
         )
+
         self.CollectionStore = CollectionStore
         self.EmbeddingStore = EmbeddingStore
         if self.create_extension:
@@ -516,13 +737,111 @@ class PGVector(VectorStore):
 
     def create_tables_if_not_exists(self) -> None:
         with self._make_sync_session() as session:
+            if self._enable_partitioning:
+                self._create_tables_with_partition_if_not_exists(session)
+                return
+
             Base.metadata.create_all(session.get_bind())
             session.commit()
 
     async def acreate_tables_if_not_exists(self) -> None:
         assert self._async_engine, "This method must be called with async_mode"
+
+        if self._enable_partitioning:
+            async with self._make_async_session() as session:
+                await self._acreate_tables_with_partition_if_not_exists(session)
+                return
+
         async with self._async_engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
+
+    def _create_tables_with_partition_if_not_exists(self, session: Session) -> None:
+        if self._check_if_table_exists(session, self.CollectionStore):
+            return
+
+        collection_table_ddl = self._compile_table_ddl(self.CollectionStore)
+        collection_index_ddls = self._compile_index_ddls(self.CollectionStore)
+
+        session.execute(text(collection_table_ddl))
+        for ddl in collection_index_ddls:
+            session.execute(text(ddl))
+
+        compiled_ddl = self._compile_table_ddl(self.EmbeddingStore).strip()
+
+        embedding_table_ddl = f"""
+            {compiled_ddl} PARTITION BY LIST (collection_id)
+        """
+        embedding_index_ddls = self._compile_index_ddls(self.EmbeddingStore)
+
+        session.execute(text(embedding_table_ddl))
+        for ddl in embedding_index_ddls:
+            session.execute(text(ddl))
+
+        session.commit()
+
+    async def _acreate_tables_with_partition_if_not_exists(
+        self, session: AsyncSession
+    ) -> None:
+        if await self._acheck_if_table_exists(session, self.CollectionStore):
+            return
+
+        collection_table_ddl = self._compile_table_ddl(self.CollectionStore)
+        collection_index_ddls = self._compile_index_ddls(self.CollectionStore)
+
+        await session.execute(text(collection_table_ddl))  # type: ignore
+        for ddl in collection_index_ddls:
+            await session.execute(text(ddl))  # type: ignore
+
+        compiled_ddl = self._compile_table_ddl(self.EmbeddingStore).strip()
+
+        embedding_table_ddl = f"""
+            {compiled_ddl} PARTITION BY LIST (collection_id)
+        """
+        embedding_index_ddls = self._compile_index_ddls(self.EmbeddingStore)
+
+        await session.execute(text(embedding_table_ddl))  # type: ignore
+        for ddl in embedding_index_ddls:
+            await session.execute(text(ddl))  # type: ignore
+
+        await session.commit()  # type: ignore
+
+    def _check_if_table_exists(self, session: Session, table: Any) -> bool:
+        inspector = sqlalchemy.inspect(session.get_bind())
+        return inspector.has_table(table.__tablename__)
+
+    async def _acheck_if_table_exists(self, session: AsyncSession, table: Any) -> bool:
+        return await session.run_sync(
+            lambda sync_session: sqlalchemy.inspect(sync_session.bind).has_table(  # type: ignore
+                table.__tablename__
+            )
+        )
+
+    def _compile_table_ddl(self, table: Any) -> str:
+        return str(
+            CreateTable(table.__table__).compile(
+                dialect=sqlalchemy.dialects.postgresql.dialect()
+            )
+        )
+
+    def _compile_index_ddls(self, table: Any) -> List[str]:
+        ddls: List[str] = []
+
+        table_args = getattr(table, "__table_args__", [])
+
+        indexes = [arg for arg in list(table_args) if isinstance(arg, sqlalchemy.Index)]
+
+        if not indexes:
+            return ddls
+
+        for index in indexes:
+            ddl = str(
+                CreateIndex(index).compile(
+                    dialect=sqlalchemy.dialects.postgresql.dialect()
+                )
+            )
+            ddls.append(ddl)
+
+        return ddls
 
     def drop_tables(self) -> None:
         with self._make_sync_session() as session:
@@ -561,12 +880,18 @@ class PGVector(VectorStore):
             return
         session.delete(collection)
 
+        if self._enable_partitioning:
+            self._delete_partition(session, str(collection.uuid))
+
     async def _adelete_collection(self, session: AsyncSession) -> None:
         collection = await self.aget_collection(session)
         if not collection:
             self.logger.warning("Collection not found")
             return
         await session.delete(collection)
+
+        if self._enable_partitioning:
+            await self._adelete_partition(session, str(collection.uuid))
 
     def delete_collection(self) -> None:
         with self._make_sync_session() as session:
@@ -575,6 +900,10 @@ class PGVector(VectorStore):
                 self.logger.warning("Collection not found")
                 return
             session.delete(collection)
+
+            if self._enable_partitioning:
+                self._delete_partition(session, str(collection.uuid))
+
             session.commit()
 
     async def adelete_collection(self) -> None:
@@ -585,7 +914,22 @@ class PGVector(VectorStore):
                 self.logger.warning("Collection not found")
                 return
             await session.delete(collection)
+
+            if self._enable_partitioning:
+                await self._adelete_partition(session, str(collection.uuid))
+
             await session.commit()
+
+    def _delete_partition(self, session: Session, uuid: str) -> None:
+        session.execute(text(f"DROP TABLE {self._compute_partition_table_name(uuid)}"))
+
+    async def _adelete_partition(self, session: AsyncSession, uuid: str) -> None:
+        await session.execute(
+            text(f"DROP TABLE {self._compute_partition_table_name(uuid)}")
+        )
+
+    def _compute_partition_table_name(self, uuid: str) -> str:
+        return f"{self.EmbeddingStore.__tablename__}_{uuid.replace('-', '_')}"
 
     def delete(
         self,
@@ -788,8 +1132,13 @@ class PGVector(VectorStore):
                 )
             ]
             stmt = insert(self.EmbeddingStore).values(data)
+
+            index_elements = ["id"]
+            if self._enable_partitioning:
+                index_elements.append("collection_id")
+
             on_conflict_stmt = stmt.on_conflict_do_update(
-                index_elements=["id"],
+                index_elements=index_elements,
                 # Conflict detection based on these columns
                 set_={
                     "embedding": stmt.excluded.embedding,
@@ -847,8 +1196,13 @@ class PGVector(VectorStore):
                 )
             ]
             stmt = insert(self.EmbeddingStore).values(data)
+
+            index_elements = ["id"]
+            if self._enable_partitioning:
+                index_elements.append("collection_id")
+
             on_conflict_stmt = stmt.on_conflict_do_update(
-                index_elements=["id"],
+                index_elements=index_elements,
                 # Conflict detection based on these columns
                 set_={
                     "embedding": stmt.excluded.embedding,
@@ -926,6 +1280,7 @@ class PGVector(VectorStore):
         query: str,
         k: int = 4,
         filter: Optional[dict] = None,
+        full_text_search: Optional[List[str]] = None,
         **kwargs: Any,
     ) -> List[Document]:
         """Run similarity search with PGVector with distance.
@@ -944,6 +1299,7 @@ class PGVector(VectorStore):
             embedding=embedding,
             k=k,
             filter=filter,
+            full_text_search=full_text_search,
         )
 
     async def asimilarity_search(
@@ -951,6 +1307,7 @@ class PGVector(VectorStore):
         query: str,
         k: int = 4,
         filter: Optional[dict] = None,
+        full_text_search: Optional[List[str]] = None,
         **kwargs: Any,
     ) -> List[Document]:
         """Run similarity search with PGVector with distance.
@@ -969,6 +1326,7 @@ class PGVector(VectorStore):
             embedding=embedding,
             k=k,
             filter=filter,
+            full_text_search=full_text_search,
         )
 
     def similarity_search_with_score(
@@ -976,6 +1334,7 @@ class PGVector(VectorStore):
         query: str,
         k: int = 4,
         filter: Optional[dict] = None,
+        full_text_search: Optional[List[str]] = None,
     ) -> List[Tuple[Document, float]]:
         """Return docs most similar to query.
 
@@ -990,7 +1349,7 @@ class PGVector(VectorStore):
         assert not self._async_engine, "This method must be called without async_mode"
         embedding = self.embeddings.embed_query(query)
         docs = self.similarity_search_with_score_by_vector(
-            embedding=embedding, k=k, filter=filter
+            embedding=embedding, k=k, filter=filter, full_text_search=full_text_search
         )
         return docs
 
@@ -999,6 +1358,7 @@ class PGVector(VectorStore):
         query: str,
         k: int = 4,
         filter: Optional[dict] = None,
+        full_text_search: Optional[List[str]] = None,
     ) -> List[Tuple[Document, float]]:
         """Return docs most similar to query.
 
@@ -1013,18 +1373,25 @@ class PGVector(VectorStore):
         await self.__apost_init__()  # Lazy async init
         embedding = await self.embeddings.aembed_query(query)
         docs = await self.asimilarity_search_with_score_by_vector(
-            embedding=embedding, k=k, filter=filter
+            embedding=embedding, k=k, filter=filter, full_text_search=full_text_search
         )
         return docs
 
     @property
     def distance_strategy(self) -> Any:
+        return self._build_distance_strategy()
+
+    def _build_distance_strategy(
+        self, column: Optional[sqlalchemy.Column] = None
+    ) -> Any:
+        _column = column if column is not None else self.EmbeddingStore.embedding
+
         if self._distance_strategy == DistanceStrategy.EUCLIDEAN:
-            return self.EmbeddingStore.embedding.l2_distance
+            return _column.l2_distance
         elif self._distance_strategy == DistanceStrategy.COSINE:
-            return self.EmbeddingStore.embedding.cosine_distance
+            return _column.cosine_distance
         elif self._distance_strategy == DistanceStrategy.MAX_INNER_PRODUCT:
-            return self.EmbeddingStore.embedding.max_inner_product
+            return _column.max_inner_product
         else:
             raise ValueError(
                 f"Got unexpected value for distance: {self._distance_strategy}. "
@@ -1036,9 +1403,12 @@ class PGVector(VectorStore):
         embedding: List[float],
         k: int = 4,
         filter: Optional[dict] = None,
+        full_text_search: Optional[List[str]] = None,
     ) -> List[Tuple[Document, float]]:
         assert not self._async_engine, "This method must be called without async_mode"
-        results = self.__query_collection(embedding=embedding, k=k, filter=filter)
+        results = self.__query_collection(
+            embedding=embedding, k=k, filter=filter, full_text_search=full_text_search
+        )
 
         return self._results_to_docs_and_scores(results)
 
@@ -1047,11 +1417,16 @@ class PGVector(VectorStore):
         embedding: List[float],
         k: int = 4,
         filter: Optional[dict] = None,
+        full_text_search: Optional[List[str]] = None,
     ) -> List[Tuple[Document, float]]:
         await self.__apost_init__()  # Lazy async init
         async with self._make_async_session() as session:  # type: ignore[arg-type]
             results = await self.__aquery_collection(
-                session=session, embedding=embedding, k=k, filter=filter
+                session=session,
+                embedding=embedding,
+                k=k,
+                filter=filter,
+                full_text_search=full_text_search,
             )
 
             return self._results_to_docs_and_scores(results)
@@ -1396,42 +1771,27 @@ class PGVector(VectorStore):
         embedding: List[float],
         k: int = 4,
         filter: Optional[Dict[str, str]] = None,
+        full_text_search: Optional[List[str]] = None,
     ) -> Sequence[Any]:
         """Query the collection."""
         with self._make_sync_session() as session:  # type: ignore[arg-type]
+            self._set_iterative_scan(session)
+            self._set_max_scan_tuples(session)
+            self._set_scan_mem_multiplier(session)
+
             collection = self.get_collection(session)
-            if not collection:
-                raise ValueError("Collection not found")
 
-            filter_by = [self.EmbeddingStore.collection_id == collection.uuid]
-            if filter:
-                if self.use_jsonb:
-                    filter_clauses = self._create_filter_clause(filter)
-                    if filter_clauses is not None:
-                        filter_by.append(filter_clauses)
-                else:
-                    # Old way of doing things
-                    filter_clauses = self._create_filter_clause_json_deprecated(filter)
-                    filter_by.extend(filter_clauses)
-
-            _type = self.EmbeddingStore
-
-            results: List[Any] = (
-                session.query(
-                    self.EmbeddingStore,
-                    self.distance_strategy(embedding).label("distance"),
-                )
-                .filter(*filter_by)
-                .order_by(sqlalchemy.asc("distance"))
-                .join(
-                    self.CollectionStore,
-                    self.EmbeddingStore.collection_id == self.CollectionStore.uuid,
-                )
-                .limit(k)
-                .all()
+            stmt = self._build_query_collection(
+                collection=collection,
+                embedding=embedding,
+                k=k,
+                filter=filter,
+                full_text_search=full_text_search,
             )
 
-        return results
+            results: Sequence[Any] = session.execute(stmt).all()
+
+            return results
 
     async def __aquery_collection(
         self,
@@ -1439,49 +1799,257 @@ class PGVector(VectorStore):
         embedding: List[float],
         k: int = 4,
         filter: Optional[Dict[str, str]] = None,
+        full_text_search: Optional[List[str]] = None,
     ) -> Sequence[Any]:
         """Query the collection."""
         async with self._make_async_session() as session:  # type: ignore[arg-type]
+            await self._aset_iterative_scan(session)
+            await self._aset_max_scan_tuples(session)
+            await self._aset_scan_mem_multiplier(session)
+
             collection = await self.aget_collection(session)
-            if not collection:
-                raise ValueError("Collection not found")
 
-            filter_by = [self.EmbeddingStore.collection_id == collection.uuid]
-            if filter:
-                if self.use_jsonb:
-                    filter_clauses = self._create_filter_clause(filter)
-                    if filter_clauses is not None:
-                        filter_by.append(filter_clauses)
-                else:
-                    # Old way of doing things
-                    filter_clauses = self._create_filter_clause_json_deprecated(filter)
-                    filter_by.extend(filter_clauses)
-
-            _type = self.EmbeddingStore
-
-            stmt = (
-                select(
-                    self.EmbeddingStore,
-                    self.distance_strategy(embedding).label("distance"),
-                )
-                .filter(*filter_by)
-                .order_by(sqlalchemy.asc("distance"))
-                .join(
-                    self.CollectionStore,
-                    self.EmbeddingStore.collection_id == self.CollectionStore.uuid,
-                )
-                .limit(k)
+            stmt = self._build_query_collection(
+                collection=collection,
+                embedding=embedding,
+                k=k,
+                filter=filter,
+                full_text_search=full_text_search,
             )
 
             results: Sequence[Any] = (await session.execute(stmt)).all()
 
             return results
 
+    def _build_query_collection(
+        self,
+        collection: Any,
+        embedding: List[float],
+        k: int,
+        filter: Optional[Dict[str, str]] = None,
+        full_text_search: Optional[List[str]] = None,
+    ) -> Any:
+        if not collection:
+            raise ValueError("Collection not found")
+
+        if self._binary_quantization:
+            return self._build_binary_quantization_query(
+                collection=collection,
+                embedding=embedding,
+                k=k,
+                filter=filter,
+                full_text_search=full_text_search,
+            )
+
+        stmt = self._build_base_query(
+            collection=collection,
+            embedding=embedding,
+            k=k,
+            filter=filter,
+            full_text_search=full_text_search,
+        )
+
+        if self._iterative_scan == IterativeScan.relaxed_order:
+            stmt = self._build_iterative_scan_query(stmt)
+
+        return stmt
+
+    def _build_binary_quantization_query(
+        self,
+        collection: Any,
+        embedding: List[float],
+        k: int,
+        filter: Optional[Dict[str, str]] = None,
+        full_text_search: Optional[List[str]] = None,
+    ) -> Any:
+        filter_by = self._build_filter(collection, filter, full_text_search)
+
+        distance = cast(
+            func.binary_quantize(self.EmbeddingStore.embedding),
+            BIT(self._embedding_length),
+        ).hamming_distance(
+            func.binary_quantize(
+                cast(
+                    embedding,
+                    VECTOR(self._embedding_length),
+                )
+            )
+        )
+
+        sub = (
+            select(self.EmbeddingStore)
+            .filter(*filter_by)
+            .order_by(distance)
+            .limit(self._binary_limit)
+            .subquery(name="binary_result")
+        )
+
+        EmbeddingStoreAlias = aliased(self.EmbeddingStore, sub)
+        embedding_store_bundle: Bundle = Bundle(
+            "EmbeddingStore",
+            *[
+                getattr(EmbeddingStoreAlias, c.key)
+                for c in self.EmbeddingStore.__table__.columns
+            ],
+        )
+
+        return (
+            select(
+                embedding_store_bundle,
+                self._build_distance_strategy(sub.c["embedding"])(embedding).label(  # type: ignore
+                    "distance"
+                ),
+            )
+            .order_by(sqlalchemy.asc("distance"))
+            .limit(k)
+        )
+
+    def _build_base_query(
+        self,
+        collection: Any,
+        embedding: List[float],
+        k: int,
+        filter: Optional[Dict[str, str]] = None,
+        full_text_search: Optional[List[str]] = None,
+    ) -> Any:
+        filter_by = self._build_filter(collection, filter, full_text_search)
+
+        return (
+            select(
+                self.EmbeddingStore,
+                self.distance_strategy(embedding).label("distance"),
+            )
+            .filter(*filter_by)
+            .order_by(sqlalchemy.asc("distance"))
+            .limit(k)
+        )
+
+    def _build_iterative_scan_query(self, stmt: Any) -> Any:
+        cte = stmt.cte("relaxed_results").prefix_with("MATERIALIZED")
+
+        EmbeddingStoreAlias = aliased(self.EmbeddingStore, cte)
+        embedding_store_bundle: Bundle = Bundle(
+            "EmbeddingStore",
+            *[
+                getattr(EmbeddingStoreAlias, c.key)
+                for c in self.EmbeddingStore.__table__.columns
+            ],
+        )
+
+        return select(embedding_store_bundle, cte.c.distance).order_by(text("distance"))
+
+    def _build_filter(
+        self,
+        collection: Any,
+        filter: Optional[Dict[str, str]] = None,
+        full_text_search: Optional[List[str]] = None,
+    ) -> List[SQLColumnExpression]:
+        filter_by = [self.EmbeddingStore.collection_id == collection.uuid]
+
+        if filter:
+            if self.use_jsonb:
+                filter_clauses = self._create_filter_clause(filter)
+                if filter_clauses is not None:
+                    filter_by.append(filter_clauses)
+            else:
+                # Old way of doing things
+                filter_clauses = self._create_filter_clause_json_deprecated(filter)
+                filter_by.extend(filter_clauses)
+
+        if full_text_search:
+            filter_by.append(self._build_full_text_search_filter(full_text_search))
+
+        return filter_by
+
+    def _build_full_text_search_filter(
+        self, keywords: List[str]
+    ) -> SQLColumnExpression:
+        return self.EmbeddingStore.document_vector.op("@@")(
+            func.to_tsquery(" | ".join(list(map(lambda x: x.strip(), keywords))))
+        )
+
+    def _set_iterative_scan(self, session: Session) -> None:
+        assert not self._async_engine, "This method must be called without async_mode"
+
+        if self._iterative_scan is None or self._embedding_index is None:
+            return
+
+        index = self._embedding_index.value
+        iterative_scan = self._iterative_scan.value
+
+        stmt = f"SET {index}.iterative_scan = {iterative_scan}"
+
+        session.execute(text(stmt))
+
+    async def _aset_iterative_scan(self, session: AsyncSession) -> None:
+        assert self._async_engine, "This method must be called with async_mode"
+
+        if self._iterative_scan is None or self._embedding_index is None:
+            return
+
+        index = self._embedding_index.value
+        iterative_scan = self._iterative_scan.value
+
+        stmt = f"SET {index}.iterative_scan = {iterative_scan}"
+
+        await session.execute(text(stmt))
+
+    def _set_max_scan_tuples(self, session: Session) -> None:
+        assert not self._async_engine, "This method must be called without async_mode"
+
+        if (
+            self._max_scan_tuples is None
+            or self._embedding_index != EmbeddingIndexType.hnsw
+        ):
+            return
+
+        session.execute(text(f"SET hnsw.max_scan_tuples = {self._max_scan_tuples}"))
+
+    async def _aset_max_scan_tuples(self, session: AsyncSession) -> None:
+        assert self._async_engine, "This method must be called with async_mode"
+
+        if (
+            self._max_scan_tuples is None
+            or self._embedding_index != EmbeddingIndexType.hnsw
+        ):
+            return
+
+        await session.execute(
+            text(f"SET hnsw.max_scan_tuples = {self._max_scan_tuples}")
+        )
+
+    def _set_scan_mem_multiplier(self, session: Session) -> None:
+        assert not self._async_engine, "This method must be called without async_mode"
+
+        if (
+            self._scan_mem_multiplier is None
+            or self._embedding_index != EmbeddingIndexType.hnsw
+        ):
+            return
+
+        session.execute(
+            text(f"SET hnsw.scan_mem_multiplier = {self._scan_mem_multiplier}")
+        )
+
+    async def _aset_scan_mem_multiplier(self, session: AsyncSession) -> None:
+        assert self._async_engine, "This method must be called with async_mode"
+
+        if (
+            self._scan_mem_multiplier is None
+            or self._embedding_index != EmbeddingIndexType.hnsw
+        ):
+            return
+
+        await session.execute(
+            text(f"SET hnsw.scan_mem_multiplier = {self._scan_mem_multiplier}")
+        )
+
     def similarity_search_by_vector(
         self,
         embedding: List[float],
         k: int = 4,
         filter: Optional[dict] = None,
+        full_text_search: Optional[List[str]] = None,
         **kwargs: Any,
     ) -> List[Document]:
         """Return docs most similar to embedding vector.
@@ -1490,13 +2058,16 @@ class PGVector(VectorStore):
             embedding: Embedding to look up documents similar to.
             k: Number of Documents to return. Defaults to 4.
             filter (Optional[Dict[str, str]]): Filter by metadata. Defaults to None.
+            full_text_search: filter by full text search only if one or more words
+                are present in the document. If passed (string1 & string2) then the
+                document should contain both string1 and string2.
 
         Returns:
             List of Documents most similar to the query vector.
         """
         assert not self._async_engine, "This method must be called without async_mode"
         docs_and_scores = self.similarity_search_with_score_by_vector(
-            embedding=embedding, k=k, filter=filter
+            embedding=embedding, k=k, filter=filter, full_text_search=full_text_search
         )
         return _results_to_docs(docs_and_scores)
 
@@ -1505,6 +2076,7 @@ class PGVector(VectorStore):
         embedding: List[float],
         k: int = 4,
         filter: Optional[dict] = None,
+        full_text_search: Optional[List[str]] = None,
         **kwargs: Any,
     ) -> List[Document]:
         """Return docs most similar to embedding vector.
@@ -1513,6 +2085,9 @@ class PGVector(VectorStore):
             embedding: Embedding to look up documents similar to.
             k: Number of Documents to return. Defaults to 4.
             filter (Optional[Dict[str, str]]): Filter by metadata. Defaults to None.
+            full_text_search: filter by full text search only if one or more words
+                are present in the document. If passed (string1 & string2) then the
+                document should contain both string1 and string2.
 
         Returns:
             List of Documents most similar to the query vector.
@@ -1520,7 +2095,7 @@ class PGVector(VectorStore):
         assert self._async_engine, "This method must be called with async_mode"
         await self.__apost_init__()  # Lazy async init
         docs_and_scores = await self.asimilarity_search_with_score_by_vector(
-            embedding=embedding, k=k, filter=filter
+            embedding=embedding, k=k, filter=filter, full_text_search=full_text_search
         )
         return _results_to_docs(docs_and_scores)
 
@@ -1876,6 +2451,7 @@ class PGVector(VectorStore):
         fetch_k: int = 20,
         lambda_mult: float = 0.5,
         filter: Optional[Dict[str, str]] = None,
+        full_text_search: Optional[List[str]] = None,
         **kwargs: Any,
     ) -> List[Tuple[Document, float]]:
         """Return docs selected using the maximal marginal relevance with score
@@ -1900,7 +2476,12 @@ class PGVector(VectorStore):
                 relevance to the query and score for each.
         """
         assert not self._async_engine, "This method must be called without async_mode"
-        results = self.__query_collection(embedding=embedding, k=fetch_k, filter=filter)
+        results = self.__query_collection(
+            embedding=embedding,
+            k=fetch_k,
+            filter=filter,
+            full_text_search=full_text_search,
+        )
 
         embedding_list = [result.EmbeddingStore.embedding for result in results]
 
@@ -1922,6 +2503,7 @@ class PGVector(VectorStore):
         fetch_k: int = 20,
         lambda_mult: float = 0.5,
         filter: Optional[Dict[str, str]] = None,
+        full_text_search: Optional[List[str]] = None,
         **kwargs: Any,
     ) -> List[Tuple[Document, float]]:
         """Return docs selected using the maximal marginal relevance with score
@@ -1948,7 +2530,11 @@ class PGVector(VectorStore):
         await self.__apost_init__()  # Lazy async init
         async with self._make_async_session() as session:
             results = await self.__aquery_collection(
-                session=session, embedding=embedding, k=fetch_k, filter=filter
+                session=session,
+                embedding=embedding,
+                k=fetch_k,
+                filter=filter,
+                full_text_search=full_text_search,
             )
 
             embedding_list = [result.EmbeddingStore.embedding for result in results]
@@ -2048,6 +2634,7 @@ class PGVector(VectorStore):
         fetch_k: int = 20,
         lambda_mult: float = 0.5,
         filter: Optional[dict] = None,
+        full_text_search: Optional[List[str]] = None,
         **kwargs: Any,
     ) -> List[Tuple[Document, float]]:
         """Return docs selected using the maximal marginal relevance with score.
@@ -2077,6 +2664,7 @@ class PGVector(VectorStore):
             fetch_k=fetch_k,
             lambda_mult=lambda_mult,
             filter=filter,
+            full_text_search=full_text_search,
             **kwargs,
         )
         return docs
@@ -2088,6 +2676,7 @@ class PGVector(VectorStore):
         fetch_k: int = 20,
         lambda_mult: float = 0.5,
         filter: Optional[dict] = None,
+        full_text_search: Optional[List[str]] = None,
         **kwargs: Any,
     ) -> List[Tuple[Document, float]]:
         """Return docs selected using the maximal marginal relevance with score.
@@ -2118,6 +2707,7 @@ class PGVector(VectorStore):
             fetch_k=fetch_k,
             lambda_mult=lambda_mult,
             filter=filter,
+            full_text_search=full_text_search,
             **kwargs,
         )
         return docs
@@ -2129,6 +2719,7 @@ class PGVector(VectorStore):
         fetch_k: int = 20,
         lambda_mult: float = 0.5,
         filter: Optional[Dict[str, str]] = None,
+        full_text_search: Optional[List[str]] = None,
         **kwargs: Any,
     ) -> List[Document]:
         """Return docs selected using the maximal marginal relevance
@@ -2157,6 +2748,7 @@ class PGVector(VectorStore):
             fetch_k=fetch_k,
             lambda_mult=lambda_mult,
             filter=filter,
+            full_text_search=full_text_search,
             **kwargs,
         )
 
@@ -2169,6 +2761,7 @@ class PGVector(VectorStore):
         fetch_k: int = 20,
         lambda_mult: float = 0.5,
         filter: Optional[Dict[str, str]] = None,
+        full_text_search: Optional[List[str]] = None,
         **kwargs: Any,
     ) -> List[Document]:
         """Return docs selected using the maximal marginal relevance
@@ -2199,6 +2792,7 @@ class PGVector(VectorStore):
                 fetch_k=fetch_k,
                 lambda_mult=lambda_mult,
                 filter=filter,
+                full_text_search=full_text_search,
                 **kwargs,
             )
         )
