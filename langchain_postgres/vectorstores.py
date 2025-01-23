@@ -189,13 +189,14 @@ def _get_embedding_collection_store(
 
             collection = cls(name=name, cmetadata=cmetadata)
             session.add(collection)
-            session.commit()
+            session.flush()
             session.refresh(collection)
 
             if partition:
                 ddl = cls._create_partition_ddl(str(collection.uuid))
                 session.execute(text(ddl))
-                session.commit()
+
+            session.commit()
 
             created = True
             return collection, created
@@ -218,13 +219,14 @@ def _get_embedding_collection_store(
 
             collection = cls(name=name, cmetadata=cmetadata)
             session.add(collection)
-            await session.commit()
+            await session.flush()
             await session.refresh(collection)
 
             if partition:
                 ddl = cls._create_partition_ddl(str(collection.uuid))
                 await session.execute(text(ddl))
-                await session.commit()
+                
+            await session.commit()
 
             created = True
             return collection, created
