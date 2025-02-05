@@ -3,7 +3,8 @@ import uuid
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
 from langchain_postgres.chat_message_histories import PostgresChatMessageHistory
-from tests.utils import asyncpg_client, syncpg_client
+from psycopg_pool import AsyncConnectionPool
+from tests.utils import asyncpg_client, syncpg_client, DSN
 
 
 def test_sync_chat_history() -> None:
@@ -121,3 +122,75 @@ async def test_async_chat_history() -> None:
         # clear
         await chat_history.aclear()
         assert await chat_history.aget_messages() == []
+
+
+async def test_async_chat_history_with_pool() -> None:
+    """Test the async chat history using a connection pool."""
+    # Initialize the connection pool
+    pool = AsyncConnectionPool(conninfo=DSN)
+    try:
+        table_name = "chat_history"
+        session_id = str(uuid.uuid4())
+
+        # Create tables using a connection from the pool
+        async with pool.connection() as async_connection:
+            await PostgresChatMessageHistory.adrop_table(async_connection, table_name)
+            await PostgresChatMessageHistory.acreate_tables(async_connection, table_name)
+
+        # Create PostgresChatMessageHistory with conn_pool
+        chat_history = PostgresChatMessageHistory(
+            session_id=session_id,
+            table_name=table_name,
+            conn_pool=pool,
+        )
+
+        # Ensure the chat history is empty
+        messages = await chat_history.aget_messages()
+        assert messages == []
+
+        # Add messages to the chat history
+        await chat_history.aadd_messages(
+            [
+                SystemMessage(content="System message"),
+                AIMessage(content="AI response"),
+                HumanMessage(content="Human message"),
+            ]
+        )
+
+        # Retrieve messages from the chat history
+        messages = await chat_history.aget_messages()
+        assert len(messages) == 3
+        assert messages == [
+            SystemMessage(content="System message"),
+            AIMessage(content="AI response"),
+            HumanMessage(content="Human message"),
+        ]
+
+        # Add more messages
+        await chat_history.aadd_messages(
+            [
+                SystemMessage(content="Another system message"),
+                AIMessage(content="Another AI response"),
+                HumanMessage(content="Another human message"),
+            ]
+        )
+
+        # Verify all messages are retrieved
+        messages = await chat_history.aget_messages()
+        assert len(messages) == 6
+        assert messages == [
+            SystemMessage(content="System message"),
+            AIMessage(content="AI response"),
+            HumanMessage(content="Human message"),
+            SystemMessage(content="Another system message"),
+            AIMessage(content="Another AI response"),
+            HumanMessage(content="Another human message"),
+        ]
+
+        # Clear the chat history
+        await chat_history.aclear()
+        messages = await chat_history.aget_messages()
+        assert messages == []
+    finally:
+        # Close the connection pool
+        await pool.close()
