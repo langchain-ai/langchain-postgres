@@ -708,7 +708,7 @@ def test_pgvector_retriever_search_threshold_custom_normalization_fn() -> None:
 
 @pytest.mark.asyncio
 async def test_async_pgvector_retriever_search_threshold_custom_normalization_fn() -> (
-    None
+        None
 ):
     """Test searching with threshold and custom normalization function"""
     texts = ["foo", "bar", "baz"]
@@ -878,7 +878,7 @@ async def async_pgvector() -> AsyncGenerator[PGVector, None]:
 
 @contextlib.contextmanager
 def get_vectorstore(
-    *, embedding: Optional[Embeddings] = None
+        *, embedding: Optional[Embeddings] = None
 ) -> Generator[PGVector, None, None]:
     """Get a pre-populated-vectorstore"""
     store = PGVector.from_documents(
@@ -898,7 +898,7 @@ def get_vectorstore(
 
 @contextlib.asynccontextmanager
 async def aget_vectorstore(
-    *, embedding: Optional[Embeddings] = None
+        *, embedding: Optional[Embeddings] = None
 ) -> AsyncGenerator[PGVector, None]:
     """Get a pre-populated-vectorstore"""
     store = await PGVector.afrom_documents(
@@ -918,8 +918,8 @@ async def aget_vectorstore(
 
 @pytest.mark.parametrize("test_filter, expected_ids", TYPE_1_FILTERING_TEST_CASES)
 def test_pgvector_with_with_metadata_filters_1(
-    test_filter: Dict[str, Any],
-    expected_ids: List[int],
+        test_filter: Dict[str, Any],
+        expected_ids: List[int],
 ) -> None:
     """Test end to end construction and search."""
     with get_vectorstore() as pgvector:
@@ -930,8 +930,8 @@ def test_pgvector_with_with_metadata_filters_1(
 @pytest.mark.asyncio
 @pytest.mark.parametrize("test_filter, expected_ids", TYPE_1_FILTERING_TEST_CASES)
 async def test_async_pgvector_with_with_metadata_filters_1(
-    test_filter: Dict[str, Any],
-    expected_ids: List[int],
+        test_filter: Dict[str, Any],
+        expected_ids: List[int],
 ) -> None:
     """Test end to end construction and search."""
     async with aget_vectorstore() as pgvector:
@@ -941,9 +941,9 @@ async def test_async_pgvector_with_with_metadata_filters_1(
 
 @pytest.mark.parametrize("test_filter, expected_ids", TYPE_2_FILTERING_TEST_CASES)
 def test_pgvector_with_with_metadata_filters_2(
-    pgvector: PGVector,
-    test_filter: Dict[str, Any],
-    expected_ids: List[int],
+        pgvector: PGVector,
+        test_filter: Dict[str, Any],
+        expected_ids: List[int],
 ) -> None:
     """Test end to end construction and search."""
     docs = pgvector.similarity_search("meow", k=5, filter=test_filter)
@@ -953,9 +953,9 @@ def test_pgvector_with_with_metadata_filters_2(
 @pytest.mark.asyncio
 @pytest.mark.parametrize("test_filter, expected_ids", TYPE_2_FILTERING_TEST_CASES)
 async def test_async_pgvector_with_with_metadata_filters_2(
-    async_pgvector: PGVector,
-    test_filter: Dict[str, Any],
-    expected_ids: List[int],
+        async_pgvector: PGVector,
+        test_filter: Dict[str, Any],
+        expected_ids: List[int],
 ) -> None:
     """Test end to end construction and search."""
     docs = await async_pgvector.asimilarity_search("meow", k=5, filter=test_filter)
@@ -964,9 +964,9 @@ async def test_async_pgvector_with_with_metadata_filters_2(
 
 @pytest.mark.parametrize("test_filter, expected_ids", TYPE_3_FILTERING_TEST_CASES)
 def test_pgvector_with_with_metadata_filters_3(
-    pgvector: PGVector,
-    test_filter: Dict[str, Any],
-    expected_ids: List[int],
+        pgvector: PGVector,
+        test_filter: Dict[str, Any],
+        expected_ids: List[int],
 ) -> None:
     """Test end to end construction and search."""
     docs = pgvector.similarity_search("meow", k=5, filter=test_filter)
@@ -976,9 +976,9 @@ def test_pgvector_with_with_metadata_filters_3(
 @pytest.mark.asyncio
 @pytest.mark.parametrize("test_filter, expected_ids", TYPE_3_FILTERING_TEST_CASES)
 async def test_async_pgvector_with_with_metadata_filters_3(
-    async_pgvector: PGVector,
-    test_filter: Dict[str, Any],
-    expected_ids: List[int],
+        async_pgvector: PGVector,
+        test_filter: Dict[str, Any],
+        expected_ids: List[int],
 ) -> None:
     """Test end to end construction and search."""
     docs = await async_pgvector.asimilarity_search("meow", k=5, filter=test_filter)
@@ -987,9 +987,9 @@ async def test_async_pgvector_with_with_metadata_filters_3(
 
 @pytest.mark.parametrize("test_filter, expected_ids", TYPE_4_FILTERING_TEST_CASES)
 def test_pgvector_with_with_metadata_filters_4(
-    pgvector: PGVector,
-    test_filter: Dict[str, Any],
-    expected_ids: List[int],
+        pgvector: PGVector,
+        test_filter: Dict[str, Any],
+        expected_ids: List[int],
 ) -> None:
     """Test end to end construction and search."""
     docs = pgvector.similarity_search("meow", k=5, filter=test_filter)
@@ -999,9 +999,9 @@ def test_pgvector_with_with_metadata_filters_4(
 @pytest.mark.asyncio
 @pytest.mark.parametrize("test_filter, expected_ids", TYPE_4_FILTERING_TEST_CASES)
 async def test_async_pgvector_with_with_metadata_filters_4(
-    async_pgvector: PGVector,
-    test_filter: Dict[str, Any],
-    expected_ids: List[int],
+        async_pgvector: PGVector,
+        test_filter: Dict[str, Any],
+        expected_ids: List[int],
 ) -> None:
     """Test end to end construction and search."""
     docs = await async_pgvector.asimilarity_search("meow", k=5, filter=test_filter)
@@ -1010,9 +1010,9 @@ async def test_async_pgvector_with_with_metadata_filters_4(
 
 @pytest.mark.parametrize("test_filter, expected_ids", TYPE_5_FILTERING_TEST_CASES)
 def test_pgvector_with_with_metadata_filters_5(
-    pgvector: PGVector,
-    test_filter: Dict[str, Any],
-    expected_ids: List[int],
+        pgvector: PGVector,
+        test_filter: Dict[str, Any],
+        expected_ids: List[int],
 ) -> None:
     """Test end to end construction and search."""
     docs = pgvector.similarity_search("meow", k=5, filter=test_filter)
@@ -1022,9 +1022,9 @@ def test_pgvector_with_with_metadata_filters_5(
 @pytest.mark.asyncio
 @pytest.mark.parametrize("test_filter, expected_ids", TYPE_5_FILTERING_TEST_CASES)
 async def test_async_pgvector_with_with_metadata_filters_5(
-    async_pgvector: PGVector,
-    test_filter: Dict[str, Any],
-    expected_ids: List[int],
+        async_pgvector: PGVector,
+        test_filter: Dict[str, Any],
+        expected_ids: List[int],
 ) -> None:
     """Test end to end construction and search."""
     docs = await async_pgvector.asimilarity_search("meow", k=5, filter=test_filter)
