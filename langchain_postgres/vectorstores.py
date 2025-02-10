@@ -41,6 +41,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.dialects.postgresql import JSON, JSONB, JSONPATH, TSVECTOR, UUID, insert
 from sqlalchemy.engine import Connection, Engine
+from sqlalchemy.exc import ProgrammingError
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -184,7 +185,11 @@ def _get_embedding_collection_store(
             """  # noqa: E501
             created = False
             collection = cls.get_by_name(session, name)
+
             if collection:
+                if partition:
+                    cls._ensure_partition_exists(session, collection)
+
                 return collection, created
 
             collection = cls(name=name, cmetadata=cmetadata)
@@ -214,7 +219,11 @@ def _get_embedding_collection_store(
             """  # noqa: E501
             created = False
             collection = await cls.aget_by_name(session, name)
+
             if collection:
+                if partition:
+                    await cls._aensure_partition_exists(session, collection)
+
                 return collection, created
 
             collection = cls(name=name, cmetadata=cmetadata)
@@ -230,6 +239,26 @@ def _get_embedding_collection_store(
 
             created = True
             return collection, created
+
+        @classmethod
+        def _ensure_partition_exists(cls, session: Session, collection: CollectionStore) -> None:
+            try:
+                ddl = cls._create_partition_ddl(str(collection.uuid))
+                session.execute(text(ddl))
+                session.commit()
+            except ProgrammingError as e:
+                if "already exists" not in str(e):
+                    raise e
+
+        @classmethod
+        async def _aensure_partition_exists(cls, session: AsyncSession, collection: CollectionStore) -> None:
+            try:
+                ddl = cls._create_partition_ddl(str(collection.uuid))
+                await session.execute(text(ddl))
+                await session.commit()
+            except ProgrammingError as e:
+                if "already exists" not in str(e):
+                    raise e
 
         @classmethod
         def _create_partition_ddl(cls, uuid: str) -> str:
