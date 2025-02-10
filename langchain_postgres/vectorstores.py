@@ -178,6 +178,7 @@ def _get_embedding_collection_store(
             session: Session,
             name: str,
             cmetadata: Optional[dict] = None,
+            partition: Optional[bool] = None,
         ) -> Tuple["CollectionStore", bool]:
             """Get or create a collection.
             Returns:
@@ -212,6 +213,7 @@ def _get_embedding_collection_store(
             session: AsyncSession,
             name: str,
             cmetadata: Optional[dict] = None,
+            partition: Optional[bool] = None,
         ) -> Tuple["CollectionStore", bool]:
             """
             Get or create a collection.
@@ -888,7 +890,10 @@ class PGVector(VectorStore):
             self.delete_collection()
         with self._make_sync_session() as session:
             self.CollectionStore.get_or_create(
-                session, self.collection_name, cmetadata=self.collection_metadata
+                session,
+                self.collection_name,
+                cmetadata=self.collection_metadata,
+                partition=self._enable_partitioning,
             )
             session.commit()
 
@@ -898,7 +903,10 @@ class PGVector(VectorStore):
             if self.pre_delete_collection:
                 await self._adelete_collection(session)
             await self.CollectionStore.aget_or_create(
-                session, self.collection_name, cmetadata=self.collection_metadata
+                session,
+                self.collection_name,
+                cmetadata=self.collection_metadata,
+                partition=self._enable_partitioning,
             )
             await session.commit()
 
