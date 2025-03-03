@@ -271,7 +271,6 @@ class PGVector(VectorStore):
     Instantiate:
         .. code-block:: python
 
-            from langchain_postgres import PGVector
             from langchain_postgres.vectorstores import PGVector
             from langchain_openai import OpenAIEmbeddings
 
