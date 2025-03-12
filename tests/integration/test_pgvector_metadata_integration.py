@@ -48,13 +48,13 @@ async def test_database_url():
     """
     db_suffix = uuid.uuid4().hex
     test_db = f"langchain_test_{db_suffix}"
-    default_db_url = "postgresql+asyncpg://langchain:langchain@localhost:6024/postgres"
+    default_db_url = "postgresql+psycopg://langchain:langchain@localhost:6024/postgres"
     engine = create_async_engine(default_db_url, isolation_level="AUTOCOMMIT")
     async with engine.connect() as conn:
         await conn.execute(text(f"CREATE DATABASE {test_db}"))
     await engine.dispose()
 
-    test_db_url = f"postgresql+asyncpg://langchain:langchain@localhost:6024/{test_db}"
+    test_db_url = f"postgresql+psycopg://langchain:langchain@localhost:6024/{test_db}"
     yield test_db_url
 
     engine = create_async_engine(default_db_url, isolation_level="AUTOCOMMIT")
@@ -84,7 +84,7 @@ async def test_all_retrieval_methods(test_database_url: str) -> None:
     and where scores are provided, they must be floats.
     """
     connection = test_database_url
-    embeddings = FakeEmbeddings(size=1352)
+    embeddings = FakeEmbeddings(size=1536)
     vectorstore = PGVector(
         embeddings=embeddings,
         connection=connection,
