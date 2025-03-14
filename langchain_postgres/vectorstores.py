@@ -198,7 +198,7 @@ def _get_embedding_collection_store(vector_dimension: Optional[int] = None) -> A
         __tablename__ = "langchain_pg_embedding"
 
         id = sqlalchemy.Column(
-            sqlalchemy.String, nullable=True, primary_key=True, index=True, unique=True
+            sqlalchemy.String, primary_key=True
         )
 
         collection_id = sqlalchemy.Column(
