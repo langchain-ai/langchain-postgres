@@ -32,6 +32,11 @@ VECTORSTORE_CONNECTION_STRING = (
     f":{POSTGRES_PORT}/{POSTGRES_DB}"
 )
 
+VECTORSTORE_CONNECTION_STRING_ASYNCPG = (
+    f"postgresql+asyncpg://{POSTGRES_USER}:{POSTGRES_PASSWORD}@{POSTGRES_HOST}"
+    f":{POSTGRES_PORT}/{POSTGRES_DB}"
+)
+
 
 @asynccontextmanager
 async def asyncpg_client() -> AsyncGenerator[psycopg.AsyncConnection, None]:
