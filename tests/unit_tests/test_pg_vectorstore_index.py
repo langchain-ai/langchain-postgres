@@ -4,7 +4,6 @@ from typing import AsyncIterator
 
 import pytest
 import pytest_asyncio
-import sqlalchemy
 from langchain_core.documents import Document
 from langchain_core.embeddings import DeterministicFakeEmbedding
 from sqlalchemy import text
@@ -15,7 +14,6 @@ from langchain_postgres.indexes import (
     DistanceStrategy,
     HNSWIndex,
     IVFFlatIndex,
-    IVFIndex,
 )
 from tests.utils import VECTORSTORE_CONNECTION_STRING_ASYNCPG as CONNECTION_STRING
 
@@ -178,16 +176,3 @@ class TestAsyncIndex:
     async def test_is_valid_index(self, vs: PGVectorStore) -> None:
         is_valid = await vs.ais_valid_index("invalid_index")
         assert is_valid == False
-
-    async def test_aapply_vector_index_ivf(self, vs: PGVectorStore) -> None:
-        index = IVFIndex(distance_strategy=DistanceStrategy.EUCLIDEAN)
-        await vs.aapply_vector_index(index, concurrently=True)
-        assert await vs.ais_valid_index(DEFAULT_INDEX_NAME_ASYNC)
-        index = IVFIndex(
-            name="secondindex",
-            distance_strategy=DistanceStrategy.INNER_PRODUCT,
-        )
-        await vs.aapply_vector_index(index)
-        assert await vs.ais_valid_index("secondindex")
-        await vs.adrop_vector_index("secondindex")
-        await vs.adrop_vector_index()

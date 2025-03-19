@@ -7,8 +7,6 @@ from langchain_postgres.indexes import (
     HNSWQueryOptions,
     IVFFlatIndex,
     IVFFlatQueryOptions,
-    IVFIndex,
-    IVFQueryOptions,
 )
 
 
@@ -55,24 +53,6 @@ class TestPGIndex:
     def test_ivfflat_query_options(self) -> None:
         options = IVFFlatQueryOptions(probes=2)
         assert options.to_parameter() == ["ivfflat.probes = 2"]
-
-        with warnings.catch_warnings(record=True) as w:
-            options.to_string()
-            assert len(w) == 1
-            assert "to_string is deprecated, use to_parameter instead." in str(
-                w[-1].message
-            )
-
-    def test_ivf_index(self) -> None:
-        index = IVFIndex(name="test_index", lists=200)
-        assert index.index_type == "ivf"
-        assert index.lists == 200
-        assert index.quantizer == "sq8"  # Check default value
-        assert index.index_options() == "(lists = 200, quantizer = sq8)"
-
-    def test_ivf_query_options(self) -> None:
-        options = IVFQueryOptions(probes=2)
-        assert options.to_parameter() == ["ivf.probes = 2"]
 
         with warnings.catch_warnings(record=True) as w:
             options.to_string()

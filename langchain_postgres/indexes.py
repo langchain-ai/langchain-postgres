@@ -116,33 +116,3 @@ class IVFFlatQueryOptions(QueryOptions):
             DeprecationWarning,
         )
         return f"ivfflat.probes = {self.probes}"
-
-
-@dataclass
-class IVFIndex(BaseIndex):
-    index_type: str = "ivf"
-    lists: int = 100
-    quantizer: str = field(
-        default="sq8", init=False
-    )  # Disable `quantizer` initialization currently only supports the value "sq8"
-
-    def index_options(self) -> str:
-        """Set index query options for vector store initialization."""
-        return f"(lists = {self.lists}, quantizer = {self.quantizer})"
-
-
-@dataclass
-class IVFQueryOptions(QueryOptions):
-    probes: int = 1
-
-    def to_parameter(self) -> list[str]:
-        """Convert index attributes to list of configurations."""
-        return [f"ivf.probes = {self.probes}"]
-
-    def to_string(self) -> str:
-        """Convert index attributes to string."""
-        warnings.warn(
-            "to_string is deprecated, use to_parameter instead.",
-            DeprecationWarning,
-        )
-        return f"ivf.probes = {self.probes}"
