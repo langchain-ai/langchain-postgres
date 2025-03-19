@@ -49,7 +49,7 @@ from sqlalchemy.orm import (
 
 from langchain_postgres._utils import maximal_marginal_relevance
 
-warnings.simplefilter('always', PendingDeprecationWarning)
+warnings.simplefilter("always", PendingDeprecationWarning)
 
 
 class DistanceStrategy(str, enum.Enum):
@@ -431,10 +431,12 @@ class PGVector(VectorStore):
         self._async_engine: Optional[AsyncEngine] = None
         self._async_init = False
 
-        warnings.warn("PGVector is being deprecated and will be removed in a future version. "
-                      "Please migrate to PGVectorStore. "
-                      "Refer to the migration guide at [https://github.com/langchain-ai/langchain-postgres/blob/main/examples/migrate_pgvector_to_pgvectorstore.md] for details.",
-                      PendingDeprecationWarning)
+        warnings.warn(
+            "PGVector is being deprecated and will be removed in a future version. "
+            "Please migrate to PGVectorStore. "
+            "Refer to the migration guide at [https://github.com/langchain-ai/langchain-postgres/blob/main/examples/migrate_pgvector_to_pgvectorstore.md] for details.",
+            PendingDeprecationWarning,
+        )
 
         if isinstance(connection, str):
             if async_mode:
