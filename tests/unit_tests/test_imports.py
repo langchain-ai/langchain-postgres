@@ -2,7 +2,10 @@ from langchain_postgres import __all__
 
 EXPECTED_ALL = [
     "__version__",
+    "Column",
+    "PGEngine",
     "PGVector",
+    "PGVectorStore",
     "PGVectorTranslator",
     "PostgresChatMessageHistory",
 ]

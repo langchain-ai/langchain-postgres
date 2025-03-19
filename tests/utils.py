@@ -1,4 +1,5 @@
 """Get fixtures for the database connection."""
+
 import os
 from contextlib import asynccontextmanager, contextmanager
 
@@ -29,6 +30,11 @@ DSN = (
 # It is also running on a postgres instance that has the pgvector extension
 VECTORSTORE_CONNECTION_STRING = (
     f"postgresql+psycopg://{POSTGRES_USER}:{POSTGRES_PASSWORD}@{POSTGRES_HOST}"
+    f":{POSTGRES_PORT}/{POSTGRES_DB}"
+)
+
+VECTORSTORE_CONNECTION_STRING_ASYNCPG = (
+    f"postgresql+asyncpg://{POSTGRES_USER}:{POSTGRES_PASSWORD}@{POSTGRES_HOST}"
     f":{POSTGRES_PORT}/{POSTGRES_DB}"
 )
 

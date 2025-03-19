@@ -1,4 +1,5 @@
 """Module needs to move to a stasndalone package."""
+
 from langchain_core.documents import Document
 
 metadatas = [
