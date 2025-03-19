@@ -47,6 +47,7 @@ async def aexecute(engine: PGEngine, query: str) -> None:
         await conn.commit()
 
 
+@pytest.mark.enable_socket
 @pytest.mark.asyncio(scope="class")
 class TestIndex:
     @pytest_asyncio.fixture(scope="class")

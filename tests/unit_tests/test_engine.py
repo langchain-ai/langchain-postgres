@@ -57,6 +57,7 @@ async def afetch(engine: PGEngine, query: str) -> Sequence[RowMapping]:
     return await engine._run_as_async(run(engine, query))
 
 
+@pytest.mark.enable_socket
 @pytest.mark.asyncio
 class TestEngineAsync:
     @pytest_asyncio.fixture(scope="class")
@@ -165,6 +166,7 @@ class TestEngineAsync:
             Column(1, "INTEGER")  # type: ignore
 
 
+@pytest.mark.enable_socket
 @pytest.mark.asyncio
 class TestEngineSync:
     @pytest_asyncio.fixture(scope="class")

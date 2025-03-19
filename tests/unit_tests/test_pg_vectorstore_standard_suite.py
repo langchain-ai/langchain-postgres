@@ -34,6 +34,7 @@ async def aexecute(
     await engine._run_as_async(run(engine, query))
 
 
+@pytest.mark.enable_socket
 @pytest.mark.filterwarnings("ignore")
 @pytest.mark.asyncio
 class TestStandardSuiteSync(VectorStoreIntegrationTests):
@@ -61,6 +62,7 @@ class TestStandardSuiteSync(VectorStoreIntegrationTests):
         yield vs
 
 
+@pytest.mark.enable_socket
 @pytest.mark.filterwarnings("ignore")
 @pytest.mark.asyncio
 class TestStandardSuiteAsync(VectorStoreIntegrationTests):

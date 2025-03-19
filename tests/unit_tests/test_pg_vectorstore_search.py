@@ -64,6 +64,7 @@ async def aexecute(
     await engine._run_as_async(run(engine, query))
 
 
+@pytest.mark.enable_socket
 @pytest.mark.asyncio(scope="class")
 class TestVectorStoreSearch:
     @pytest_asyncio.fixture(scope="class")
@@ -278,6 +279,7 @@ class TestVectorStoreSearch:
         assert [doc.metadata["code"] for doc in docs] == expected_ids, test_filter
 
 
+@pytest.mark.enable_socket
 class TestVectorStoreSearchSync:
     @pytest_asyncio.fixture(scope="class")
     async def engine_sync(self) -> AsyncIterator[PGEngine]:

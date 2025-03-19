@@ -59,6 +59,7 @@ async def aexecute(
         await conn.commit()
 
 
+@pytest.mark.enable_socket
 @pytest.mark.asyncio(scope="class")
 class TestVectorStoreSearch:
     @pytest_asyncio.fixture(scope="class")

@@ -1,4 +1,5 @@
 import warnings
+import pytest
 
 from langchain_postgres.indexes import (
     DistanceStrategy,
@@ -11,6 +12,7 @@ from langchain_postgres.indexes import (
 )
 
 
+@pytest.mark.enable_socket
 class TestPGIndex:
     def test_distance_strategy(self) -> None:
         assert DistanceStrategy.EUCLIDEAN.operator == "<->"
