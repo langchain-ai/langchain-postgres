@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from threading import Thread
 from typing import TYPE_CHECKING, Any, Awaitable, Optional, TypeVar, Union
 
-from sqlalchemy import MetaData, Table, text
+from sqlalchemy import MetaData, Table, TextClause, text
 from sqlalchemy.engine import URL
 from sqlalchemy.exc import InvalidRequestError
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
@@ -136,6 +136,12 @@ class PGEngine:
         """Dispose of connection pool"""
         await self._run_as_async(self._pool.dispose())
 
+    def _create_vector_extension(self) -> TextClause:
+        return text(
+            "SELECT pg_advisory_xact_lock(1573678846307946496);"
+            "CREATE EXTENSION IF NOT EXISTS vector;"
+        )
+
     async def _ainit_vectorstore_table(
         self,
         table_name: str,
@@ -176,7 +182,8 @@ class PGEngine:
             :class:`UndefinedObjectError <asyncpg.exceptions.UndefinedObjectError>`: if the data type of the id column is not a postgreSQL data type.
         """
         async with self._pool.connect() as conn:
-            await conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
+            stmt = self._create_vector_extension()
+            await conn.execute(stmt)
             await conn.commit()
 
         if overwrite_existing:
