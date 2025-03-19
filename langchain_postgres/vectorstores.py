@@ -432,7 +432,7 @@ class PGVector(VectorStore):
         self._async_init = False
 
         warnings.warn(
-            "PGVector is being deprecated and will be removed in a future version. "
+            "PGVector is being deprecated and will be removed in the future. "
             "Please migrate to PGVectorStore. "
             "Refer to the migration guide at [https://github.com/langchain-ai/langchain-postgres/blob/main/examples/migrate_pgvector_to_pgvectorstore.md] for details.",
             PendingDeprecationWarning,
