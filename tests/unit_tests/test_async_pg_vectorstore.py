@@ -42,7 +42,7 @@ async def afetch(engine: PGEngine, query: str) -> Sequence[RowMapping]:
     return result_fetch
 
 
-@pytest.mark.asyncio(cope="class")
+@pytest.mark.asyncio(scope="class")
 class TestVectorStore:
     @pytest_asyncio.fixture(scope="class")
     async def engine(self) -> AsyncIterator[PGEngine]:

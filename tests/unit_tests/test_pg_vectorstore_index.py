@@ -59,7 +59,7 @@ async def aexecute(
     await engine._run_as_async(run(engine, query))
 
 
-@pytest.mark.asyncio(cope="class")
+@pytest.mark.asyncio(scope="class")
 class TestIndex:
     @pytest_asyncio.fixture(scope="class")
     async def engine(self) -> AsyncIterator[PGEngine]:
@@ -119,7 +119,7 @@ class TestIndex:
         assert is_valid == False
 
 
-@pytest.mark.asyncio(cope="class")
+@pytest.mark.asyncio(scope="class")
 class TestAsyncIndex:
     @pytest_asyncio.fixture(scope="class")
     async def engine(self) -> AsyncIterator[PGEngine]:

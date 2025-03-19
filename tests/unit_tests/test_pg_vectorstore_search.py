@@ -64,7 +64,7 @@ async def aexecute(
     await engine._run_as_async(run(engine, query))
 
 
-@pytest.mark.asyncio(cope="class")
+@pytest.mark.asyncio(scope="class")
 class TestVectorStoreSearch:
     @pytest_asyncio.fixture(scope="class")
     async def engine(self) -> AsyncIterator[PGEngine]:

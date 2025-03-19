@@ -47,7 +47,7 @@ async def aexecute(engine: PGEngine, query: str) -> None:
         await conn.commit()
 
 
-@pytest.mark.asyncio(cope="class")
+@pytest.mark.asyncio(scope="class")
 class TestIndex:
     @pytest_asyncio.fixture(scope="class")
     async def engine(self) -> AsyncIterator[PGEngine]:
