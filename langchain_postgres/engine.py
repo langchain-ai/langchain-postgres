@@ -136,11 +136,11 @@ class PGEngine:
         """Dispose of connection pool"""
         await self._run_as_async(self._pool.dispose())
 
-    def _create_vector_extension(self) -> TextClause:
-        return text(
-            "SELECT pg_advisory_xact_lock(1573678846307946496);"
+    def _create_vector_extension(self) -> list[str]:
+        return [
+            "SELECT pg_advisory_xact_lock(1573678846307946496);",
             "CREATE EXTENSION IF NOT EXISTS vector;"
-        )
+        ]
 
     async def _ainit_vectorstore_table(
         self,
@@ -182,8 +182,9 @@ class PGEngine:
             :class:`UndefinedObjectError <asyncpg.exceptions.UndefinedObjectError>`: if the data type of the id column is not a postgreSQL data type.
         """
         async with self._pool.connect() as conn:
-            stmt = self._create_vector_extension()
-            await conn.execute(stmt)
+            stmts = self._create_vector_extension()
+            for stmt in stmts:
+                await conn.execute(text(stmt))
             await conn.commit()
 
         if overwrite_existing:
