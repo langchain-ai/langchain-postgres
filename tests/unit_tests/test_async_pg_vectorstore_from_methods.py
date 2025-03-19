@@ -54,6 +54,7 @@ async def afetch(engine: PGEngine, query: str) -> Sequence[RowMapping]:
     return result_fetch
 
 
+@pytest.mark.enable_socket
 @pytest.mark.asyncio
 class TestVectorStoreFromMethods:
     @pytest_asyncio.fixture
