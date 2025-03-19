@@ -23,7 +23,7 @@ async def __aget_collection_uuid(
     Get the collection uuid for a collection present in PGVector tables.
 
     Args:
-        engine (PGEngine): The AlloyDB engine corresponding to the Database.
+        engine (PGEngine): The PG engine corresponding to the Database.
         collection_name (str): The name of the collection to get the uuid for.
     Returns:
         The uuid corresponding to the collection.
@@ -49,7 +49,7 @@ async def __aextract_pgvector_collection(
     Extract all data belonging to a PGVector collection.
 
     Args:
-        engine (PGEngine): The AlloyDB engine corresponding to the Database.
+        engine (PGEngine): The PG engine corresponding to the Database.
         collection_name (str): The name of the collection to get the data for.
         batch_size (int): The batch size for collection extraction.
             Default: 1000. Optional.
@@ -112,12 +112,12 @@ async def __amigrate_pgvector_collection(
 ) -> None:
     """
     Migrate all data present in a PGVector collection to use separate tables for each collection.
-    The new data format is compatible with the AlloyDB interface.
+    The new data format is compatible with the PGVectoreStore interface.
 
     Args:
-        engine (PGEngine): The AlloyDB engine corresponding to the Database.
+        engine (PGEngine): The PG engine corresponding to the Database.
         collection_name (str): The collection to migrate.
-        vector_store (PGVectorStore): The AlloyDB vectorstore object corresponding to the new collection table.
+        vector_store (PGVectorStore): The PGVectorStore object corresponding to the new collection table.
         delete_pg_collection (bool): An option to delete the original data upon migration.
             Default: False. Optional.
         insert_batch_size (int): Number of rows to insert at once in the table.
@@ -202,7 +202,7 @@ async def aextract_pgvector_collection(
     Extract all data belonging to a PGVector collection.
 
     Args:
-        engine (PGEngine): The AlloyDB engine corresponding to the Database.
+        engine (PGEngine): The PG engine corresponding to the Database.
         collection_name (str): The name of the collection to get the data for.
         batch_size (int): The batch size for collection extraction.
             Default: 1000. Optional.
@@ -235,13 +235,13 @@ async def amigrate_pgvector_collection(
 ) -> None:
     """
     Migrate all data present in a PGVector collection to use separate tables for each collection.
-    The new data format is compatible with the AlloyDB interface.
+    The new data format is compatible with the PGVectorStore interface.
 
     Args:
-        engine (PGEngine): The AlloyDB engine corresponding to the Database.
+        engine (PGEngine): The PG engine corresponding to the Database.
         collection_name (str): The collection to migrate.
-        vector_store (PGVectorStore): The AlloyDB vectorstore object corresponding to the new collection table.
-        use_json_metadata (bool): An option to keep the PGVector metadata as json in the AlloyDB table.
+        vector_store (PGVectorStore): The PGVectorStore object corresponding to the new collection table.
+        use_json_metadata (bool): An option to keep the PGVector metadata as json in the new table.
             Default: False. Optional.
         delete_pg_collection (bool): An option to delete the original data upon migration.
             Default: False. Optional.
@@ -268,7 +268,7 @@ def extract_pgvector_collection(
     Extract all data belonging to a PGVector collection.
 
     Args:
-        engine (PGEngine): The AlloyDB engine corresponding to the Database.
+        engine (PGEngine): The PG engine corresponding to the Database.
         collection_name (str): The name of the collection to get the data for.
         batch_size (int): The batch size for collection extraction.
             Default: 1000. Optional.
@@ -299,12 +299,12 @@ def migrate_pgvector_collection(
 ) -> None:
     """
     Migrate all data present in a PGVector collection to use separate tables for each collection.
-    The new data format is compatible with the AlloyDB interface.
+    The new data format is compatible with the PGVectorStore interface.
 
     Args:
-        engine (PGEngine): The AlloyDB engine corresponding to the Database.
+        engine (PGEngine): The PG engine corresponding to the Database.
         collection_name (str): The collection to migrate.
-        vector_store (PGVectorStore): The AlloyDB vectorstore object corresponding to the new collection table.
+        vector_store (PGVectorStore): The PGVectorStore object corresponding to the new collection table.
         delete_pg_collection (bool): An option to delete the original data upon migration.
             Default: False. Optional.
         insert_batch_size (int): Number of rows to insert at once in the table.
