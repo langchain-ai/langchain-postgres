@@ -35,7 +35,7 @@ async def aexecute(
 
 
 @pytest.mark.enable_socket
-@pytest.mark.filterwarnings("ignore")
+# @pytest.mark.filterwarnings("ignore")
 @pytest.mark.asyncio
 class TestStandardSuiteSync(VectorStoreIntegrationTests):
     @pytest_asyncio.fixture(scope="function")
@@ -63,7 +63,7 @@ class TestStandardSuiteSync(VectorStoreIntegrationTests):
 
 
 @pytest.mark.enable_socket
-@pytest.mark.filterwarnings("ignore")
+# @pytest.mark.filterwarnings("ignore")
 @pytest.mark.asyncio
 class TestStandardSuiteAsync(VectorStoreIntegrationTests):
     @pytest_asyncio.fixture(scope="function")
