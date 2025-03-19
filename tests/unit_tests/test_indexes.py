@@ -1,9 +1,14 @@
 import warnings
 
-from langchain_postgres.indexes import (DistanceStrategy, HNSWIndex,
-                                        HNSWQueryOptions, IVFFlatIndex,
-                                        IVFFlatQueryOptions, IVFIndex,
-                                        IVFQueryOptions)
+from langchain_postgres.indexes import (
+    DistanceStrategy,
+    HNSWIndex,
+    HNSWQueryOptions,
+    IVFFlatIndex,
+    IVFFlatQueryOptions,
+    IVFIndex,
+    IVFQueryOptions,
+)
 
 
 class TestPGIndex:

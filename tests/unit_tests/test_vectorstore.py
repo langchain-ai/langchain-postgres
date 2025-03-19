@@ -1,4 +1,5 @@
 """Test PGVector functionality."""
+
 import contextlib
 from typing import Any, AsyncGenerator, Dict, Generator, List, Optional, Sequence
 

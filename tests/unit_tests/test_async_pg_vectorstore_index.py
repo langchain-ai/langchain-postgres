@@ -10,11 +10,13 @@ from sqlalchemy import text
 
 from langchain_postgres import PGEngine
 from langchain_postgres.async_vectorstore import AsyncPGVectorStore
-from langchain_postgres.indexes import (DEFAULT_INDEX_NAME_SUFFIX,
-                                        DistanceStrategy, HNSWIndex,
-                                        IVFFlatIndex)
-from tests.utils import \
-    VECTORSTORE_CONNECTION_STRING_ASYNCPG as CONNECTION_STRING
+from langchain_postgres.indexes import (
+    DEFAULT_INDEX_NAME_SUFFIX,
+    DistanceStrategy,
+    HNSWIndex,
+    IVFFlatIndex,
+)
+from tests.utils import VECTORSTORE_CONNECTION_STRING_ASYNCPG as CONNECTION_STRING
 
 DEFAULT_TABLE = "test_table" + str(uuid.uuid4()).replace("-", "_")
 DEFAULT_INDEX_NAME = DEFAULT_TABLE + DEFAULT_INDEX_NAME_SUFFIX
@@ -45,7 +47,7 @@ async def aexecute(engine: PGEngine, query: str) -> None:
         await conn.commit()
 
 
-@pytest.mark.asyncio(loop_scope="class")
+@pytest.mark.asyncio(cope="class")
 class TestIndex:
     @pytest_asyncio.fixture(scope="class")
     async def engine(self) -> AsyncIterator[PGEngine]:

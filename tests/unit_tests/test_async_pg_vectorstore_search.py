@@ -12,9 +12,10 @@ from langchain_postgres import Column, PGEngine
 from langchain_postgres.async_vectorstore import AsyncPGVectorStore
 from langchain_postgres.indexes import DistanceStrategy, HNSWQueryOptions
 from tests.unit_tests.fixtures.metadata_filtering_data import (
-    FILTERING_TEST_CASES, METADATAS)
-from tests.utils import \
-    VECTORSTORE_CONNECTION_STRING_ASYNCPG as CONNECTION_STRING
+    FILTERING_TEST_CASES,
+    METADATAS,
+)
+from tests.utils import VECTORSTORE_CONNECTION_STRING_ASYNCPG as CONNECTION_STRING
 
 DEFAULT_TABLE = "test_table" + str(uuid.uuid4()).replace("-", "_")
 CUSTOM_TABLE = "test_table_custom" + str(uuid.uuid4()).replace("-", "_")
@@ -58,7 +59,7 @@ async def aexecute(
         await conn.commit()
 
 
-@pytest.mark.asyncio(loop_scope="class")
+@pytest.mark.asyncio(cope="class")
 class TestVectorStoreSearch:
     @pytest_asyncio.fixture(scope="class")
     async def engine(self) -> AsyncIterator[PGEngine]:
@@ -212,7 +213,8 @@ class TestVectorStoreSearch:
 
         score_threshold = {"score_threshold": 0.9}
         results = await vs.asimilarity_search_with_relevance_scores(
-            "foo", **score_threshold  # type: ignore
+            "foo",
+            **score_threshold,  # type: ignore
         )
         assert len(results) == 1
         assert results[0][0] == Document(page_content="foo", id=ids[0])

@@ -10,8 +10,7 @@ from sqlalchemy.engine.row import RowMapping
 
 from langchain_postgres import Column, PGEngine
 from langchain_postgres.async_vectorstore import AsyncPGVectorStore
-from tests.utils import \
-    VECTORSTORE_CONNECTION_STRING_ASYNCPG as CONNECTION_STRING
+from tests.utils import VECTORSTORE_CONNECTION_STRING_ASYNCPG as CONNECTION_STRING
 
 DEFAULT_TABLE = "test_table" + str(uuid.uuid4())
 DEFAULT_TABLE_SYNC = "test_table_sync" + str(uuid.uuid4())
@@ -43,7 +42,7 @@ async def afetch(engine: PGEngine, query: str) -> Sequence[RowMapping]:
     return result_fetch
 
 
-@pytest.mark.asyncio(loop_scope="class")
+@pytest.mark.asyncio(cope="class")
 class TestVectorStore:
     @pytest_asyncio.fixture(scope="class")
     async def engine(self) -> AsyncIterator[PGEngine]:

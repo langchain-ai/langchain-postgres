@@ -1,4 +1,5 @@
 """Copied from community."""
+
 from typing import List
 
 from langchain_core.embeddings import Embeddings

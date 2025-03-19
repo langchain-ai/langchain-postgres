@@ -14,9 +14,14 @@ from sqlalchemy import RowMapping, text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from .engine import PGEngine
-from .indexes import (DEFAULT_DISTANCE_STRATEGY, DEFAULT_INDEX_NAME_SUFFIX,
-                      BaseIndex, DistanceStrategy, ExactNearestNeighbor,
-                      QueryOptions)
+from .indexes import (
+    DEFAULT_DISTANCE_STRATEGY,
+    DEFAULT_INDEX_NAME_SUFFIX,
+    BaseIndex,
+    DistanceStrategy,
+    ExactNearestNeighbor,
+    QueryOptions,
+)
 
 COMPARISONS_TO_NATIVE = {
     "$eq": "=",
@@ -775,7 +780,7 @@ class AsyncPGVectorStore(VectorStore):
             if index.name == None:
                 index.name = self.table_name + DEFAULT_INDEX_NAME_SUFFIX
             name = index.name
-        stmt = f"CREATE INDEX {'CONCURRENTLY' if concurrently else ''} {name} ON \"{self.schema_name}\".\"{self.table_name}\" USING {index.index_type} ({self.embedding_column} {function}) {params} {filter};"
+        stmt = f'CREATE INDEX {"CONCURRENTLY" if concurrently else ""} {name} ON "{self.schema_name}"."{self.table_name}" USING {index.index_type} ({self.embedding_column} {function}) {params} {filter};'
         if concurrently:
             async with self.engine.connect() as conn:
                 await conn.execute(text("COMMIT"))

@@ -2,6 +2,7 @@
 
 This client provides support for both sync and async via psycopg 3.
 """
+
 from __future__ import annotations
 
 import json

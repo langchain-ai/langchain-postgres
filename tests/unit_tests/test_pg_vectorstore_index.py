@@ -10,11 +10,14 @@ from langchain_core.embeddings import DeterministicFakeEmbedding
 from sqlalchemy import text
 
 from langchain_postgres import PGEngine, PGVectorStore
-from langchain_postgres.indexes import (DEFAULT_INDEX_NAME_SUFFIX,
-                                        DistanceStrategy, HNSWIndex,
-                                        IVFFlatIndex, IVFIndex)
-from tests.utils import \
-    VECTORSTORE_CONNECTION_STRING_ASYNCPG as CONNECTION_STRING
+from langchain_postgres.indexes import (
+    DEFAULT_INDEX_NAME_SUFFIX,
+    DistanceStrategy,
+    HNSWIndex,
+    IVFFlatIndex,
+    IVFIndex,
+)
+from tests.utils import VECTORSTORE_CONNECTION_STRING_ASYNCPG as CONNECTION_STRING
 
 DEFAULT_TABLE = "test_table" + str(uuid.uuid4()).replace("-", "_")
 DEFAULT_TABLE_ASYNC = "test_table" + str(uuid.uuid4()).replace("-", "_")
@@ -56,7 +59,7 @@ async def aexecute(
     await engine._run_as_async(run(engine, query))
 
 
-@pytest.mark.asyncio(loop_scope="class")
+@pytest.mark.asyncio(cope="class")
 class TestIndex:
     @pytest_asyncio.fixture(scope="class")
     async def engine(self) -> AsyncIterator[PGEngine]:
@@ -116,7 +119,7 @@ class TestIndex:
         assert is_valid == False
 
 
-@pytest.mark.asyncio(loop_scope="class")
+@pytest.mark.asyncio(cope="class")
 class TestAsyncIndex:
     @pytest_asyncio.fixture(scope="class")
     async def engine(self) -> AsyncIterator[PGEngine]:

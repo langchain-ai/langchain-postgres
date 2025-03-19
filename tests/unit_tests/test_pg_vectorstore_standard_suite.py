@@ -9,8 +9,7 @@ from langchain_tests.integration_tests.vectorstores import EMBEDDING_SIZE
 from sqlalchemy import text
 
 from langchain_postgres import Column, PGEngine, PGVectorStore
-from tests.utils import \
-    VECTORSTORE_CONNECTION_STRING_ASYNCPG as CONNECTION_STRING
+from tests.utils import VECTORSTORE_CONNECTION_STRING_ASYNCPG as CONNECTION_STRING
 
 DEFAULT_TABLE = "test_table_standard_test_suite" + str(uuid.uuid4())
 DEFAULT_TABLE_SYNC = "test_table_sync_standard_test_suite" + str(uuid.uuid4())
@@ -38,7 +37,7 @@ async def aexecute(
 @pytest.mark.filterwarnings("ignore")
 @pytest.mark.asyncio
 class TestStandardSuiteSync(VectorStoreIntegrationTests):
-    @pytest_asyncio.fixture(loop_scope="function")
+    @pytest_asyncio.fixture(cope="function")
     async def sync_engine(self) -> AsyncIterator[PGEngine]:
         sync_engine = PGEngine.from_connection_string(url=CONNECTION_STRING)
         yield sync_engine
@@ -65,14 +64,14 @@ class TestStandardSuiteSync(VectorStoreIntegrationTests):
 @pytest.mark.filterwarnings("ignore")
 @pytest.mark.asyncio
 class TestStandardSuiteAsync(VectorStoreIntegrationTests):
-    @pytest_asyncio.fixture(loop_scope="function")
+    @pytest_asyncio.fixture(cope="function")
     async def async_engine(self) -> AsyncIterator[PGEngine]:
         async_engine = PGEngine.from_connection_string(url=CONNECTION_STRING)
         yield async_engine
         await aexecute(async_engine, f'DROP TABLE IF EXISTS "{DEFAULT_TABLE}"')
         await async_engine.close()
 
-    @pytest_asyncio.fixture(loop_scope="function")
+    @pytest_asyncio.fixture(cope="function")
     async def vectorstore(self, async_engine: PGEngine) -> AsyncIterator[PGVectorStore]:
         """Get an empty vectorstore for unit tests."""
         await async_engine.ainit_vectorstore_table(

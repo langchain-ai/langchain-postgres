@@ -9,8 +9,12 @@ from langchain_core.vectorstores import VectorStore
 
 from .async_vectorstore import AsyncPGVectorStore
 from .engine import PGEngine
-from .indexes import (DEFAULT_DISTANCE_STRATEGY, BaseIndex, DistanceStrategy,
-                      QueryOptions)
+from .indexes import (
+    DEFAULT_DISTANCE_STRATEGY,
+    BaseIndex,
+    DistanceStrategy,
+    QueryOptions,
+)
 
 
 class PGVectorStore(VectorStore):

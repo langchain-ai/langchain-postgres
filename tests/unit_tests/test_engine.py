@@ -12,8 +12,7 @@ from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy.pool import NullPool
 
 from langchain_postgres import Column, PGEngine
-from tests.utils import \
-    VECTORSTORE_CONNECTION_STRING_ASYNCPG as CONNECTION_STRING
+from tests.utils import VECTORSTORE_CONNECTION_STRING_ASYNCPG as CONNECTION_STRING
 
 DEFAULT_TABLE = "test_table" + str(uuid.uuid4()).replace("-", "_")
 CUSTOM_TABLE = "test_table_custom" + str(uuid.uuid4()).replace("-", "_")
@@ -26,7 +25,6 @@ INT_ID_CUSTOM_TABLE_SYNC = "test_table_custom_int_id" + str(uuid.uuid4()).replac
 VECTOR_SIZE = 768
 
 embeddings_service = DeterministicFakeEmbedding(size=VECTOR_SIZE)
-host = os.environ["IP_ADDRESS"]
 
 
 def get_env_var(key: str, desc: str) -> str:
@@ -135,7 +133,6 @@ class TestEngineAsync:
             assert row in expected
 
     async def test_from_engine(self) -> None:
-
         engine = create_async_engine(
             CONNECTION_STRING,
         )
