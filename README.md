@@ -83,3 +83,25 @@ print(chat_history.messages)
 ### Vectorstore
 
 See example for the [PGVector vectorstore here](https://github.com/langchain-ai/langchain-postgres/blob/main/examples/vectorstore.ipynb)
+
+## Google Cloud Integrations
+
+[Google Cloud](https://python.langchain.com/docs/integrations/providers/google/) provides Vector Store, Chat Message History, and Data Loader integrations for [AlloyDB](https://cloud.google.com/alloydb) and [Cloud SQL](https://cloud.google.com/sql) for PostgreSQL databases via the following PyPi packages:
+
+* [`langchain-google-alloydb-pg`](https://github.com/googleapis/langchain-google-alloydb-pg-python)
+
+* [`langchain-google-cloud-sql-pg`](https://github.com/googleapis/langchain-google-cloud-sql-pg-python)
+
+Using the Google Cloud provided integrations provides the following benefits:
+
+- **Enhanced security**: Easily and securely connect to Google Cloud databases utilizing IAM for authorization and database authentication without needing to manage SSL certificates, configure firewall rules, or enable authorized networks.
+- **Simplified and Secure Connections:** Connect to Google Cloud databases effortlessly using the instance name instead of complex connection strings. The integrations creates a secure connection pool that can be easily shared across your application using the `engine` object.
+
+Learn how to [migrate a `PGVector` vector store to `AlloyDBVectorStore`](https://github.com/googleapis/langchain-google-alloydb-pg-python/blob/main/samples/migrations/migrate_pgvector_to_alloydb.md) to gain the following benefits:
+
+- **Simplified management**: a single table contains data corresponding to a single collection, making it easier to query, update, and maintain.
+- **Schema flexibility**: allow users to add tables into any database schema.
+- **Improved performance**: using a single-table schema can lead to faster query execution, especially for large collections.
+- **Improved metadata handling**: store metadata in columns instead of JSON, resulting in significant performance improvements.
+- **Clear separation**: clearly separate table and extension creation, allowing for distinct permissions and streamlined workflows.
+- **Better integration with AlloyDB**: take advantage of AlloyDB's advanced indexing and scalability capabilities.
