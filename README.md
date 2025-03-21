@@ -97,8 +97,8 @@ Using the Google Cloud integrations provides the following benefits:
 - **Enhanced Security**: Securely connect to Google Cloud databases utilizing IAM for authorization and database authentication without needing to manage SSL certificates, configure firewall rules, or enable authorized networks.
 - **Simplified and Secure Connections:** Connect to Google Cloud databases effortlessly using the instance name instead of complex connection strings. The integrations creates a secure connection pool that can be easily shared across your application using the `engine` object.
 
-| Vector Store             | Metadata filtering | Async support  | Schema Flexibility | Improved metadata handling | Hybrid Search         |
+| Vector Store             | Metadata filtering | Async support  | Schema Flexibility | Improved metadata handling | Hybrid Search |
 |--------------------------|--------------------|----------------|--------------------|----------------------------|---------------|
-| Google AlloyDB           | ✓                  | ✓              | ✓                  | ✓                          | ✗             |
-| Google Cloud SQL Postgres| ✓                  | ✓              | ✓                  | ✓                          | ✗             |
+| Google AlloyDB           |          ✓         |        ✓       |         ✓          |             ✓              |       ✗       |
+| Google Cloud SQL Postgres|          ✓         |        ✓       |         ✓          |             ✓              |       ✗       |
 
