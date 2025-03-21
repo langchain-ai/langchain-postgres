@@ -99,6 +99,6 @@ Using the Google Cloud integrations provides the following benefits:
 
 | Vector Store             | Metadata filtering | Async support  | Schema Flexibility | Improved metadata handling | Hybrid Search         |
 |--------------------------|--------------------|----------------|--------------------|----------------------------|---------------|
-| Google AlloyDB           | ✓                  | ✓              | ✓                  | ✓                          | ✓             |
-| Google Cloud SQL Postgres| ✓                  | ✓              | ✓                  | ✓                          | ✓             |
+| Google AlloyDB           | ✓                  | ✓              | ✓                  | ✓                          | ✗             |
+| Google Cloud SQL Postgres| ✓                  | ✓              | ✓                  | ✓                          | ✗             |
 
