@@ -1073,3 +1073,75 @@ def test_validate_operators() -> None:
         "$not",
         "$or",
     ]
+
+
+def test_pgvector_similarity_search_with_hnsw() -> None:
+    """Test similarity search using HNSW index."""
+    texts = ["foo", "bar", "baz"]
+    docsearch = PGVector.from_texts(
+        texts=texts,
+        collection_name="test_collection_hnsw",
+        embedding=FakeEmbeddingsWithAdaDimension(),
+        connection=CONNECTION_STRING,
+        pre_delete_collection=True,
+    )
+    docsearch.create_hnsw_index()
+    output = docsearch.similarity_search("foo", k=1, use_hnsw=True, ef_search=200)
+    assert output == [Document(page_content="foo")]
+
+
+@pytest.mark.asyncio
+async def test_async_pgvector_similarity_search_with_hnsw() -> None:
+    """Test similarity search using HNSW index asynchronously."""
+    texts = ["foo", "bar", "baz"]
+    docsearch = await PGVector.afrom_texts(
+        texts=texts,
+        collection_name="test_collection_hnsw",
+        embedding=FakeEmbeddingsWithAdaDimension(),
+        connection=CONNECTION_STRING,
+        pre_delete_collection=True,
+    )
+    await docsearch.acreate_hnsw_index()
+    output = await docsearch.asimilarity_search(
+        "foo", k=1, use_hnsw=True, ef_search=200
+    )
+    assert output == [Document(page_content="foo")]
+
+
+def test_pgvector_similarity_search_with_hnsw_and_filter() -> None:
+    """Test similarity search using HNSW index with a filter."""
+    texts = ["foo", "bar", "baz"]
+    metadatas = [{"page": str(i)} for i in range(len(texts))]
+    docsearch = PGVector.from_texts(
+        texts=texts,
+        collection_name="test_collection_hnsw_filter",
+        embedding=FakeEmbeddingsWithAdaDimension(),
+        metadatas=metadatas,
+        connection=CONNECTION_STRING,
+        pre_delete_collection=True,
+    )
+    docsearch.create_hnsw_index()
+    output = docsearch.similarity_search(
+        "foo", k=1, use_hnsw=True, ef_search=200, filter={"page": "0"}
+    )
+    assert output == [Document(page_content="foo", metadata={"page": "0"})]
+
+
+@pytest.mark.asyncio
+async def test_async_pgvector_similarity_search_with_hnsw_and_filter() -> None:
+    """Test similarity search using HNSW index with a filter asynchronously."""
+    texts = ["foo", "bar", "baz"]
+    metadatas = [{"page": str(i)} for i in range(len(texts))]
+    docsearch = await PGVector.afrom_texts(
+        texts=texts,
+        collection_name="test_collection_hnsw_filter",
+        embedding=FakeEmbeddingsWithAdaDimension(),
+        metadatas=metadatas,
+        connection=CONNECTION_STRING,
+        pre_delete_collection=True,
+    )
+    await docsearch.acreate_hnsw_index()
+    output = await docsearch.asimilarity_search(
+        "foo", k=1, use_hnsw=True, ef_search=200, filter={"page": "0"}
+    )
+    assert output == [Document(page_content="foo", metadata={"page": "0"})]
