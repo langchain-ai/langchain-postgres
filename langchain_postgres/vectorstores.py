@@ -49,7 +49,7 @@ from sqlalchemy.orm import (
 
 from langchain_postgres._utils import maximal_marginal_relevance
 
-warnings.simplefilter("always", PendingDeprecationWarning)
+warnings.simplefilter("once", PendingDeprecationWarning)
 
 
 class DistanceStrategy(str, enum.Enum):
