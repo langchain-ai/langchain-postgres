@@ -83,3 +83,47 @@ print(chat_history.messages)
 ### Vectorstore
 
 See example for the [PGVector vectorstore here](https://github.com/langchain-ai/langchain-postgres/blob/main/examples/vectorstore.ipynb)
+
+> [!NOTE]
+> PGVector is being deprecated. Please migrate to PGVectorStore.
+PGVectorStore is used for improved performance and manageability.
+See the [migration guide](https://github.com/langchain-ai/langchain-postgres/blob/main/examples/migrate_pgvector_to_pgvectorstore.md) for details on how to migrate from PGVector to PGVectorStore.
+
+> [!TIP]
+> All synchronous functions have corresponding asynchronous functions
+
+```python
+from langchain_postgres import PGEngine, PGVectorStore
+from langchain_core.embeddings import DeterministicFakeEmbedding
+import uuid
+
+# Replace these variable values
+engine = PGEngine.from_connection_string(url=CONNECTION_STRING)
+
+VECTOR_SIZE = 768
+embedding = DeterministicFakeEmbedding(size=VECTOR_SIZE)
+
+engine.init_vectorstore_table(
+    table_name="destination_table",
+    vector_size=VECTOR_SIZE,
+)
+
+store = PGVectorStore.create_sync(
+    engine=engine,
+    table_name=TABLE_NAME,
+    embedding_service=embedding,
+)
+
+all_texts = ["Apples and oranges", "Cars and airplanes", "Pineapple", "Train", "Banana"]
+metadatas = [{"len": len(t)} for t in all_texts]
+ids = [str(uuid.uuid4()) for _ in all_texts]
+docs = [
+    Document(id=ids[i], page_content=all_texts[i], metadata=metadatas[i]) for i in range(len(all_texts))
+]
+
+store.add_documents(docs)
+
+query = "I'd like a fruit."
+docs = store.similarity_search(query)
+print(docs)
+```
