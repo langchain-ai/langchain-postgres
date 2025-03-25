@@ -89,7 +89,8 @@ See example for the [PGVector vectorstore here](https://github.com/langchain-ai/
 PGVectorStore is used for improved performance and manageability.
 See the [migration guide](https://github.com/langchain-ai/langchain-postgres/blob/main/examples/migrate_pgvector_to_pgvectorstore.md) for details on how to migrate from PGVector to PGVectorStore.
 
-*Note:* All synchronous functions have corresponding asynchronous functions
+> [!TIP]
+> All synchronous functions have corresponding asynchronous functions
 
 ```python
 from langchain_postgres import PGEngine, PGVectorStore
