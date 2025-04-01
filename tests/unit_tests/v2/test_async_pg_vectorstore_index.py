@@ -72,16 +72,16 @@ class TestIndex:
         yield vs
 
     async def test_aapply_vector_index(self, vs: AsyncPGVectorStore) -> None:
-        index = HNSWIndex()
+        index = HNSWIndex(name=DEFAULT_INDEX_NAME)
         await vs.aapply_vector_index(index)
         assert await vs.is_valid_index(DEFAULT_INDEX_NAME)
         await vs.adrop_vector_index(DEFAULT_INDEX_NAME)
 
     async def test_areindex(self, vs: AsyncPGVectorStore) -> None:
         if not await vs.is_valid_index(DEFAULT_INDEX_NAME):
-            index = HNSWIndex()
+            index = HNSWIndex(name=DEFAULT_INDEX_NAME)
             await vs.aapply_vector_index(index)
-        await vs.areindex()
+        await vs.areindex(DEFAULT_INDEX_NAME)
         await vs.areindex(DEFAULT_INDEX_NAME)
         assert await vs.is_valid_index(DEFAULT_INDEX_NAME)
         await vs.adrop_vector_index(DEFAULT_INDEX_NAME)
@@ -92,7 +92,9 @@ class TestIndex:
         assert not result
 
     async def test_aapply_vector_index_ivfflat(self, vs: AsyncPGVectorStore) -> None:
-        index = IVFFlatIndex(distance_strategy=DistanceStrategy.EUCLIDEAN)
+        index = IVFFlatIndex(
+            name=DEFAULT_INDEX_NAME, distance_strategy=DistanceStrategy.EUCLIDEAN
+        )
         await vs.aapply_vector_index(index, concurrently=True)
         assert await vs.is_valid_index(DEFAULT_INDEX_NAME)
         index = IVFFlatIndex(

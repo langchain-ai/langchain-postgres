@@ -81,16 +81,16 @@ class TestIndex:
         yield vs
 
     async def test_aapply_vector_index(self, vs: PGVectorStore) -> None:
-        index = HNSWIndex()
+        index = HNSWIndex(name=DEFAULT_INDEX_NAME)
         vs.apply_vector_index(index)
         assert vs.is_valid_index(DEFAULT_INDEX_NAME)
         vs.drop_vector_index(DEFAULT_INDEX_NAME)
 
     async def test_areindex(self, vs: PGVectorStore) -> None:
         if not vs.is_valid_index(DEFAULT_INDEX_NAME):
-            index = HNSWIndex()
+            index = HNSWIndex(name=DEFAULT_INDEX_NAME)
             vs.apply_vector_index(index)
-        vs.reindex()
+        vs.reindex(DEFAULT_INDEX_NAME)
         vs.reindex(DEFAULT_INDEX_NAME)
         assert vs.is_valid_index(DEFAULT_INDEX_NAME)
         vs.drop_vector_index(DEFAULT_INDEX_NAME)
@@ -101,7 +101,9 @@ class TestIndex:
         assert not result
 
     async def test_aapply_vector_index_ivfflat(self, vs: PGVectorStore) -> None:
-        index = IVFFlatIndex(distance_strategy=DistanceStrategy.EUCLIDEAN)
+        index = IVFFlatIndex(
+            name=DEFAULT_INDEX_NAME, distance_strategy=DistanceStrategy.EUCLIDEAN
+        )
         vs.apply_vector_index(index, concurrently=True)
         assert vs.is_valid_index(DEFAULT_INDEX_NAME)
         index = IVFFlatIndex(
@@ -142,15 +144,15 @@ class TestAsyncIndex:
         yield vs
 
     async def test_aapply_vector_index(self, vs: PGVectorStore) -> None:
-        index = HNSWIndex()
+        index = HNSWIndex(name=DEFAULT_INDEX_NAME_ASYNC)
         await vs.aapply_vector_index(index)
         assert await vs.ais_valid_index(DEFAULT_INDEX_NAME_ASYNC)
 
     async def test_areindex(self, vs: PGVectorStore) -> None:
         if not await vs.ais_valid_index(DEFAULT_INDEX_NAME_ASYNC):
-            index = HNSWIndex()
+            index = HNSWIndex(name=DEFAULT_INDEX_NAME_ASYNC)
             await vs.aapply_vector_index(index)
-        await vs.areindex()
+        await vs.areindex(DEFAULT_INDEX_NAME_ASYNC)
         await vs.areindex(DEFAULT_INDEX_NAME_ASYNC)
         assert await vs.ais_valid_index(DEFAULT_INDEX_NAME_ASYNC)
         await vs.adrop_vector_index(DEFAULT_INDEX_NAME_ASYNC)
@@ -161,7 +163,9 @@ class TestAsyncIndex:
         assert not result
 
     async def test_aapply_vector_index_ivfflat(self, vs: PGVectorStore) -> None:
-        index = IVFFlatIndex(distance_strategy=DistanceStrategy.EUCLIDEAN)
+        index = IVFFlatIndex(
+            name=DEFAULT_INDEX_NAME_ASYNC, distance_strategy=DistanceStrategy.EUCLIDEAN
+        )
         await vs.aapply_vector_index(index, concurrently=True)
         assert await vs.ais_valid_index(DEFAULT_INDEX_NAME_ASYNC)
         index = IVFFlatIndex(
