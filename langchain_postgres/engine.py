@@ -136,6 +136,9 @@ class PGEngine:
         """Dispose of connection pool"""
         await self._run_as_async(self._pool.dispose())
 
+    def escape_postgres_identifier(self, name: str) -> str:
+        return name.replace('"', '""')
+
     async def _ainit_vectorstore_table(
         self,
         table_name: str,
@@ -144,7 +147,7 @@ class PGEngine:
         schema_name: str = "public",
         content_column: str = "content",
         embedding_column: str = "embedding",
-        metadata_columns: list[Column] = [],
+        metadata_columns: Optional[list[Column]] = None,
         metadata_json_column: str = "langchain_metadata",
         id_column: Union[str, Column] = "langchain_id",
         overwrite_existing: bool = False,
@@ -162,8 +165,8 @@ class PGEngine:
                 Default: "page_content".
             embedding_column (str) : Name of the column to store vector embeddings.
                 Default: "embedding".
-            metadata_columns (list[Column]): A list of Columns to create for custom
-                metadata. Default: []. Optional.
+            metadata_columns (Optional[list[Column]]): A list of Columns to create for custom
+                metadata. Default: None. Optional.
             metadata_json_column (str): The column to store extra metadata in JSON format.
                 Default: "langchain_metadata". Optional.
             id_column (Union[str, Column]) :  Column to store ids.
@@ -175,8 +178,21 @@ class PGEngine:
         Raises:
             :class:`DuplicateTableError <asyncpg.exceptions.DuplicateTableError>`: if table already exists.
             :class:`UndefinedObjectError <asyncpg.exceptions.UndefinedObjectError>`: if the data type of the id column is not a postgreSQL data type.
-            :class: `ValueError`: If any of the column names, schema name or table name is not a valid postgreSQL identifier
         """
+
+        schema_name = self.escape_postgres_identifier(schema_name)
+        table_name = self.escape_postgres_identifier(table_name)
+        content_column = self.escape_postgres_identifier(content_column)
+        embedding_column = self.escape_postgres_identifier(embedding_column)
+        if metadata_columns is None:
+            metadata_columns = []
+        else:
+            for col in metadata_columns:
+                col.name = self.escape_postgres_identifier(col.name)
+        if isinstance(id_column, str):
+            id_column = self.escape_postgres_identifier(id_column)
+        else:
+            id_column.name = self.escape_postgres_identifier(id_column.name)
 
         async with self._pool.connect() as conn:
             await conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
@@ -215,7 +231,7 @@ class PGEngine:
         schema_name: str = "public",
         content_column: str = "content",
         embedding_column: str = "embedding",
-        metadata_columns: list[Column] = [],
+        metadata_columns: Optional[list[Column]] = None,
         metadata_json_column: str = "langchain_metadata",
         id_column: Union[str, Column] = "langchain_id",
         overwrite_existing: bool = False,
@@ -233,8 +249,8 @@ class PGEngine:
                 Default: "page_content".
             embedding_column (str) : Name of the column to store vector embeddings.
                 Default: "embedding".
-            metadata_columns (list[Column]): A list of Columns to create for custom
-                metadata. Default: []. Optional.
+            metadata_columns (Optional[list[Column]]): A list of Columns to create for custom
+                metadata. Default: None. Optional.
             metadata_json_column (str): The column to store extra metadata in JSON format.
                 Default: "langchain_metadata". Optional.
             id_column (Union[str, Column]) :  Column to store ids.
@@ -266,7 +282,7 @@ class PGEngine:
         schema_name: str = "public",
         content_column: str = "content",
         embedding_column: str = "embedding",
-        metadata_columns: list[Column] = [],
+        metadata_columns: Optional[list[Column]] = None,
         metadata_json_column: str = "langchain_metadata",
         id_column: Union[str, Column] = "langchain_id",
         overwrite_existing: bool = False,
@@ -284,8 +300,8 @@ class PGEngine:
                 Default: "page_content".
             embedding_column (str) : Name of the column to store vector embeddings.
                 Default: "embedding".
-            metadata_columns (list[Column]): A list of Columns to create for custom
-                metadata. Default: []. Optional.
+            metadata_columns (Optional[list[Column]]): A list of Columns to create for custom
+                metadata. Default: None. Optional.
             metadata_json_column (str): The column to store extra metadata in JSON format.
                 Default: "langchain_metadata". Optional.
             id_column (Union[str, Column]) :  Column to store ids.

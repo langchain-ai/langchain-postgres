@@ -131,7 +131,7 @@ class PGVectorStore(VectorStore):
             schema_name (str, optional): Name of the database schema. Defaults to "public".
             content_column (str, optional): Column that represent a Document's page_content. Defaults to "content".
             embedding_column (str, optional): Column for embedding vectors. The embedding is generated from the document value. Defaults to "embedding".
-            metadata_columns (list[str]): Column(s) that represent a document's metadata. Defaults to an empty list.
+            metadata_columns (list[str], optional): Column(s) that represent a document's metadata. Defaults to None.
             ignore_metadata_columns (Optional[list[str]]): Column(s) to ignore in pre-existing tables for a document's metadata. Can not be used with metadata_columns. Defaults to None.
             id_column (str, optional): Column that represents the Document's id. Defaults to "langchain_id".
             metadata_json_column (str, optional): Column to store metadata as JSON. Defaults to "langchain_metadata".
@@ -292,7 +292,7 @@ class PGVectorStore(VectorStore):
         ids: Optional[list] = None,
         content_column: str = "content",
         embedding_column: str = "embedding",
-        metadata_columns: list[str] = [],
+        metadata_columns: Optional[list[str]] = None,
         ignore_metadata_columns: Optional[list[str]] = None,
         id_column: str = "langchain_id",
         metadata_json_column: str = "langchain_metadata",
@@ -362,7 +362,7 @@ class PGVectorStore(VectorStore):
         ids: Optional[list] = None,
         content_column: str = "content",
         embedding_column: str = "embedding",
-        metadata_columns: list[str] = [],
+        metadata_columns: Optional[list[str]] = None,
         ignore_metadata_columns: Optional[list[str]] = None,
         id_column: str = "langchain_id",
         metadata_json_column: str = "langchain_metadata",
@@ -433,7 +433,7 @@ class PGVectorStore(VectorStore):
         ids: Optional[list] = None,
         content_column: str = "content",
         embedding_column: str = "embedding",
-        metadata_columns: list[str] = [],
+        metadata_columns: Optional[list[str]] = None,
         ignore_metadata_columns: Optional[list[str]] = None,
         id_column: str = "langchain_id",
         metadata_json_column: str = "langchain_metadata",
@@ -504,7 +504,7 @@ class PGVectorStore(VectorStore):
         ids: Optional[list] = None,
         content_column: str = "content",
         embedding_column: str = "embedding",
-        metadata_columns: list[str] = [],
+        metadata_columns: Optional[list[str]] = None,
         ignore_metadata_columns: Optional[list[str]] = None,
         id_column: str = "langchain_id",
         metadata_json_column: str = "langchain_metadata",
