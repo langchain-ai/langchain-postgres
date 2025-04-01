@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import copy
 import json
+import re
 import uuid
 from typing import Any, Callable, Iterable, Optional, Sequence
 
@@ -13,8 +14,8 @@ from langchain_core.vectorstores import VectorStore, utils
 from sqlalchemy import RowMapping, text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
-from .engine import PGEngine
-from .indexes import (
+from ..engine import PGEngine
+from ..indexes import (
     DEFAULT_DISTANCE_STRATEGY,
     DEFAULT_INDEX_NAME_SUFFIX,
     BaseIndex,
@@ -65,6 +66,7 @@ class AsyncPGVectorStore(VectorStore):
         engine: AsyncEngine,
         embedding_service: Embeddings,
         table_name: str,
+        *,
         schema_name: str = "public",
         content_column: str = "content",
         embedding_column: str = "embedding",
@@ -125,10 +127,11 @@ class AsyncPGVectorStore(VectorStore):
         engine: PGEngine,
         embedding_service: Embeddings,
         table_name: str,
+        *,
         schema_name: str = "public",
         content_column: str = "content",
         embedding_column: str = "embedding",
-        metadata_columns: list[str] = [],
+        metadata_columns: Optional[list[str]] = None,
         ignore_metadata_columns: Optional[list[str]] = None,
         id_column: str = "langchain_id",
         metadata_json_column: Optional[str] = "langchain_metadata",
@@ -160,14 +163,20 @@ class AsyncPGVectorStore(VectorStore):
         Returns:
             AsyncPGVectorStore
         """
+
+        if metadata_columns is None:
+            metadata_columns = []
+
         if metadata_columns and ignore_metadata_columns:
             raise ValueError(
                 "Can not use both metadata_columns and ignore_metadata_columns."
             )
         # Get field type information
-        stmt = f"SELECT column_name, data_type FROM information_schema.columns WHERE table_name = '{table_name}' AND table_schema = '{schema_name}'"
+        stmt = "SELECT column_name, data_type FROM information_schema.columns WHERE table_name = :table_name AND table_schema = :schema_name"
         async with engine._pool.connect() as conn:
-            result = await conn.execute(text(stmt))
+            result = await conn.execute(
+                text(stmt), {"table_name": table_name, "schema_name": schema_name}
+            )
             result_map = result.mappings()
             results = result_map.fetchall()
         columns = {}
@@ -367,10 +376,11 @@ class AsyncPGVectorStore(VectorStore):
         if not ids:
             return False
 
-        id_list = ", ".join([f"'{id}'" for id in ids])
-        query = f'DELETE FROM "{self.schema_name}"."{self.table_name}" WHERE {self.id_column} in ({id_list})'
+        placeholders = ", ".join(f":id_{i}" for i in range(len(ids)))
+        param_dict = {f"id_{i}": id for i, id in enumerate(ids)}
+        query = f'DELETE FROM "{self.schema_name}"."{self.table_name}" WHERE {self.id_column} in ({placeholders})'
         async with self.engine.connect() as conn:
-            await conn.execute(text(query))
+            await conn.execute(text(query), param_dict)
             await conn.commit()
         return True
 
@@ -381,6 +391,7 @@ class AsyncPGVectorStore(VectorStore):
         embedding: Embeddings,
         engine: PGEngine,
         table_name: str,
+        *,
         schema_name: str = "public",
         metadatas: Optional[list[dict]] = None,
         ids: Optional[list] = None,
@@ -451,6 +462,7 @@ class AsyncPGVectorStore(VectorStore):
         embedding: Embeddings,
         engine: PGEngine,
         table_name: str,
+        *,
         schema_name: str = "public",
         ids: Optional[list] = None,
         content_column: str = "content",
@@ -519,6 +531,7 @@ class AsyncPGVectorStore(VectorStore):
     async def __query_collection(
         self,
         embedding: list[float],
+        *,
         k: Optional[int] = None,
         filter: Optional[dict] | Optional[str] = None,
         **kwargs: Any,
@@ -546,19 +559,20 @@ class AsyncPGVectorStore(VectorStore):
             query_embedding = self.embedding_service.embed_query_inline(kwargs["query"])  # type: ignore
         else:
             query_embedding = f"'{[float(dimension) for dimension in embedding]}'"
-        stmt = f'SELECT {column_names}, {search_function}({self.embedding_column}, {query_embedding}) as distance FROM "{self.schema_name}"."{self.table_name}" {filter} ORDER BY {self.embedding_column} {operator} {query_embedding} LIMIT {k};'
+        stmt = f'SELECT {column_names}, {search_function}({self.embedding_column}, :query_embedding) as distance FROM "{self.schema_name}"."{self.table_name}" {filter} ORDER BY {self.embedding_column} {operator} {query_embedding} LIMIT :k;'
+        param_dict = {"query_embedding": query_embedding, "k": k}
         if self.index_query_options:
             async with self.engine.connect() as conn:
                 # Set each query option individually
                 for query_option in self.index_query_options.to_parameter():
                     query_options_stmt = f"SET LOCAL {query_option};"
                     await conn.execute(text(query_options_stmt))
-                result = await conn.execute(text(stmt))
+                result = await conn.execute(text(stmt), param_dict)
                 result_map = result.mappings()
                 results = result_map.fetchall()
         else:
             async with self.engine.connect() as conn:
-                result = await conn.execute(text(stmt))
+                result = await conn.execute(text(stmt), param_dict)
                 result_map = result.mappings()
                 results = result_map.fetchall()
         return results
@@ -758,6 +772,7 @@ class AsyncPGVectorStore(VectorStore):
         self,
         index: BaseIndex,
         name: Optional[str] = None,
+        *,
         concurrently: bool = False,
     ) -> None:
         """Create index in the vector store table."""
@@ -818,10 +833,15 @@ class AsyncPGVectorStore(VectorStore):
         query = f"""
         SELECT tablename, indexname
         FROM pg_indexes
-        WHERE tablename = '{self.table_name}' AND schemaname = '{self.schema_name}' AND indexname = '{index_name}';
+        WHERE tablename = :table_name AND schemaname = :schema_name AND indexname = :index_name;
         """
+        param_dict = {
+            "table_name": self.table_name,
+            "schema_name": self.schema_name,
+            "index_name": index_name,
+        }
         async with self.engine.connect() as conn:
-            result = await conn.execute(text(query))
+            result = await conn.execute(text(query), param_dict)
             result_map = result.mappings()
             results = result_map.fetchall()
         return bool(len(results) == 1)
@@ -830,7 +850,6 @@ class AsyncPGVectorStore(VectorStore):
         """Get documents by ids."""
 
         quoted_ids = [f"'{id_val}'" for id_val in ids]
-        id_list_str = ", ".join(quoted_ids)
 
         columns = self.metadata_columns + [
             self.id_column,
@@ -841,10 +860,13 @@ class AsyncPGVectorStore(VectorStore):
 
         column_names = ", ".join(f'"{col}"' for col in columns)
 
-        query = f'SELECT {column_names} FROM "{self.schema_name}"."{self.table_name}" WHERE "{self.id_column}" IN ({id_list_str});'
+        placeholders = ", ".join(f":id_{i}" for i in range(len(ids)))
+        param_dict = {f"id_{i}": id for i, id in enumerate(quoted_ids)}
+
+        query = f'SELECT {column_names} FROM "{self.schema_name}"."{self.table_name}" WHERE "{self.id_column}" IN ({placeholders});'
 
         async with self.engine.connect() as conn:
-            result = await conn.execute(text(query))
+            result = await conn.execute(text(query), param_dict)
             result_map = result.mappings()
             results = result_map.fetchall()
 
@@ -871,6 +893,7 @@ class AsyncPGVectorStore(VectorStore):
 
     def _handle_field_filter(
         self,
+        *,
         field: str,
         value: Any,
     ) -> str:
@@ -1002,7 +1025,7 @@ class AsyncPGVectorStore(VectorStore):
                     )
             else:
                 # Then it's a field
-                return self._handle_field_filter(key, filters[key])
+                return self._handle_field_filter(field=key, value=filters[key])
 
             if key.lower() == "$and" or key.lower() == "$or":
                 if not isinstance(value, list):
@@ -1048,7 +1071,9 @@ class AsyncPGVectorStore(VectorStore):
                         f"Invalid filter condition. Expected a field but got: {key}"
                     )
             # These should all be fields and combined using an $and operator
-            and_ = [self._handle_field_filter(k, v) for k, v in filters.items()]
+            and_ = [
+                self._handle_field_filter(field=k, value=v) for k, v in filters.items()
+            ]
             if len(and_) > 1:
                 return f"({' AND '.join(and_)})"
             elif len(and_) == 1:

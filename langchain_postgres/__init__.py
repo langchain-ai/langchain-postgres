@@ -3,7 +3,7 @@ from importlib import metadata
 from langchain_postgres.chat_message_histories import PostgresChatMessageHistory
 from langchain_postgres.engine import Column, PGEngine
 from langchain_postgres.translator import PGVectorTranslator
-from langchain_postgres.vectorstore import PGVectorStore
+from langchain_postgres.vectorstore.v2 import PGVectorStore
 from langchain_postgres.vectorstores import PGVector
 
 try:

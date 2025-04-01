@@ -9,7 +9,7 @@ from langchain_core.embeddings import DeterministicFakeEmbedding
 from sqlalchemy import text
 
 from langchain_postgres import PGEngine
-from langchain_postgres.async_vectorstore import AsyncPGVectorStore
+from langchain_postgres.vectorstore.async_vectorstore import AsyncPGVectorStore
 from langchain_postgres.indexes import (
     DEFAULT_INDEX_NAME_SUFFIX,
     DistanceStrategy,

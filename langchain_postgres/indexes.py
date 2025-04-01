@@ -1,4 +1,10 @@
+"""Index class to add vector indexes on the PGVectorStore.
+
+Learn more about vector indexes at https://github.com/pgvector/pgvector?tab=readme-ov-file#indexing
+"""
+
 import enum
+import re
 import warnings
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
@@ -26,6 +32,18 @@ DEFAULT_INDEX_NAME_SUFFIX: str = "langchainvectorindex"
 
 @dataclass
 class BaseIndex(ABC):
+    """
+    Abstract base class for defining vector indexes.
+
+    Attributes:
+        name (Optional[str]): A human-readable name for the index. Defaults to None.
+        index_type (str): A string identifying the type of index. Defaults to "base".
+        distance_strategy (DistanceStrategy): The strategy used to calculate distances
+            between vectors in the index. Defaults to DistanceStrategy.COSINE_DISTANCE.
+        partial_indexes (Optional[list[str]]): A list of names of partial indexes. Defaults to None.
+        extension_name (Optional[str]): The name of the extension to be created for the index, if any. Defaults to None.
+    """
+
     name: Optional[str] = None
     index_type: str = "base"
     distance_strategy: DistanceStrategy = field(
@@ -43,6 +61,20 @@ class BaseIndex(ABC):
 
     def get_index_function(self) -> str:
         return self.distance_strategy.index_function
+
+    def __post_init__(self) -> None:
+        """Check if initialization parameters are valid.
+
+        Raises:
+            ValueError: extension_name is a valid postgreSQL identifier
+        """
+        if (
+            self.extension_name
+            and re.match(r"^[a-zA-Z_][a-zA-Z0-9_]*$", self.extension_name) is None
+        ):
+            raise ValueError(
+                f"Invalid identifier: {self.extension_name}. Identifiers must start with a letter or underscore, and subsequent characters can be letters, digits, or underscores."
+            )
 
 
 @dataclass

@@ -9,7 +9,7 @@ from sqlalchemy import text
 from sqlalchemy.engine.row import RowMapping
 
 from langchain_postgres import Column, PGEngine
-from langchain_postgres.async_vectorstore import AsyncPGVectorStore
+from langchain_postgres.vectorstore.async_vectorstore import AsyncPGVectorStore
 from tests.utils import VECTORSTORE_CONNECTION_STRING_ASYNCPG as CONNECTION_STRING
 
 DEFAULT_TABLE = "test_table" + str(uuid.uuid4())

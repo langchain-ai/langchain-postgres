@@ -2,12 +2,12 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass
+import re
 from threading import Thread
 from typing import TYPE_CHECKING, Any, Awaitable, Optional, TypeVar, Union
 
-from sqlalchemy import MetaData, Table, text
+from sqlalchemy import text
 from sqlalchemy.engine import URL
-from sqlalchemy.exc import InvalidRequestError
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 
 if TYPE_CHECKING:
@@ -54,7 +54,7 @@ class PGEngine:
 
         Args:
             key (object): Prevent direct constructor usage.
-            engine (AsyncEngine): Async engine connection pool.
+            pool (AsyncEngine): Async engine connection pool.
             loop (Optional[asyncio.AbstractEventLoop]): Async event loop used to create the engine.
             thread (Optional[Thread]): Thread used to create the engine async.
 
@@ -140,6 +140,7 @@ class PGEngine:
         self,
         table_name: str,
         vector_size: int,
+        *,
         schema_name: str = "public",
         content_column: str = "content",
         embedding_column: str = "embedding",
@@ -174,7 +175,9 @@ class PGEngine:
         Raises:
             :class:`DuplicateTableError <asyncpg.exceptions.DuplicateTableError>`: if table already exists.
             :class:`UndefinedObjectError <asyncpg.exceptions.UndefinedObjectError>`: if the data type of the id column is not a postgreSQL data type.
+            :class: `ValueError`: If any of the column names, schema name or table name is not a valid postgreSQL identifier
         """
+
         async with self._pool.connect() as conn:
             await conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
             await conn.commit()
@@ -208,6 +211,7 @@ class PGEngine:
         self,
         table_name: str,
         vector_size: int,
+        *,
         schema_name: str = "public",
         content_column: str = "content",
         embedding_column: str = "embedding",
@@ -243,14 +247,14 @@ class PGEngine:
             self._ainit_vectorstore_table(
                 table_name,
                 vector_size,
-                schema_name,
-                content_column,
-                embedding_column,
-                metadata_columns,
-                metadata_json_column,
-                id_column,
-                overwrite_existing,
-                store_metadata,
+                schema_name=schema_name,
+                content_column=content_column,
+                embedding_column=embedding_column,
+                metadata_columns=metadata_columns,
+                metadata_json_column=metadata_json_column,
+                id_column=id_column,
+                overwrite_existing=overwrite_existing,
+                store_metadata=store_metadata,
             )
         )
 
@@ -258,6 +262,7 @@ class PGEngine:
         self,
         table_name: str,
         vector_size: int,
+        *,
         schema_name: str = "public",
         content_column: str = "content",
         embedding_column: str = "embedding",
@@ -293,53 +298,13 @@ class PGEngine:
             self._ainit_vectorstore_table(
                 table_name,
                 vector_size,
-                schema_name,
-                content_column,
-                embedding_column,
-                metadata_columns,
-                metadata_json_column,
-                id_column,
-                overwrite_existing,
-                store_metadata,
+                schema_name=schema_name,
+                content_column=content_column,
+                embedding_column=embedding_column,
+                metadata_columns=metadata_columns,
+                metadata_json_column=metadata_json_column,
+                id_column=id_column,
+                overwrite_existing=overwrite_existing,
+                store_metadata=store_metadata,
             )
         )
-
-    async def _aload_table_schema(
-        self, table_name: str, schema_name: str = "public"
-    ) -> Table:
-        """
-        Load table schema from an existing table in a PgSQL database, potentially from a specific database schema.
-
-        Args:
-            table_name: The name of the table to load the table schema from.
-            schema_name: The name of the database schema where the table resides.
-                Default: "public".
-
-        Returns:
-            (sqlalchemy.Table): The loaded table, including its table schema information.
-        """
-        metadata = MetaData()
-        async with self._pool.connect() as conn:
-            try:
-                await conn.run_sync(
-                    metadata.reflect, schema=schema_name, only=[table_name]
-                )
-            except InvalidRequestError as e:
-                raise ValueError(
-                    f"Table, '{schema_name}'.'{table_name}', does not exist: " + str(e)
-                )
-
-        table = Table(table_name, metadata, schema=schema_name)
-        # Extract the schema information
-        schema = []
-        for column in table.columns:
-            schema.append(
-                {
-                    "name": column.name,
-                    "type": column.type.python_type,
-                    "max_length": getattr(column.type, "length", None),
-                    "nullable": not column.nullable,
-                }
-            )
-
-        return metadata.tables[f"{schema_name}.{table_name}"]

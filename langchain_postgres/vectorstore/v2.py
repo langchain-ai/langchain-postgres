@@ -8,8 +8,8 @@ from langchain_core.embeddings import Embeddings
 from langchain_core.vectorstores import VectorStore
 
 from .async_vectorstore import AsyncPGVectorStore
-from .engine import PGEngine
-from .indexes import (
+from ..engine import PGEngine
+from ..indexes import (
     DEFAULT_DISTANCE_STRATEGY,
     BaseIndex,
     DistanceStrategy,
@@ -50,7 +50,7 @@ class PGVectorStore(VectorStore):
         schema_name: str = "public",
         content_column: str = "content",
         embedding_column: str = "embedding",
-        metadata_columns: list[str] = [],
+        metadata_columns: Optional[list[str]] = None,
         ignore_metadata_columns: Optional[list[str]] = None,
         id_column: str = "langchain_id",
         metadata_json_column: Optional[str] = "langchain_metadata",
@@ -111,7 +111,7 @@ class PGVectorStore(VectorStore):
         schema_name: str = "public",
         content_column: str = "content",
         embedding_column: str = "embedding",
-        metadata_columns: list[str] = [],
+        metadata_columns: Optional[list[str]] = None,
         ignore_metadata_columns: Optional[list[str]] = None,
         id_column: str = "langchain_id",
         metadata_json_column: str = "langchain_metadata",
@@ -778,7 +778,7 @@ class PGVectorStore(VectorStore):
     ) -> None:
         """Create an index on the vector store table."""
         return await self._engine._run_as_async(
-            self.__vs.aapply_vector_index(index, name, concurrently)
+            self.__vs.aapply_vector_index(index, name, concurrently=concurrently)
         )
 
     def apply_vector_index(
@@ -789,7 +789,7 @@ class PGVectorStore(VectorStore):
     ) -> None:
         """Create an index on the vector store table."""
         return self._engine._run_as_sync(
-            self.__vs.aapply_vector_index(index, name, concurrently)
+            self.__vs.aapply_vector_index(index, name, concurrently=concurrently)
         )
 
     async def areindex(self, index_name: Optional[str] = None) -> None:
