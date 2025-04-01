@@ -19,7 +19,7 @@ from langchain_postgres.indexes import (
 from tests.utils import VECTORSTORE_CONNECTION_STRING_ASYNCPG as CONNECTION_STRING
 
 DEFAULT_TABLE = "default" + str(uuid.uuid4()).replace("-", "_")
-DEFAULT_INDEX_NAME = DEFAULT_TABLE + DEFAULT_INDEX_NAME_SUFFIX
+DEFAULT_INDEX_NAME = DEFAULT_TABLE + "index"
 VECTOR_SIZE = 768
 
 embeddings_service = DeterministicFakeEmbedding(size=VECTOR_SIZE)

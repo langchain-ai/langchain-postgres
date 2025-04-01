@@ -849,8 +849,6 @@ class AsyncPGVectorStore(VectorStore):
     async def aget_by_ids(self, ids: Sequence[str]) -> list[Document]:
         """Get documents by ids."""
 
-        quoted_ids = [f"'{id_val}'" for id_val in ids]
-
         columns = self.metadata_columns + [
             self.id_column,
             self.content_column,
@@ -861,7 +859,7 @@ class AsyncPGVectorStore(VectorStore):
         column_names = ", ".join(f'"{col}"' for col in columns)
 
         placeholders = ", ".join(f":id_{i}" for i in range(len(ids)))
-        param_dict = {f"id_{i}": id for i, id in enumerate(quoted_ids)}
+        param_dict = {f"id_{i}": id for i, id in enumerate(ids)}
 
         query = f'SELECT {column_names} FROM "{self.schema_name}"."{self.table_name}" WHERE "{self.id_column}" IN ({placeholders});'
 
