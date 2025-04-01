@@ -136,7 +136,7 @@ class PGEngine:
         """Dispose of connection pool"""
         await self._run_as_async(self._pool.dispose())
 
-    def escape_postgres_identifier(self, name: str) -> str:
+    def _escape_postgres_identifier(self, name: str) -> str:
         return name.replace('"', '""')
 
     async def _ainit_vectorstore_table(
@@ -180,19 +180,19 @@ class PGEngine:
             :class:`UndefinedObjectError <asyncpg.exceptions.UndefinedObjectError>`: if the data type of the id column is not a postgreSQL data type.
         """
 
-        schema_name = self.escape_postgres_identifier(schema_name)
-        table_name = self.escape_postgres_identifier(table_name)
-        content_column = self.escape_postgres_identifier(content_column)
-        embedding_column = self.escape_postgres_identifier(embedding_column)
+        schema_name = self._escape_postgres_identifier(schema_name)
+        table_name = self._escape_postgres_identifier(table_name)
+        content_column = self._escape_postgres_identifier(content_column)
+        embedding_column = self._escape_postgres_identifier(embedding_column)
         if metadata_columns is None:
             metadata_columns = []
         else:
             for col in metadata_columns:
-                col.name = self.escape_postgres_identifier(col.name)
+                col.name = self._escape_postgres_identifier(col.name)
         if isinstance(id_column, str):
-            id_column = self.escape_postgres_identifier(id_column)
+            id_column = self._escape_postgres_identifier(id_column)
         else:
-            id_column.name = self.escape_postgres_identifier(id_column.name)
+            id_column.name = self._escape_postgres_identifier(id_column.name)
 
         async with self._pool.connect() as conn:
             await conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
