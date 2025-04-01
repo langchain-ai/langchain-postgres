@@ -29,7 +29,7 @@ from langchain_core.documents import Document
 from langchain_core.embeddings import Embeddings
 from langchain_core.utils import get_from_dict_or_env
 from langchain_core.vectorstores import VectorStore
-from sqlalchemy import SQLColumnExpression, cast, create_engine, delete, func, select
+from sqlalchemy import SQLColumnExpression, cast, create_engine, delete, func, select, text
 from sqlalchemy.dialects.postgresql import JSON, JSONB, JSONPATH, UUID, insert
 from sqlalchemy.engine import Connection, Engine
 from sqlalchemy.ext.asyncio import (
@@ -96,6 +96,138 @@ SUPPORTED_OPERATORS = (
     .union(LOGICAL_OPERATORS)
     .union(SPECIAL_CASED_OPERATORS)
 )
+
+class IndexManager:
+    """Manages the creation, listing, and retrieval of indexes for the embedding column in a PostgreSQL database.
+
+    This class provides both synchronous and asynchronous methods to interact with the database, allowing for
+    the creation of different types of indexes (e.g., HNSW, IVFFlat) with various distance functions (e.g., l2, cosine).
+
+    Args:
+        connection (Union[str, Engine, AsyncEngine]): The database connection string or engine instance.
+        async_mode (bool): Flag to indicate if asynchronous operations should be used. Defaults to False.
+    """
+    def __init__(self, connection: Union[str, Engine, AsyncEngine], async_mode: bool = False):
+        self.async_mode = async_mode
+        if isinstance(connection, str):
+            if async_mode:
+                self._engine = create_async_engine(connection)
+            else:
+                self._engine = create_engine(connection)
+        elif isinstance(connection, (Engine, AsyncEngine)):
+            self._engine = connection
+        else:
+            raise ValueError("Invalid connection type")
+
+    def list_indexes(self) -> List[Dict[str, Any]]:
+        """List all indexes from the embeddings column."""
+        with self._engine.connect() as conn:
+            result = conn.execute(
+                text("""
+                    SELECT * 
+                    FROM pg_indexes 
+                    WHERE tablename = 'langchain_pg_embedding' 
+                    AND indexdef LIKE '%embedding%'
+                    """)
+            )
+            indexes = [dict(row) for row in result]
+        return indexes
+
+    async def alist_indexes(self) -> List[Dict[str, Any]]:
+        """Asynchronously list all indexes from the embeddings column."""
+        async with self._engine.connect() as conn:
+            result = await conn.execute(
+                text("""
+                    SELECT * 
+                    FROM pg_indexes 
+                    WHERE tablename = 'langchain_pg_embedding' 
+                    AND indexdef LIKE '%embedding%'
+                    """)
+            )
+            indexes = [dict(row) for row in result]
+        return indexes
+
+    def create_index(self, index_type: str, distance_strategy: DistanceStrategy, **kwargs: Any) -> str:
+        """Create an index (HNSW or IVFFlat) on the embedding column.
+
+        Args:
+            index_type: The type of index to create ('hnsw' or 'ivfflat').
+            distance_strategy: The distance strategy to use (e.g., DistanceStrategy.L2, DistanceStrategy.COSINE).
+            kwargs: Additional parameters for the index creation (e.g., m, ef_construction, lists).
+
+        Returns:
+            The name of the created index.
+        """
+        index_ops = f"vector_{distance_strategy.value}_ops"
+        index_name = f"{index_type}_{distance_strategy.value}_index"
+        index_params = ", ".join(f"{key} = {value}" for key, value in kwargs.items())
+        with self._engine.connect() as conn:
+            conn.execute(
+                text(
+                    f"""
+                    CREATE INDEX {index_name} ON langchain_pg_embedding USING {index_type} (embedding {index_ops})
+                    WITH ({index_params});
+                    """
+                )
+            )
+        return index_name
+
+    async def acreate_index(self, index_type: str, distance_strategy: DistanceStrategy, **kwargs: Any) -> str:
+        """Asynchronously create an index (HNSW or IVFFlat) on the embedding column.
+
+        Args:
+            index_type: The type of index to create ('hnsw' or 'ivfflat').
+            distance_strategy: The distance strategy to use (e.g., DistanceStrategy.L2, DistanceStrategy.COSINE).
+            kwargs: Additional parameters for the index creation (e.g., m, ef_construction, lists).
+
+        Returns:
+            The name of the created index.
+        """
+        index_ops = f"vector_{distance_strategy.value}_ops"
+        index_name = f"{index_type}_{distance_strategy.value}_index"
+        index_params = ", ".join(f"{key} = {value}" for key, value in kwargs.items())
+        async with self._engine.connect() as conn:
+            await conn.execute(
+                text(
+                    f"""
+                    CREATE INDEX {index_name} ON langchain_pg_embedding USING {index_type} (embedding {index_ops})
+                    WITH ({index_params});
+                    """
+                )
+            )
+        return index_name
+
+    def get_index(self, index_name: str, embeddings: Embeddings, collection_name: str) -> Optional[PGVector]:
+        """Get details of a specific index and return a PGVector instance."""
+        with self._engine.connect() as conn:
+            result = conn.execute(text(f"SELECT * FROM pg_indexes WHERE indexname = :index_name"), {"index_name": index_name})
+            index = result.fetchone()
+        if index:
+            distance_strategy = DistanceStrategy(index['indexdef'].split(' ')[-1].split('_')[1])
+            return PGVector(
+                embeddings=embeddings,
+                connection=self._engine,
+                collection_name=collection_name,
+                distance_strategy=distance_strategy,
+                async_mode=self.async_mode
+            )
+        return None
+
+    async def aget_index(self, index_name: str, embeddings: Embeddings, collection_name: str) -> Optional[PGVector]:
+        """Asynchronously get details of a specific index and return a PGVector instance."""
+        async with self._engine.connect() as conn:
+            result = await conn.execute(text(f"SELECT * FROM pg_indexes WHERE indexname = :index_name"), {"index_name": index_name})
+            index = result.fetchone()
+        if index:
+            distance_strategy = DistanceStrategy(index['indexdef'].split(' ')[-1].split('_')[1])
+            return PGVector(
+                embeddings=embeddings,
+                connection=self._engine,
+                collection_name=collection_name,
+                distance_strategy=distance_strategy,
+                async_mode=self.async_mode
+            )
+        return None
 
 
 def _get_embedding_collection_store(vector_dimension: Optional[int] = None) -> Any:
@@ -386,6 +518,8 @@ class PGVector(VectorStore):
         use_jsonb: bool = True,
         create_extension: bool = True,
         async_mode: bool = False,
+        index_type: Optional[str] = None,
+        index_params: Optional[Dict[str, Any]] = None,
     ) -> None:
         """Initialize the PGVector store.
         For an async version, use `PGVector.acreate()` instead.
@@ -414,6 +548,8 @@ class PGVector(VectorStore):
             create_extension: If True, will create the vector extension if it
                 doesn't exist. disabling creation is useful when using ReadOnly
                 Databases.
+            index_type: The type of index to create. (default: None)
+            index_params: The parameters for the index. (default: None)
         """
         self.async_mode = async_mode
         self.embedding_function = embeddings
@@ -427,6 +563,8 @@ class PGVector(VectorStore):
         self._engine: Optional[Engine] = None
         self._async_engine: Optional[AsyncEngine] = None
         self._async_init = False
+        self.index_type = index_type
+        self.index_params = index_params or {}
 
         if isinstance(connection, str):
             if async_mode:
@@ -458,6 +596,9 @@ class PGVector(VectorStore):
         if not use_jsonb:
             # Replace with a deprecation warning.
             raise NotImplementedError("use_jsonb=False is no longer supported.")
+        
+        self.index_manager = IndexManager(connection=self._engine, async_mode=self.async_mode)
+
         if not self.async_mode:
             self.__post_init__()
 
@@ -475,6 +616,9 @@ class PGVector(VectorStore):
         self.EmbeddingStore = EmbeddingStore
         self.create_tables_if_not_exists()
         self.create_collection()
+
+        if self.index_type:
+            self.index_manager.create_index(self.index_type, self._distance_strategy, **self.index_params)
 
     async def __apost_init__(
         self,
@@ -494,6 +638,9 @@ class PGVector(VectorStore):
 
         await self.acreate_tables_if_not_exists()
         await self.acreate_collection()
+
+        if self.index_type:
+            await self.index_manager.acreate_index(self.index_type, self._distance_strategy, **self.index_params)
 
     @property
     def embeddings(self) -> Embeddings:

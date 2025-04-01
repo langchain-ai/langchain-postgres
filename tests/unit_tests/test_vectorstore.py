@@ -9,6 +9,8 @@ from sqlalchemy import select
 
 from langchain_postgres.vectorstores import (
     SUPPORTED_OPERATORS,
+    DistanceStrategy,
+    IndexManager,
     PGVector,
 )
 from tests.unit_tests.fake_embeddings import FakeEmbeddings
@@ -1073,3 +1075,86 @@ def test_validate_operators() -> None:
         "$not",
         "$or",
     ]
+
+def test_pgvector_with_hnsw_index() -> None:
+    """Test end to end construction and search with HNSW index."""
+    texts = ["foo", "bar", "baz"]
+    docsearch = PGVector.from_texts(
+        texts=texts,
+        collection_name="test_collection_hnsw",
+        embedding=FakeEmbeddingsWithAdaDimension(),
+        connection=CONNECTION_STRING,
+        pre_delete_collection=True,
+        index_type="hnsw",
+        index_params={"m": 16, "ef_construction": 64},
+        distance_strategy=DistanceStrategy.L2,
+    )
+    output = docsearch.similarity_search("foo", k=1)
+    assert output == [Document(page_content="foo", id=AnyStr())]
+
+@pytest.mark.asyncio
+async def test_async_pgvector_with_hnsw_index() -> None:
+    """Test end to end construction and search with HNSW index."""
+    texts = ["foo", "bar", "baz"]
+    docsearch = await PGVector.afrom_texts(
+        texts=texts,
+        collection_name="test_collection_hnsw",
+        embedding=FakeEmbeddingsWithAdaDimension(),
+        connection=CONNECTION_STRING,
+        pre_delete_collection=True,
+        index_type="hnsw",
+        index_params={"m": 16, "ef_construction": 64},
+        distance_strategy=DistanceStrategy.L2,
+    )
+    output = await docsearch.asimilarity_search("foo", k=1)
+    assert output == [Document(page_content="foo", id=AnyStr())]
+
+def test_pgvector_with_ivfflat_index() -> None:
+    """Test end to end construction and search with IVFFlat index."""
+    texts = ["foo", "bar", "baz"]
+    docsearch = PGVector.from_texts(
+        texts=texts,
+        collection_name="test_collection_ivfflat",
+        embedding=FakeEmbeddingsWithAdaDimension(),
+        connection=CONNECTION_STRING,
+        pre_delete_collection=True,
+        index_type="ivfflat",
+        index_params={"lists": 100},
+        distance_strategy=DistanceStrategy.COSINE,
+    )
+    output = docsearch.similarity_search("foo", k=1)
+    assert output == [Document(page_content="foo", id=AnyStr())]
+
+@pytest.mark.asyncio
+async def test_async_pgvector_with_ivfflat_index() -> None:
+    """Test end to end construction and search with IVFFlat index."""
+    texts = ["foo", "bar", "baz"]
+    docsearch = await PGVector.afrom_texts(
+        texts=texts,
+        collection_name="test_collection_ivfflat",
+        embedding=FakeEmbeddingsWithAdaDimension(),
+        connection=CONNECTION_STRING,
+        pre_delete_collection=True,
+        index_type="ivfflat",
+        index_params={"lists": 100},
+        distance_strategy=DistanceStrategy.COSINE,
+    )
+    output = await docsearch.asimilarity_search("foo", k=1)
+    assert output == [Document(page_content="foo", id=AnyStr())]
+
+def test_get_index() -> None:
+    """Test retrieving a VectorStore instance."""
+    index_manager = IndexManager(connection=CONNECTION_STRING)
+    vectorstore = index_manager.get_index("hnsw_l2_index", FakeEmbeddingsWithAdaDimension(), "test_collection_hnsw")
+    assert vectorstore is not None
+    output = vectorstore.similarity_search("foo", k=1)
+    assert output == [Document(page_content="foo", id=AnyStr())]
+
+@pytest.mark.asyncio
+async def test_async_get_index() -> None:
+    """Test asynchronously retrieving a VectorStore instance."""
+    index_manager = IndexManager(connection=CONNECTION_STRING, async_mode=True)
+    vectorstore = await index_manager.aget_index("hnsw_l2_index", FakeEmbeddingsWithAdaDimension(), "test_collection_hnsw")
+    assert vectorstore is not None
+    output = await vectorstore.asimilarity_search("foo", k=1)
+    assert output == [Document(page_content="foo", id=AnyStr())]
