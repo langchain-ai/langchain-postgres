@@ -17,13 +17,11 @@ from langchain_postgres.indexes import (
 )
 from tests.utils import VECTORSTORE_CONNECTION_STRING_ASYNCPG as CONNECTION_STRING
 
-DEFAULT_TABLE = "test_table" + str(uuid.uuid4()).replace("-", "_")
-DEFAULT_TABLE_ASYNC = "test_table" + str(uuid.uuid4()).replace("-", "_")
-DEFAULT_TABLE_OMNI = "test_table" + str(uuid.uuid4()).replace("-", "_")
-CUSTOM_TABLE = "test_table_custom" + str(uuid.uuid4()).replace("-", "_")
+DEFAULT_TABLE = "default" + str(uuid.uuid4()).replace("-", "_")
+DEFAULT_TABLE_ASYNC = "default_sync" + str(uuid.uuid4()).replace("-", "_")
+CUSTOM_TABLE = "custom" + str(uuid.uuid4()).replace("-", "_")
 DEFAULT_INDEX_NAME = DEFAULT_TABLE + DEFAULT_INDEX_NAME_SUFFIX
 DEFAULT_INDEX_NAME_ASYNC = DEFAULT_TABLE_ASYNC + DEFAULT_INDEX_NAME_SUFFIX
-DEFAULT_INDEX_NAME_OMNI = DEFAULT_TABLE_OMNI + DEFAULT_INDEX_NAME_SUFFIX
 VECTOR_SIZE = 768
 
 embeddings_service = DeterministicFakeEmbedding(size=VECTOR_SIZE)

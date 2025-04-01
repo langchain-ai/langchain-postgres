@@ -11,8 +11,8 @@ from sqlalchemy import text
 from langchain_postgres import Column, PGEngine, PGVectorStore
 from tests.utils import VECTORSTORE_CONNECTION_STRING_ASYNCPG as CONNECTION_STRING
 
-DEFAULT_TABLE = "test_table_standard_test_suite" + str(uuid.uuid4())
-DEFAULT_TABLE_SYNC = "test_table_sync_standard_test_suite" + str(uuid.uuid4())
+DEFAULT_TABLE = "standard" + str(uuid.uuid4())
+DEFAULT_TABLE_SYNC = "sync_standard" + str(uuid.uuid4())
 
 
 def get_env_var(key: str, desc: str) -> str:

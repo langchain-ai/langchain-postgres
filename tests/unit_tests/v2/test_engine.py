@@ -14,12 +14,12 @@ from sqlalchemy.pool import NullPool
 from langchain_postgres import Column, PGEngine
 from tests.utils import VECTORSTORE_CONNECTION_STRING_ASYNCPG as CONNECTION_STRING
 
-DEFAULT_TABLE = "test_table" + str(uuid.uuid4()).replace("-", "_")
-CUSTOM_TABLE = "test_table_custom" + str(uuid.uuid4()).replace("-", "_")
-INT_ID_CUSTOM_TABLE = "test_table_custom_int_id" + str(uuid.uuid4()).replace("-", "_")
-DEFAULT_TABLE_SYNC = "test_table" + str(uuid.uuid4()).replace("-", "_")
-CUSTOM_TABLE_SYNC = "test_table_custom" + str(uuid.uuid4()).replace("-", "_")
-INT_ID_CUSTOM_TABLE_SYNC = "test_table_custom_int_id" + str(uuid.uuid4()).replace(
+DEFAULT_TABLE = "default" + str(uuid.uuid4()).replace("-", "_")
+CUSTOM_TABLE = "custom" + str(uuid.uuid4()).replace("-", "_")
+INT_ID_CUSTOM_TABLE = "custom_int_id" + str(uuid.uuid4()).replace("-", "_")
+DEFAULT_TABLE_SYNC = "default_sync" + str(uuid.uuid4()).replace("-", "_")
+CUSTOM_TABLE_SYNC = "custom_sync" + str(uuid.uuid4()).replace("-", "_")
+INT_ID_CUSTOM_TABLE_SYNC = "custom_int_id_sync" + str(uuid.uuid4()).replace(
     "-", "_"
 )
 VECTOR_SIZE = 768

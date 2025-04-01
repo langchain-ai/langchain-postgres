@@ -17,11 +17,11 @@ from tests.unit_tests.fixtures.metadata_filtering_data import (
 )
 from tests.utils import VECTORSTORE_CONNECTION_STRING_ASYNCPG as CONNECTION_STRING
 
-DEFAULT_TABLE = "test_table" + str(uuid.uuid4()).replace("-", "_")
-DEFAULT_TABLE_SYNC = "test_table" + str(uuid.uuid4()).replace("-", "_")
-CUSTOM_TABLE = "test_table_custom" + str(uuid.uuid4()).replace("-", "_")
-CUSTOM_FILTER_TABLE = "test_table_custom_filter" + str(uuid.uuid4()).replace("-", "_")
-CUSTOM_FILTER_TABLE_SYNC = "test_table_custom_filter_sync" + str(uuid.uuid4()).replace(
+DEFAULT_TABLE = "default" + str(uuid.uuid4()).replace("-", "_")
+DEFAULT_TABLE_SYNC = "default_sync" + str(uuid.uuid4()).replace("-", "_")
+CUSTOM_TABLE = "custom" + str(uuid.uuid4()).replace("-", "_")
+CUSTOM_FILTER_TABLE = "custom_filter" + str(uuid.uuid4()).replace("-", "_")
+CUSTOM_FILTER_TABLE_SYNC = "custom_filter_sync" + str(uuid.uuid4()).replace(
     "-", "_"
 )
 VECTOR_SIZE = 768

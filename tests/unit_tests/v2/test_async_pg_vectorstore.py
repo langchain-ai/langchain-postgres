@@ -12,9 +12,9 @@ from langchain_postgres import Column, PGEngine
 from langchain_postgres.vectorstore.async_vectorstore import AsyncPGVectorStore
 from tests.utils import VECTORSTORE_CONNECTION_STRING_ASYNCPG as CONNECTION_STRING
 
-DEFAULT_TABLE = "test_table" + str(uuid.uuid4())
-DEFAULT_TABLE_SYNC = "test_table_sync" + str(uuid.uuid4())
-CUSTOM_TABLE = "test-table-custom" + str(uuid.uuid4())
+DEFAULT_TABLE = "default" + str(uuid.uuid4())
+DEFAULT_TABLE_SYNC = "default_sync" + str(uuid.uuid4())
+CUSTOM_TABLE = "custom" + str(uuid.uuid4())
 VECTOR_SIZE = 768
 
 embeddings_service = DeterministicFakeEmbedding(size=VECTOR_SIZE)
