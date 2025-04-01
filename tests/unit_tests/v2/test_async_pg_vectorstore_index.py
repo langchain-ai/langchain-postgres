@@ -20,7 +20,7 @@ from tests.utils import VECTORSTORE_CONNECTION_STRING_ASYNCPG as CONNECTION_STRI
 
 uuid_str = str(uuid.uuid4()).replace("-", "_")
 DEFAULT_TABLE = "default" + uuid_str
-DEFAULT_INDEX_NAME = uuid_str + "index"
+DEFAULT_INDEX_NAME = "index" + uuid_str
 VECTOR_SIZE = 768
 
 embeddings_service = DeterministicFakeEmbedding(size=VECTOR_SIZE)

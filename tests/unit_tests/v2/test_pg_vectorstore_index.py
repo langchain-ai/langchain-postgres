@@ -22,8 +22,8 @@ uuid_str_sync = str(uuid.uuid4()).replace("-", "_")
 DEFAULT_TABLE = "default" + uuid_str
 DEFAULT_TABLE_ASYNC = "default_sync" + uuid_str_sync
 CUSTOM_TABLE = "custom" + str(uuid.uuid4()).replace("-", "_")
-DEFAULT_INDEX_NAME = uuid_str + "index"
-DEFAULT_INDEX_NAME_ASYNC = uuid_str_sync + "index"
+DEFAULT_INDEX_NAME = "index" + uuid_str
+DEFAULT_INDEX_NAME_ASYNC = "index" + uuid_str_sync
 VECTOR_SIZE = 768
 
 embeddings_service = DeterministicFakeEmbedding(size=VECTOR_SIZE)
@@ -77,14 +77,14 @@ class TestIndex:
         )
 
         vs.add_texts(texts, ids=ids)
-        vs.drop_vector_index()
+        vs.drop_vector_index(DEFAULT_INDEX_NAME)
         yield vs
 
     async def test_aapply_vector_index(self, vs: PGVectorStore) -> None:
         index = HNSWIndex()
         vs.apply_vector_index(index)
         assert vs.is_valid_index(DEFAULT_INDEX_NAME)
-        vs.drop_vector_index()
+        vs.drop_vector_index(DEFAULT_INDEX_NAME)
 
     async def test_areindex(self, vs: PGVectorStore) -> None:
         if not vs.is_valid_index(DEFAULT_INDEX_NAME):
@@ -96,7 +96,7 @@ class TestIndex:
         vs.drop_vector_index(DEFAULT_INDEX_NAME)
 
     async def test_dropindex(self, vs: PGVectorStore) -> None:
-        vs.drop_vector_index()
+        vs.drop_vector_index(DEFAULT_INDEX_NAME)
         result = vs.is_valid_index(DEFAULT_INDEX_NAME)
         assert not result
 
@@ -111,7 +111,7 @@ class TestIndex:
         vs.apply_vector_index(index)
         assert vs.is_valid_index("secondindex")
         vs.drop_vector_index("secondindex")
-        vs.drop_vector_index()
+        vs.drop_vector_index(DEFAULT_INDEX_NAME)
 
     async def test_is_valid_index(self, vs: PGVectorStore) -> None:
         is_valid = vs.is_valid_index("invalid_index")
@@ -138,7 +138,7 @@ class TestAsyncIndex:
         )
 
         await vs.aadd_texts(texts, ids=ids)
-        await vs.adrop_vector_index()
+        await vs.adrop_vector_index(DEFAULT_INDEX_NAME_ASYNC)
         yield vs
 
     async def test_aapply_vector_index(self, vs: PGVectorStore) -> None:
@@ -156,7 +156,7 @@ class TestAsyncIndex:
         await vs.adrop_vector_index(DEFAULT_INDEX_NAME_ASYNC)
 
     async def test_dropindex(self, vs: PGVectorStore) -> None:
-        await vs.adrop_vector_index()
+        await vs.adrop_vector_index(DEFAULT_INDEX_NAME_ASYNC)
         result = await vs.ais_valid_index(DEFAULT_INDEX_NAME_ASYNC)
         assert not result
 
@@ -171,7 +171,7 @@ class TestAsyncIndex:
         await vs.aapply_vector_index(index)
         assert await vs.ais_valid_index("secondindex")
         await vs.adrop_vector_index("secondindex")
-        await vs.adrop_vector_index()
+        await vs.adrop_vector_index(DEFAULT_INDEX_NAME_ASYNC)
 
     async def test_is_valid_index(self, vs: PGVectorStore) -> None:
         is_valid = await vs.ais_valid_index("invalid_index")
