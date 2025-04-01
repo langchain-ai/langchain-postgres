@@ -7,7 +7,7 @@ from sqlalchemy import RowMapping, text
 from sqlalchemy.exc import ProgrammingError, SQLAlchemyError
 
 from ..engine import PGEngine
-from ..vectorstore import PGVectorStore
+from ..vectorstore.v2 import PGVectorStore
 
 COLLECTIONS_TABLE = "langchain_pg_collection"
 EMBEDDINGS_TABLE = "langchain_pg_embedding"
