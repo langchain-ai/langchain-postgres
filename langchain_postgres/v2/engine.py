@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass
 from threading import Thread
-from typing import TYPE_CHECKING, Any, Awaitable, Optional, TypeVar, Union
+from typing import TYPE_CHECKING, Any, Awaitable, Optional, TypeVar, TypedDict, Union
 
 from sqlalchemy import text
 from sqlalchemy.engine import URL
@@ -13,6 +13,12 @@ if TYPE_CHECKING:
     import asyncpg  # type: ignore
 
 T = TypeVar("T")
+
+
+class ColumnDict(TypedDict):
+    name: str
+    data_type: str
+    nullable: bool
 
 
 @dataclass
@@ -132,6 +138,14 @@ class PGEngine:
     def _escape_postgres_identifier(self, name: str) -> str:
         return name.replace('"', '""')
 
+    def _validate_column_dict(self, col: ColumnDict) -> None:
+        if not isinstance(col.get("name"), str):
+            raise TypeError("The 'name' field must be a string.")
+        if not isinstance(col.get("data_type"), str):
+            raise TypeError("The 'data_type' field must be a string.")
+        if not isinstance(col.get("nullable"), bool):
+            raise TypeError("The 'nullable' field must be a boolean.")
+
     async def _ainit_vectorstore_table(
         self,
         table_name: str,
@@ -140,9 +154,9 @@ class PGEngine:
         schema_name: str = "public",
         content_column: str = "content",
         embedding_column: str = "embedding",
-        metadata_columns: Optional[list[Column]] = None,
+        metadata_columns: Optional[list[Union[Column, ColumnDict]]] = None,
         metadata_json_column: str = "langchain_metadata",
-        id_column: Union[str, Column] = "langchain_id",
+        id_column: Union[str, Column, ColumnDict] = "langchain_id",
         overwrite_existing: bool = False,
         store_metadata: bool = True,
     ) -> None:
@@ -158,11 +172,11 @@ class PGEngine:
                 Default: "page_content".
             embedding_column (str) : Name of the column to store vector embeddings.
                 Default: "embedding".
-            metadata_columns (Optional[list[Column]]): A list of Columns to create for custom
+            metadata_columns (Optional[list[Union[Column, ColumnDict]]]): A list of Columns to create for custom
                 metadata. Default: None. Optional.
             metadata_json_column (str): The column to store extra metadata in JSON format.
                 Default: "langchain_metadata". Optional.
-            id_column (Union[str, Column]) :  Column to store ids.
+            id_column (Union[str, Column, ColumnDict]) :  Column to store ids.
                 Default: "langchain_id" column name with data type UUID. Optional.
             overwrite_existing (bool): Whether to drop existing table. Default: False.
             store_metadata (bool): Whether to store metadata in the table.
@@ -181,11 +195,18 @@ class PGEngine:
             metadata_columns = []
         else:
             for col in metadata_columns:
-                col.name = self._escape_postgres_identifier(col.name)
+                if isinstance(col, Column):
+                    col.name = self._escape_postgres_identifier(col.name)
+                elif isinstance(col, dict):
+                    self._validate_column_dict(col)
+                    col["name"] = self._escape_postgres_identifier(col["name"])
         if isinstance(id_column, str):
             id_column = self._escape_postgres_identifier(id_column)
-        else:
+        elif isinstance(id_column, Column):
             id_column.name = self._escape_postgres_identifier(id_column.name)
+        else:
+            self._validate_column_dict(id_column)
+            id_column["name"] = self._escape_postgres_identifier(id_column["name"])
 
         async with self._pool.connect() as conn:
             await conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
@@ -198,16 +219,27 @@ class PGEngine:
                 )
                 await conn.commit()
 
-        id_data_type = "UUID" if isinstance(id_column, str) else id_column.data_type
-        id_column_name = id_column if isinstance(id_column, str) else id_column.name
+        if isinstance(id_column, str):
+            id_data_type = "UUID"
+            id_column_name = id_column
+        elif isinstance(id_column, Column):
+            id_data_type = id_column.data_type
+            id_column_name = id_column.name
+        else:
+            id_data_type = id_column["data_type"]
+            id_column_name = id_column["name"]
 
         query = f"""CREATE TABLE "{schema_name}"."{table_name}"(
             "{id_column_name}" {id_data_type} PRIMARY KEY,
             "{content_column}" TEXT NOT NULL,
             "{embedding_column}" vector({vector_size}) NOT NULL"""
         for column in metadata_columns:
-            nullable = "NOT NULL" if not column.nullable else ""
-            query += f',\n"{column.name}" {column.data_type} {nullable}'
+            if isinstance(column, Column):
+                nullable = "NOT NULL" if not column.nullable else ""
+                query += f',\n"{column.name}" {column.data_type} {nullable}'
+            elif isinstance(column, dict):
+                nullable = "NOT NULL" if not column["nullable"] else ""
+                query += f',\n"{column["name"]}" {column["data_type"]} {nullable}'
         if store_metadata:
             query += f""",\n"{metadata_json_column}" JSON"""
         query += "\n);"
@@ -224,9 +256,9 @@ class PGEngine:
         schema_name: str = "public",
         content_column: str = "content",
         embedding_column: str = "embedding",
-        metadata_columns: Optional[list[Column]] = None,
+        metadata_columns: Optional[list[Union[Column, ColumnDict]]] = None,
         metadata_json_column: str = "langchain_metadata",
-        id_column: Union[str, Column] = "langchain_id",
+        id_column: Union[str, Column, ColumnDict] = "langchain_id",
         overwrite_existing: bool = False,
         store_metadata: bool = True,
     ) -> None:
@@ -242,11 +274,11 @@ class PGEngine:
                 Default: "page_content".
             embedding_column (str) : Name of the column to store vector embeddings.
                 Default: "embedding".
-            metadata_columns (Optional[list[Column]]): A list of Columns to create for custom
+            metadata_columns (Optional[list[Union[Column, ColumnDict]]]): A list of Columns to create for custom
                 metadata. Default: None. Optional.
             metadata_json_column (str): The column to store extra metadata in JSON format.
                 Default: "langchain_metadata". Optional.
-            id_column (Union[str, Column]) :  Column to store ids.
+            id_column (Union[str, Column, ColumnDict]) :  Column to store ids.
                 Default: "langchain_id" column name with data type UUID. Optional.
             overwrite_existing (bool): Whether to drop existing table. Default: False.
             store_metadata (bool): Whether to store metadata in the table.
@@ -275,9 +307,9 @@ class PGEngine:
         schema_name: str = "public",
         content_column: str = "content",
         embedding_column: str = "embedding",
-        metadata_columns: Optional[list[Column]] = None,
+        metadata_columns: Optional[list[Union[Column, ColumnDict]]] = None,
         metadata_json_column: str = "langchain_metadata",
-        id_column: Union[str, Column] = "langchain_id",
+        id_column: Union[str, Column, ColumnDict] = "langchain_id",
         overwrite_existing: bool = False,
         store_metadata: bool = True,
     ) -> None:
@@ -293,11 +325,11 @@ class PGEngine:
                 Default: "page_content".
             embedding_column (str) : Name of the column to store vector embeddings.
                 Default: "embedding".
-            metadata_columns (Optional[list[Column]]): A list of Columns to create for custom
+            metadata_columns (Optional[list[Union[Column, ColumnDict]]]): A list of Columns to create for custom
                 metadata. Default: None. Optional.
             metadata_json_column (str): The column to store extra metadata in JSON format.
                 Default: "langchain_metadata". Optional.
-            id_column (Union[str, Column]) :  Column to store ids.
+            id_column (Union[str, Column, ColumnDict]) :  Column to store ids.
                 Default: "langchain_id" column name with data type UUID. Optional.
             overwrite_existing (bool): Whether to drop existing table. Default: False.
             store_metadata (bool): Whether to store metadata in the table.

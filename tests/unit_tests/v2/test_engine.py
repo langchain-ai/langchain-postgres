@@ -11,14 +11,16 @@ from sqlalchemy.engine.row import RowMapping
 from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy.pool import NullPool
 
-from langchain_postgres import Column, PGEngine
+from langchain_postgres import Column, PGEngine, ColumnDict
 from tests.utils import VECTORSTORE_CONNECTION_STRING as CONNECTION_STRING
 
 DEFAULT_TABLE = "default" + str(uuid.uuid4()).replace("-", "_")
 CUSTOM_TABLE = "custom" + str(uuid.uuid4()).replace("-", "_")
+CUSTOM_TYPEDDICT_TABLE = "custom_td" + str(uuid.uuid4()).replace("-", "_")
 INT_ID_CUSTOM_TABLE = "custom_int_id" + str(uuid.uuid4()).replace("-", "_")
 DEFAULT_TABLE_SYNC = "default_sync" + str(uuid.uuid4()).replace("-", "_")
 CUSTOM_TABLE_SYNC = "custom_sync" + str(uuid.uuid4()).replace("-", "_")
+CUSTOM_TYPEDDICT_TABLE_SYNC = "custom_td_sync" + str(uuid.uuid4()).replace("-", "_")
 INT_ID_CUSTOM_TABLE_SYNC = "custom_int_id_sync" + str(uuid.uuid4()).replace("-", "_")
 VECTOR_SIZE = 768
 
@@ -68,6 +70,7 @@ class TestEngineAsync:
 
         yield engine
         await aexecute(engine, f'DROP TABLE "{CUSTOM_TABLE}"')
+        await aexecute(engine, f'DROP TABLE "{CUSTOM_TYPEDDICT_TABLE}"')
         await aexecute(engine, f'DROP TABLE "{DEFAULT_TABLE}"')
         await aexecute(engine, f'DROP TABLE "{INT_ID_CUSTOM_TABLE}"')
         await engine.close()
@@ -96,6 +99,63 @@ class TestEngineAsync:
             store_metadata=True,
         )
         stmt = f"SELECT column_name, data_type FROM information_schema.columns WHERE table_name = '{CUSTOM_TABLE}';"
+        results = await afetch(engine, stmt)
+        expected = [
+            {"column_name": "uuid", "data_type": "uuid"},
+            {"column_name": "my_embedding", "data_type": "USER-DEFINED"},
+            {"column_name": "langchain_metadata", "data_type": "json"},
+            {"column_name": "my-content", "data_type": "text"},
+            {"column_name": "page", "data_type": "text"},
+            {"column_name": "source", "data_type": "text"},
+        ]
+        for row in results:
+            assert row in expected
+
+    async def test_invalid_typed_dict(self, engine: PGEngine) -> None:
+        with pytest.raises(TypeError):
+            await engine.ainit_vectorstore_table(
+                CUSTOM_TYPEDDICT_TABLE,
+                VECTOR_SIZE,
+                id_column={"name": "uuid", "data_type": "UUID"},  # type: ignore
+                content_column="my-content",
+                embedding_column="my_embedding",
+                metadata_columns=[
+                    {"name": "page", "data_type": "TEXT", "nullable": True},
+                    {"name": "source", "data_type": "TEXT", "nullable": True},
+                ],
+                store_metadata=True,
+                overwrite_existing=True,
+            )
+        with pytest.raises(TypeError):
+            await engine.ainit_vectorstore_table(
+                CUSTOM_TYPEDDICT_TABLE,
+                VECTOR_SIZE,
+                id_column={"name": "uuid", "data_type": "UUID", "nullable": False},
+                content_column="my-content",
+                embedding_column="my_embedding",
+                metadata_columns=[
+                    {"name": "page", "nullable": True},
+                    {"data_type": "TEXT", "nullable": True},
+                ],  # type: ignore
+                store_metadata=True,
+                overwrite_existing=True,
+            )
+
+    async def test_init_table_custom_with_typed_dict(self, engine: PGEngine) -> None:
+        await engine.ainit_vectorstore_table(
+            CUSTOM_TYPEDDICT_TABLE,
+            VECTOR_SIZE,
+            id_column={"name": "uuid", "data_type": "UUID", "nullable": False},
+            content_column="my-content",
+            embedding_column="my_embedding",
+            metadata_columns=[
+                {"name": "page", "data_type": "TEXT", "nullable": True},
+                {"name": "source", "data_type": "TEXT", "nullable": True},
+            ],
+            store_metadata=True,
+            overwrite_existing=True,
+        )
+        stmt = f"SELECT column_name, data_type FROM information_schema.columns WHERE table_name = '{CUSTOM_TYPEDDICT_TABLE}';"
         results = await afetch(engine, stmt)
         expected = [
             {"column_name": "uuid", "data_type": "uuid"},
@@ -174,6 +234,7 @@ class TestEngineSync:
         await aexecute(engine, f'DROP TABLE "{CUSTOM_TABLE_SYNC}"')
         await aexecute(engine, f'DROP TABLE "{DEFAULT_TABLE_SYNC}"')
         await aexecute(engine, f'DROP TABLE "{INT_ID_CUSTOM_TABLE_SYNC}"')
+        await aexecute(engine, f'DROP TABLE "{CUSTOM_TYPEDDICT_TABLE_SYNC}"')
         await engine.close()
 
     async def test_init_table(self, engine: PGEngine) -> None:
@@ -197,6 +258,62 @@ class TestEngineSync:
             store_metadata=True,
         )
         stmt = f"SELECT column_name, data_type FROM information_schema.columns WHERE table_name = '{CUSTOM_TABLE_SYNC}';"
+        results = await afetch(engine, stmt)
+        expected = [
+            {"column_name": "uuid", "data_type": "uuid"},
+            {"column_name": "my_embedding", "data_type": "USER-DEFINED"},
+            {"column_name": "langchain_metadata", "data_type": "json"},
+            {"column_name": "my-content", "data_type": "text"},
+            {"column_name": "page", "data_type": "text"},
+            {"column_name": "source", "data_type": "text"},
+        ]
+        for row in results:
+            assert row in expected
+
+    async def test_invalid_typed_dict(self, engine: PGEngine) -> None:
+        with pytest.raises(TypeError):
+            engine.init_vectorstore_table(
+                CUSTOM_TYPEDDICT_TABLE_SYNC,
+                VECTOR_SIZE,
+                id_column={"name": "uuid", "data_type": "UUID"},  # type: ignore
+                content_column="my-content",
+                embedding_column="my_embedding",
+                metadata_columns=[
+                    {"name": "page", "data_type": "TEXT", "nullable": True},
+                    {"name": "source", "data_type": "TEXT", "nullable": True},
+                ],
+                store_metadata=True,
+                overwrite_existing=True,
+            )
+        with pytest.raises(TypeError):
+            engine.init_vectorstore_table(
+                CUSTOM_TYPEDDICT_TABLE_SYNC,
+                VECTOR_SIZE,
+                id_column={"name": "uuid", "data_type": "UUID", "nullable": False},
+                content_column="my-content",
+                embedding_column="my_embedding",
+                metadata_columns=[
+                    {"name": "page", "nullable": True},
+                    {"data_type": "TEXT", "nullable": True},
+                ],  # type: ignore
+                store_metadata=True,
+                overwrite_existing=True,
+            )
+
+    async def test_init_table_custom_with_typed_dict(self, engine: PGEngine) -> None:
+        engine.init_vectorstore_table(
+            CUSTOM_TYPEDDICT_TABLE_SYNC,
+            VECTOR_SIZE,
+            id_column={"name": "uuid", "data_type": "UUID", "nullable": False},
+            content_column="my-content",
+            embedding_column="my_embedding",
+            metadata_columns=[
+                {"name": "page", "data_type": "TEXT", "nullable": True},
+                {"name": "source", "data_type": "TEXT", "nullable": True},
+            ],
+            store_metadata=True,
+        )
+        stmt = f"SELECT column_name, data_type FROM information_schema.columns WHERE table_name = '{CUSTOM_TYPEDDICT_TABLE_SYNC}';"
         results = await afetch(engine, stmt)
         expected = [
             {"column_name": "uuid", "data_type": "uuid"},
