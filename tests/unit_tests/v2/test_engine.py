@@ -134,9 +134,9 @@ class TestEngineAsync:
                 content_column="my-content",
                 embedding_column="my_embedding",
                 metadata_columns=[
-                    {"name": "page", "nullable": True},
-                    {"data_type": "TEXT", "nullable": True},
-                ],  # type: ignore
+                    {"name": "page", "nullable": True}, # type: ignore
+                    {"data_type": "TEXT", "nullable": True}, # type: ignore
+                ],
                 store_metadata=True,
                 overwrite_existing=True,
             )
@@ -293,9 +293,9 @@ class TestEngineSync:
                 content_column="my-content",
                 embedding_column="my_embedding",
                 metadata_columns=[
-                    {"name": "page", "nullable": True},
-                    {"data_type": "TEXT", "nullable": True},
-                ],  # type: ignore
+                    {"name": "page", "nullable": True}, # type: ignore
+                    {"data_type": "TEXT", "nullable": True}, # type: ignore
+                ],
                 store_metadata=True,
                 overwrite_existing=True,
             )
