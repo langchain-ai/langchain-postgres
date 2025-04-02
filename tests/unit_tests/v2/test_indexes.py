@@ -1,7 +1,7 @@
 import warnings
 import pytest
 
-from langchain_postgres.indexes import (
+from langchain_postgres.v2.indexes import (
     DistanceStrategy,
     HNSWIndex,
     HNSWQueryOptions,

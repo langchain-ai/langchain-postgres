@@ -9,13 +9,13 @@ from langchain_core.embeddings import DeterministicFakeEmbedding
 from sqlalchemy import text
 
 from langchain_postgres import PGEngine, PGVectorStore
-from langchain_postgres.indexes import (
+from langchain_postgres.v2.indexes import (
     DEFAULT_INDEX_NAME_SUFFIX,
     DistanceStrategy,
     HNSWIndex,
     IVFFlatIndex,
 )
-from tests.utils import VECTORSTORE_CONNECTION_STRING_ASYNCPG as CONNECTION_STRING
+from tests.utils import VECTORSTORE_CONNECTION_STRING as CONNECTION_STRING
 
 uuid_str = str(uuid.uuid4()).replace("-", "_")
 uuid_str_sync = str(uuid.uuid4()).replace("-", "_")

@@ -9,13 +9,13 @@ from langchain_core.embeddings import DeterministicFakeEmbedding
 from sqlalchemy import text
 
 from langchain_postgres import Column, PGEngine
-from langchain_postgres.vectorstore.async_vectorstore import AsyncPGVectorStore
-from langchain_postgres.indexes import DistanceStrategy, HNSWQueryOptions
+from langchain_postgres.v2.async_vectorstore import AsyncPGVectorStore
+from langchain_postgres.v2.indexes import DistanceStrategy, HNSWQueryOptions
 from tests.unit_tests.fixtures.metadata_filtering_data import (
     FILTERING_TEST_CASES,
     METADATAS,
 )
-from tests.utils import VECTORSTORE_CONNECTION_STRING_ASYNCPG as CONNECTION_STRING
+from tests.utils import VECTORSTORE_CONNECTION_STRING as CONNECTION_STRING
 
 DEFAULT_TABLE = "default" + str(uuid.uuid4()).replace("-", "_")
 CUSTOM_TABLE = "custom" + str(uuid.uuid4()).replace("-", "_")

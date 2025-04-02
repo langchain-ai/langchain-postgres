@@ -6,8 +6,8 @@ from typing import Any, AsyncIterator, Iterator, Optional, Sequence, TypeVar
 from sqlalchemy import RowMapping, text
 from sqlalchemy.exc import ProgrammingError, SQLAlchemyError
 
-from ..engine import PGEngine
-from ..vectorstore.v2 import PGVectorStore
+from ..v2.engine import PGEngine
+from ..v2.vectorstores import PGVectorStore
 
 COLLECTIONS_TABLE = "langchain_pg_collection"
 EMBEDDINGS_TABLE = "langchain_pg_embedding"

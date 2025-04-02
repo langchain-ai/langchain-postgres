@@ -9,19 +9,20 @@ from langchain_core.embeddings import DeterministicFakeEmbedding
 from sqlalchemy import text
 
 from langchain_postgres import PGEngine
-from langchain_postgres.vectorstore.async_vectorstore import AsyncPGVectorStore
-from langchain_postgres.indexes import (
+from langchain_postgres.v2.async_vectorstore import AsyncPGVectorStore
+from langchain_postgres.v2.indexes import (
     DEFAULT_INDEX_NAME_SUFFIX,
     DistanceStrategy,
     HNSWIndex,
     IVFFlatIndex,
 )
-from tests.utils import VECTORSTORE_CONNECTION_STRING_ASYNCPG as CONNECTION_STRING
+from tests.utils import VECTORSTORE_CONNECTION_STRING as CONNECTION_STRING
 
 uuid_str = str(uuid.uuid4()).replace("-", "_")
 DEFAULT_TABLE = "default" + uuid_str
 DEFAULT_INDEX_NAME = "index" + uuid_str
 VECTOR_SIZE = 768
+SIMPLE_TABLE = "default_table"
 
 embeddings_service = DeterministicFakeEmbedding(size=VECTOR_SIZE)
 
@@ -56,6 +57,7 @@ class TestIndex:
         engine = PGEngine.from_connection_string(url=CONNECTION_STRING)
         yield engine
         await aexecute(engine, f"DROP TABLE IF EXISTS {DEFAULT_TABLE}")
+        await aexecute(engine, f"DROP TABLE IF EXISTS {SIMPLE_TABLE}")
         await engine.close()
 
     @pytest_asyncio.fixture(scope="class")
@@ -70,6 +72,20 @@ class TestIndex:
         await vs.aadd_texts(texts, ids=ids)
         await vs.adrop_vector_index(DEFAULT_INDEX_NAME)
         yield vs
+
+    async def test_apply_default_name_vector_index(self, engine: PGEngine) -> None:
+        await engine._ainit_vectorstore_table(SIMPLE_TABLE, VECTOR_SIZE)
+        vs = await AsyncPGVectorStore.create(
+            engine,
+            embedding_service=embeddings_service,
+            table_name=SIMPLE_TABLE,
+        )
+        await vs.aadd_texts(texts, ids=ids)
+        await vs.adrop_vector_index()
+        index = HNSWIndex()
+        await vs.aapply_vector_index(index)
+        assert await vs.is_valid_index()
+        await vs.adrop_vector_index()
 
     async def test_aapply_vector_index(self, vs: AsyncPGVectorStore) -> None:
         index = HNSWIndex(name=DEFAULT_INDEX_NAME)

@@ -9,7 +9,7 @@ from langchain_tests.integration_tests.vectorstores import EMBEDDING_SIZE
 from sqlalchemy import text
 
 from langchain_postgres import Column, PGEngine, PGVectorStore
-from tests.utils import VECTORSTORE_CONNECTION_STRING_ASYNCPG as CONNECTION_STRING
+from tests.utils import VECTORSTORE_CONNECTION_STRING as CONNECTION_STRING
 
 DEFAULT_TABLE = "standard" + str(uuid.uuid4())
 DEFAULT_TABLE_SYNC = "sync_standard" + str(uuid.uuid4())

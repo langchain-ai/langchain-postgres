@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass
-import re
 from threading import Thread
 from typing import TYPE_CHECKING, Any, Awaitable, Optional, TypeVar, Union
 
@@ -104,12 +103,6 @@ class PGEngine:
                 target=cls._default_loop.run_forever, daemon=True
             )
             cls._default_thread.start()
-
-        driver = "postgresql+asyncpg"
-        if (isinstance(url, str) and not url.startswith(driver)) or (
-            isinstance(url, URL) and url.drivername != driver
-        ):
-            raise ValueError("Driver must be type 'postgresql+asyncpg'")
 
         engine = create_async_engine(url, **kwargs)
         return cls(cls.__create_key, engine, cls._default_loop, cls._default_thread)

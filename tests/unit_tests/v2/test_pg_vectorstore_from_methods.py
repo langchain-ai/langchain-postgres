@@ -11,7 +11,7 @@ from sqlalchemy.engine.row import RowMapping
 from sqlalchemy.ext.asyncio import create_async_engine
 
 from langchain_postgres import Column, PGEngine, PGVectorStore
-from tests.utils import VECTORSTORE_CONNECTION_STRING_ASYNCPG as CONNECTION_STRING
+from tests.utils import VECTORSTORE_CONNECTION_STRING as CONNECTION_STRING
 
 DEFAULT_TABLE = "default" + str(uuid.uuid4()).replace("-", "_")
 DEFAULT_TABLE_SYNC = "default_sync" + str(uuid.uuid4()).replace("-", "_")

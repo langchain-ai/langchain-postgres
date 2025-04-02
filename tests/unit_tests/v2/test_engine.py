@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy.pool import NullPool
 
 from langchain_postgres import Column, PGEngine
-from tests.utils import VECTORSTORE_CONNECTION_STRING_ASYNCPG as CONNECTION_STRING
+from tests.utils import VECTORSTORE_CONNECTION_STRING as CONNECTION_STRING
 
 DEFAULT_TABLE = "default" + str(uuid.uuid4()).replace("-", "_")
 CUSTOM_TABLE = "custom" + str(uuid.uuid4()).replace("-", "_")

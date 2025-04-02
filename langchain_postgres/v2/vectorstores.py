@@ -8,8 +8,8 @@ from langchain_core.embeddings import Embeddings
 from langchain_core.vectorstores import VectorStore
 
 from .async_vectorstore import AsyncPGVectorStore
-from ..engine import PGEngine
-from ..indexes import (
+from .engine import PGEngine
+from .indexes import (
     DEFAULT_DISTANCE_STRATEGY,
     BaseIndex,
     DistanceStrategy,

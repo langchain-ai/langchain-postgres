@@ -14,8 +14,8 @@ from langchain_core.vectorstores import VectorStore, utils
 from sqlalchemy import RowMapping, text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
-from ..engine import PGEngine
-from ..indexes import (
+from .engine import PGEngine
+from .indexes import (
     DEFAULT_DISTANCE_STRATEGY,
     DEFAULT_INDEX_NAME_SUFFIX,
     BaseIndex,
@@ -70,7 +70,7 @@ class AsyncPGVectorStore(VectorStore):
         schema_name: str = "public",
         content_column: str = "content",
         embedding_column: str = "embedding",
-        metadata_columns: list[str] = [],
+        metadata_columns: Optional[list[str]] = None,
         id_column: str = "langchain_id",
         metadata_json_column: Optional[str] = "langchain_metadata",
         distance_strategy: DistanceStrategy = DEFAULT_DISTANCE_STRATEGY,
@@ -112,7 +112,7 @@ class AsyncPGVectorStore(VectorStore):
         self.schema_name = schema_name
         self.content_column = content_column
         self.embedding_column = embedding_column
-        self.metadata_columns = metadata_columns
+        self.metadata_columns = metadata_columns if metadata_columns is not None else []
         self.id_column = id_column
         self.metadata_json_column = metadata_json_column
         self.distance_strategy = distance_strategy
@@ -262,6 +262,10 @@ class AsyncPGVectorStore(VectorStore):
             ids = [id if id is not None else str(uuid.uuid4()) for id in ids]
         if not metadatas:
             metadatas = [{} for _ in texts]
+
+        # Check for inline embedding capability
+        inline_embed_func = getattr(self.embedding_service, "embed_query_inline", None)
+        can_inline_embed = callable(inline_embed_func)
         # Insert embeddings
         for id, content, embedding, metadata in zip(ids, texts, embeddings, metadatas):
             metadata_col_names = (
@@ -276,10 +280,8 @@ class AsyncPGVectorStore(VectorStore):
                 "embedding": str([float(dimension) for dimension in embedding]),
             }
             values_stmt = "VALUES (:id, :content, :embedding"
-            inline_embed_func = getattr(
-                self.embedding_service, "embed_query_inline", None
-            )
-            if not embedding and callable(inline_embed_func):
+
+            if not embedding and can_inline_embed:
                 values_stmt = f"VALUES (:id, :content, {self.embedding_service.embed_query_inline(content)}"  # type: ignore
 
             # Add metadata
@@ -559,7 +561,7 @@ class AsyncPGVectorStore(VectorStore):
             query_embedding = self.embedding_service.embed_query_inline(kwargs["query"])  # type: ignore
         else:
             query_embedding = f"{[float(dimension) for dimension in embedding]}"
-        stmt = f'SELECT {column_names}, {search_function}({self.embedding_column}, :query_embedding) as distance FROM "{self.schema_name}"."{self.table_name}" {filter} ORDER BY {self.embedding_column} {operator} :query_embedding LIMIT :k;'
+        stmt = f'SELECT {column_names}, {search_function}("{self.embedding_column}", :query_embedding) as distance FROM "{self.schema_name}"."{self.table_name}" {filter} ORDER BY "{self.embedding_column}" {operator} :query_embedding LIMIT :k;'
         param_dict = {"query_embedding": query_embedding, "k": k}
         if self.index_query_options:
             async with self.engine.connect() as conn:
@@ -798,8 +800,10 @@ class AsyncPGVectorStore(VectorStore):
         stmt = f'CREATE INDEX {"CONCURRENTLY" if concurrently else ""} {name} ON "{self.schema_name}"."{self.table_name}" USING {index.index_type} ({self.embedding_column} {function}) {params} {filter};'
         if concurrently:
             async with self.engine.connect() as conn:
-                await conn.execute(text("COMMIT"))
-                await conn.execute(text(stmt))
+                autocommit_conn = await conn.execution_options(
+                    isolation_level="AUTOCOMMIT"
+                )
+                await autocommit_conn.execute(text(stmt))
         else:
             async with self.engine.connect() as conn:
                 await conn.execute(text(stmt))
