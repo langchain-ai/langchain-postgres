@@ -30,6 +30,13 @@ DEFAULT_DISTANCE_STRATEGY: DistanceStrategy = DistanceStrategy.COSINE_DISTANCE
 DEFAULT_INDEX_NAME_SUFFIX: str = "langchainvectorindex"
 
 
+def validate_identifier(identifier: str) -> None:
+    if re.match(r"^[a-zA-Z_][a-zA-Z0-9_]*$", identifier) is None:
+        raise ValueError(
+            f"Invalid identifier: {identifier}. Identifiers must start with a letter or underscore, and subsequent characters can be letters, digits, or underscores."
+        )
+
+
 @dataclass
 class BaseIndex(ABC):
     """
@@ -68,13 +75,11 @@ class BaseIndex(ABC):
         Raises:
             ValueError: extension_name is a valid postgreSQL identifier
         """
-        if (
-            self.extension_name
-            and re.match(r"^[a-zA-Z_][a-zA-Z0-9_]*$", self.extension_name) is None
-        ):
-            raise ValueError(
-                f"Invalid identifier: {self.extension_name}. Identifiers must start with a letter or underscore, and subsequent characters can be letters, digits, or underscores."
-            )
+
+        if self.extension_name:
+            validate_identifier(self.extension_name)
+        if self.index_type:
+            validate_identifier(self.index_type)
 
 
 @dataclass
