@@ -347,7 +347,7 @@ class PostgresChatMessageHistory(BaseChatMessageHistory):
 
     @messages.setter
     def messages(self, value: list[BaseMessage]) -> None:
-        """Clear the stored messages and appends a list of messages to the record in AlloyDB."""
+        """Clear the stored messages and appends a list of messages."""
         self.clear()
         self.add_messages(value)
 
