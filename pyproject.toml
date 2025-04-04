@@ -16,8 +16,9 @@ langchain-core = ">=0.2.13,<0.4.0"
 psycopg = "^3"
 psycopg-pool = "^3.2.1"
 sqlalchemy = "^2"
-pgvector = "<0.4"
-numpy = ">=1.21"
+pgvector = ">=0.2.5,<0.4"
+numpy = "^1.21"
+asyncpg = "^0.30.0"
 
 [tool.poetry.group.docs.dependencies]
 

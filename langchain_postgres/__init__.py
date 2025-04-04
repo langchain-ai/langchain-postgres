@@ -1,7 +1,9 @@
 from importlib import metadata
 
 from langchain_postgres.chat_message_histories import PostgresChatMessageHistory
+from langchain_postgres.v2.engine import Column, PGEngine, ColumnDict
 from langchain_postgres.translator import PGVectorTranslator
+from langchain_postgres.v2.vectorstores import PGVectorStore
 from langchain_postgres.vectorstores import PGVector
 
 try:
@@ -12,7 +14,11 @@ except metadata.PackageNotFoundError:
 
 __all__ = [
     "__version__",
+    "Column",
+    "ColumnDict",
+    "PGEngine",
     "PostgresChatMessageHistory",
     "PGVector",
+    "PGVectorStore",
     "PGVectorTranslator",
 ]
