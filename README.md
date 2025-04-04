@@ -9,7 +9,7 @@
 
 The `langchain-postgres` package implementations of core LangChain abstractions using `Postgres`.
 
-The package is released under the MIT license. 
+The package is released under the MIT license.
 
 Feel free to use the abstraction as provided or else modify them / extend them as appropriate for your own application.
 
@@ -23,22 +23,65 @@ The package currently only supports the [psycogp3](https://www.psycopg.org/psyco
 pip install -U langchain-postgres
 ```
 
-## Change Log
-
-0.0.6: 
-- Remove langgraph as a dependency as it was causing dependency conflicts.
-- Base interface for checkpointer changed in langgraph, so existing implementation would've broken regardless.
-
 ## Usage
+
+### Vectorstore
+
+> [!NOTE]
+> See example for the [PGVector vectorstore here](https://github.com/langchain-ai/langchain-postgres/blob/main/examples/vectorstore.ipynb)
+`PGVector` is being deprecated. Please migrate to `PGVectorStore`.
+`PGVectorStore` is used for improved performance and manageability.
+See the [migration guide](https://github.com/langchain-ai/langchain-postgres/blob/main/examples/migrate_pgvector_to_pgvectorstore.md) for details on how to migrate from `PGVector` to `PGVectorStore`.
+
+> [!TIP]
+> All synchronous functions have corresponding asynchronous functions
+
+```python
+from langchain_postgres import PGEngine, PGVectorStore
+from langchain_core.embeddings import DeterministicFakeEmbedding
+import uuid
+
+# Replace these variable values
+engine = PGEngine.from_connection_string(url=CONNECTION_STRING)
+
+VECTOR_SIZE = 768
+embedding = DeterministicFakeEmbedding(size=VECTOR_SIZE)
+
+engine.init_vectorstore_table(
+    table_name="destination_table",
+    vector_size=VECTOR_SIZE,
+)
+
+store = PGVectorStore.create_sync(
+    engine=engine,
+    table_name=TABLE_NAME,
+    embedding_service=embedding,
+)
+
+all_texts = ["Apples and oranges", "Cars and airplanes", "Pineapple", "Train", "Banana"]
+metadatas = [{"len": len(t)} for t in all_texts]
+ids = [str(uuid.uuid4()) for _ in all_texts]
+docs = [
+    Document(id=ids[i], page_content=all_texts[i], metadata=metadatas[i]) for i in range(len(all_texts))
+]
+
+store.add_documents(docs)
+
+query = "I'd like a fruit."
+docs = store.similarity_search(query)
+print(docs)
+```
+
+For a detailed example on `PGVectorStore` see [here](https://github.com/langchain-ai/langchain-postgres/blob/main/examples/pg_vectorstore.ipynb).
 
 ### ChatMessageHistory
 
-The chat message history abstraction helps to persist chat message history 
+The chat message history abstraction helps to persist chat message history
 in a postgres table.
 
 PostgresChatMessageHistory is parameterized using a `table_name` and a `session_id`.
 
-The `table_name` is the name of the table in the database where 
+The `table_name` is the name of the table in the database where
 the chat messages will be stored.
 
 The `session_id` is a unique identifier for the chat session. It can be assigned
@@ -78,8 +121,3 @@ chat_history.add_messages([
 
 print(chat_history.messages)
 ```
-
-
-### Vectorstore
-
-See example for the [PGVector vectorstore here](https://github.com/langchain-ai/langchain-postgres/blob/main/examples/vectorstore.ipynb)
