@@ -1,4 +1,5 @@
 """Get fixtures for the database connection."""
+
 import os
 from contextlib import asynccontextmanager, contextmanager
 

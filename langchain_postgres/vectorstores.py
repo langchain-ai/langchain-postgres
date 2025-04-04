@@ -19,6 +19,7 @@ from typing import (
     Type,
     Union,
 )
+import warnings
 from typing import (
     cast as typing_cast,
 )
@@ -47,6 +48,8 @@ from sqlalchemy.orm import (
 )
 
 from langchain_postgres._utils import maximal_marginal_relevance
+
+warnings.simplefilter("once", PendingDeprecationWarning)
 
 
 class DistanceStrategy(str, enum.Enum):
@@ -427,6 +430,13 @@ class PGVector(VectorStore):
         self._engine: Optional[Engine] = None
         self._async_engine: Optional[AsyncEngine] = None
         self._async_init = False
+
+        warnings.warn(
+            "PGVector is being deprecated and will be removed in the future. "
+            "Please migrate to PGVectorStore. "
+            "Refer to the migration guide at [https://github.com/langchain-ai/langchain-postgres/blob/main/examples/migrate_pgvector_to_pgvectorstore.md] for details.",
+            PendingDeprecationWarning,
+        )
 
         if isinstance(connection, str):
             if async_mode:

@@ -340,10 +340,16 @@ class PostgresChatMessageHistory(BaseChatMessageHistory):
         messages = messages_from_dict(items)
         return messages
 
-    @property  # type: ignore[override]
+    @property
     def messages(self) -> List[BaseMessage]:
         """The abstraction required a property."""
         return self.get_messages()
+
+    @messages.setter
+    def messages(self, value: list[BaseMessage]) -> None:
+        """Clear the stored messages and appends a list of messages."""
+        self.clear()
+        self.add_messages(value)
 
     def clear(self) -> None:
         """Clear the chat message history for the GIVEN session."""
