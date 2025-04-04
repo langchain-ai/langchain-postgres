@@ -121,3 +121,26 @@ chat_history.add_messages([
 
 print(chat_history.messages)
 ```
+
+### Vectorstore
+
+See example for the [PGVector vectorstore here](https://github.com/langchain-ai/langchain-postgres/blob/main/examples/vectorstore.ipynb)
+
+## Google Cloud Integrations
+
+[Google Cloud](https://python.langchain.com/docs/integrations/providers/google/) provides Vector Store, Chat Message History, and Data Loader integrations for [AlloyDB](https://cloud.google.com/alloydb) and [Cloud SQL](https://cloud.google.com/sql) for PostgreSQL databases via the following PyPi packages:
+
+* [`langchain-google-alloydb-pg`](https://github.com/googleapis/langchain-google-alloydb-pg-python)
+
+* [`langchain-google-cloud-sql-pg`](https://github.com/googleapis/langchain-google-cloud-sql-pg-python)
+
+Using the Google Cloud integrations provides the following benefits:
+
+- **Enhanced Security**: Securely connect to Google Cloud databases utilizing IAM for authorization and database authentication without needing to manage SSL certificates, configure firewall rules, or enable authorized networks.
+- **Simplified and Secure Connections:** Connect to Google Cloud databases effortlessly using the instance name instead of complex connection strings. The integrations creates a secure connection pool that can be easily shared across your application using the `engine` object.
+
+| Vector Store             | Metadata filtering | Async support  | Schema Flexibility | Improved metadata handling | Hybrid Search |
+|--------------------------|--------------------|----------------|--------------------|----------------------------|---------------|
+| Google AlloyDB           |          ✓         |        ✓       |         ✓          |             ✓              |       ✗       |
+| Google Cloud SQL Postgres|          ✓         |        ✓       |         ✓          |             ✓              |       ✗       |
+
