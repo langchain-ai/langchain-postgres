@@ -31,7 +31,7 @@ pip install -U langchain-postgres
 > See example for the [PGVector vectorstore here](https://github.com/langchain-ai/langchain-postgres/blob/main/examples/vectorstore.ipynb)
 `PGVector` is being deprecated. Please migrate to `PGVectorStore`.
 `PGVectorStore` is used for improved performance and manageability.
-See the [migration guide](https://github.com/langchain-ai/langchain-postgres/blob/main/examples/migrate_pgvector_to_pgvectorstore.md) for details on how to migrate from `PGVector` to `PGVectorStore`.
+See the [migration script](https://github.com/langchain-ai/langchain-postgres/blob/main/examples/migrate_pgvector_to_pgvectorstore.ipynb) for details on how to migrate from `PGVector` to `PGVectorStore`.
 
 > [!TIP]
 > All synchronous functions have corresponding asynchronous functions
