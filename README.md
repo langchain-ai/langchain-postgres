@@ -15,7 +15,7 @@ Feel free to use the abstraction as provided or else modify them / extend them a
 
 ## Requirements
 
-The package currently only supports the [psycogp3](https://www.psycopg.org/psycopg3/) driver.
+The package supports the [asyncpg](https://github.com/MagicStack/asyncpg) and [psycogp3](https://www.psycopg.org/psycopg3/) drivers.
 
 ## Installation
 
@@ -27,14 +27,12 @@ pip install -U langchain-postgres
 
 ### Vectorstore
 
-> [!NOTE]
-> See example for the [PGVector vectorstore here](https://github.com/langchain-ai/langchain-postgres/blob/main/examples/vectorstore.ipynb)
-`PGVector` is being deprecated. Please migrate to `PGVectorStore`.
-`PGVectorStore` is used for improved performance and manageability.
-See the [migration guide](https://github.com/langchain-ai/langchain-postgres/blob/main/examples/migrate_pgvector_to_pgvectorstore.md) for details on how to migrate from `PGVector` to `PGVectorStore`.
+> [!WARNING]
+> In v0.0.14+, `PGVector` is deprecated. Please migrate to `PGVectorStore`
+> for improved performance and manageability.
+> See the [migration guide](https://github.com/langchain-ai/langchain-postgres/blob/main/examples/migrate_pgvector_to_pgvectorstore.md) for details on how to migrate from `PGVector` to `PGVectorStore`.
 
-> [!TIP]
-> All synchronous functions have corresponding asynchronous functions
+For a detailed example on `PGVectorStore` see [here](https://github.com/langchain-ai/langchain-postgres/blob/main/examples/pg_vectorstore.ipynb).
 
 ```python
 from langchain_postgres import PGEngine, PGVectorStore
@@ -58,11 +56,10 @@ store = PGVectorStore.create_sync(
     embedding_service=embedding,
 )
 
-all_texts = ["Apples and oranges", "Cars and airplanes", "Pineapple", "Train", "Banana"]
-metadatas = [{"len": len(t)} for t in all_texts]
-ids = [str(uuid.uuid4()) for _ in all_texts]
 docs = [
-    Document(id=ids[i], page_content=all_texts[i], metadata=metadatas[i]) for i in range(len(all_texts))
+    Document(page_content="Apples and oranges"),
+    Document(page_content="Cars and airplanes"),
+    Document(page_content="Train")
 ]
 
 store.add_documents(docs)
@@ -72,7 +69,8 @@ docs = store.similarity_search(query)
 print(docs)
 ```
 
-For a detailed example on `PGVectorStore` see [here](https://github.com/langchain-ai/langchain-postgres/blob/main/examples/pg_vectorstore.ipynb).
+> [!TIP]
+> All synchronous functions have corresponding asynchronous functions
 
 ### ChatMessageHistory
 
@@ -121,10 +119,6 @@ chat_history.add_messages([
 
 print(chat_history.messages)
 ```
-
-### Vectorstore
-
-See example for the [PGVector vectorstore here](https://github.com/langchain-ai/langchain-postgres/blob/main/examples/vectorstore.ipynb)
 
 ## Google Cloud Integrations
 
