@@ -35,18 +35,22 @@ pip install -U langchain-postgres
 For a detailed example on `PGVectorStore` see [here](https://github.com/langchain-ai/langchain-postgres/blob/main/examples/pg_vectorstore.ipynb).
 
 ```python
-from langchain_postgres import PGEngine, PGVectorStore
+from langchain_core.documents import Document
 from langchain_core.embeddings import DeterministicFakeEmbedding
-import uuid
+from langchain_postgres import PGEngine, PGVectorStore
 
-# Replace these variable values
+# Replace the connection string with your own Postgres connection string
+CONNECTION_STRING = "postgresql+psycopg3://langchain:langchain@localhost:6024/langchain"
 engine = PGEngine.from_connection_string(url=CONNECTION_STRING)
 
+# Replace the vector size with your own vector size
 VECTOR_SIZE = 768
 embedding = DeterministicFakeEmbedding(size=VECTOR_SIZE)
 
+TABLE_NAME = "my_doc_collection"
+
 engine.init_vectorstore_table(
-    table_name="destination_table",
+    table_name=TABLE_NAME,
     vector_size=VECTOR_SIZE,
 )
 
