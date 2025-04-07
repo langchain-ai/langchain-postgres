@@ -49,9 +49,8 @@ from sqlalchemy.orm import (
 
 from langchain_postgres._utils import maximal_marginal_relevance
 
+
 warnings.simplefilter("once", PendingDeprecationWarning)
-
-
 class DistanceStrategy(str, enum.Enum):
     """Enumerator of the Distance strategies."""
 
@@ -101,7 +100,7 @@ SUPPORTED_OPERATORS = (
 )
 
 
-def _get_embedding_collection_store(vector_dimension: Optional[int] = None) -> Any:
+def _get_embedding_collection_store(vector_dimension: Optional[int] = None, table_name: str = "pg_embedding", schema_name: str = "public") -> Any:
     global _classes
     if _classes is not None:
         return _classes
@@ -111,7 +110,8 @@ def _get_embedding_collection_store(vector_dimension: Optional[int] = None) -> A
     class CollectionStore(Base):
         """Collection store."""
 
-        __tablename__ = "langchain_pg_collection"
+        __tablename__ = f"{table_name}_collection"
+        __table_args__ = {"schema": schema_name}
 
         uuid = sqlalchemy.Column(
             UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
@@ -198,16 +198,25 @@ def _get_embedding_collection_store(vector_dimension: Optional[int] = None) -> A
     class EmbeddingStore(Base):
         """Embedding store."""
 
-        __tablename__ = "langchain_pg_embedding"
+        __tablename__ = table_name
+        __table_args__ = (
+            {"schema": schema_name},
+            sqlalchemy.Index(
+                f"{table_name}_ix_cmetadata_gin",
+                "cmetadata",
+                postgresql_using="gin",
+                postgresql_ops={"cmetadata": "jsonb_path_ops"},
+            ),
+        )
 
         id = sqlalchemy.Column(
-            sqlalchemy.String, primary_key=True
+            sqlalchemy.String, nullable=True, primary_key=True, index=True, unique=True
         )
 
         collection_id = sqlalchemy.Column(
             UUID(as_uuid=True),
             sqlalchemy.ForeignKey(
-                f"{CollectionStore.__tablename__}.uuid",
+                f"{schema_name}.{CollectionStore.__tablename__}.uuid",
                 ondelete="CASCADE",
             ),
         )
@@ -219,7 +228,7 @@ def _get_embedding_collection_store(vector_dimension: Optional[int] = None) -> A
 
         __table_args__ = (
             sqlalchemy.Index(
-                "ix_cmetadata_gin",
+                f"{table_name}_ix_cmetadata_gin",
                 "cmetadata",
                 postgresql_using="gin",
                 postgresql_ops={"cmetadata": "jsonb_path_ops"},
@@ -272,6 +281,7 @@ class PGVector(VectorStore):
     Instantiate:
         .. code-block:: python
 
+            from langchain_postgres import PGVector
             from langchain_postgres.vectorstores import PGVector
             from langchain_openai import OpenAIEmbeddings
 
@@ -282,6 +292,8 @@ class PGVector(VectorStore):
             vector_store = PGVector(
                 embeddings=OpenAIEmbeddings(model="text-embedding-3-large"),
                 collection_name=collection_name,
+                schema_name=schema_name,
+                table_name=table_name,
                 connection=connection,
                 use_jsonb=True,
             )
@@ -303,7 +315,8 @@ class PGVector(VectorStore):
         .. code-block:: python
 
             vector_store.delete(ids=["3"])
-
+                or
+            vector_store.delete(cmetadata={"key1": "value1"})    
     Search:
         .. code-block:: python
 
@@ -345,6 +358,7 @@ class PGVector(VectorStore):
 
             # delete documents
             # await vector_store.adelete(ids=["3"])
+            # await vector_store.adelete(cmetadata={"key1": "value1"})
 
             # search
             # results = vector_store.asimilarity_search(query="thud",k=1)
@@ -379,6 +393,8 @@ class PGVector(VectorStore):
         *,
         connection: Union[None, DBConnection, Engine, AsyncEngine, str] = None,
         embedding_length: Optional[int] = None,
+        table_name: str = "knowledge_pg_embedding",
+        schema_name: str = "public",
         collection_name: str = _LANGCHAIN_DEFAULT_COLLECTION_NAME,
         collection_metadata: Optional[dict] = None,
         distance_strategy: DistanceStrategy = DEFAULT_DISTANCE_STRATEGY,
@@ -421,7 +437,9 @@ class PGVector(VectorStore):
         self.async_mode = async_mode
         self.embedding_function = embeddings
         self._embedding_length = embedding_length
+        self.table_name = table_name
         self.collection_name = collection_name
+        self.schema_name = schema_name
         self.collection_metadata = collection_metadata
         self._distance_strategy = distance_strategy
         self.pre_delete_collection = pre_delete_collection
@@ -432,12 +450,16 @@ class PGVector(VectorStore):
         self._async_init = False
 
         warnings.warn(
-            "PGVector is being deprecated and will be removed in the future. "
-            "Please migrate to PGVectorStore. "
-            "Refer to the migration guide at [https://github.com/langchain-ai/langchain-postgres/blob/main/examples/migrate_pgvector_to_pgvectorstore.md] for details.",
-            PendingDeprecationWarning,
-        )
 
+            "PGVector is being deprecated and will be removed in the future. "
+
+            "Please migrate to PGVectorStore. "
+
+            "Refer to the migration guide at [https://github.com/langchain-ai/langchain-postgres/blob/main/examples/migrate_pgvector_to_pgvectorstore.md] for details.",
+
+            PendingDeprecationWarning,
+
+        )
         if isinstance(connection, str):
             if async_mode:
                 self._async_engine = create_async_engine(
@@ -479,7 +501,7 @@ class PGVector(VectorStore):
             self.create_vector_extension()
 
         EmbeddingStore, CollectionStore = _get_embedding_collection_store(
-            self._embedding_length
+            self._embedding_length, self.table_name, self.schema_name
         )
         self.CollectionStore = CollectionStore
         self.EmbeddingStore = EmbeddingStore
@@ -495,7 +517,7 @@ class PGVector(VectorStore):
         self._async_init = True
 
         EmbeddingStore, CollectionStore = _get_embedding_collection_store(
-            self._embedding_length
+            self._embedding_length, self.table_name, self.schema_name
         )
         self.CollectionStore = CollectionStore
         self.EmbeddingStore = EmbeddingStore
@@ -600,6 +622,7 @@ class PGVector(VectorStore):
         self,
         ids: Optional[List[str]] = None,
         collection_only: bool = False,
+        cmetadata: dict = {},
         **kwargs: Any,
     ) -> None:
         """Delete vectors by ids or uuids.
@@ -629,12 +652,48 @@ class PGVector(VectorStore):
 
                 stmt = stmt.where(self.EmbeddingStore.id.in_(ids))
                 session.execute(stmt)
+            elif cmetadata:
+                self.logger.debug(
+                    "Trying to delete vectors by cmetadata (represented by the model "
+                    "using the custom cmetadata field)"
+                )
+                key = list(cmetadata.keys())[0]
+                val = list(cmetadata.values())[0]
+                stmt = delete(self.EmbeddingStore).where(self.EmbeddingStore.cmetadata[key].astext == val)
+
+                if collection_only:
+                    collection = self.get_collection(session)
+                    if not collection:
+                        self.logger.warning("Collection not found")
+                        return
+
+                    stmt = stmt.where(
+                        self.EmbeddingStore.collection_id == collection.uuid
+                    )
+                session.execute(stmt)
+            elif ids is None and not cmetadata:
+                self.logger.debug(
+                    "Trying to delete all vectors"
+                )
+                stmt = delete(self.EmbeddingStore)
+
+                if collection_only:
+                    collection = self.get_collection(session)
+                    if not collection:
+                        self.logger.warning("Collection not found")
+                        return
+
+                    stmt = stmt.where(
+                        self.EmbeddingStore.collection_id == collection.uuid
+                    )
+                session.execute(stmt)
             session.commit()
 
     async def adelete(
         self,
         ids: Optional[List[str]] = None,
         collection_only: bool = False,
+        cmetadata: dict = {},
         **kwargs: Any,
     ) -> None:
         """Async delete vectors by ids or uuids.
@@ -664,6 +723,41 @@ class PGVector(VectorStore):
                     )
 
                 stmt = stmt.where(self.EmbeddingStore.id.in_(ids))
+                await session.execute(stmt)
+            elif cmetadata:
+                self.logger.debug(
+                    "Trying to delete vectors by cmetadata (represented by the model "
+                    "using the custom cmetadata field)"
+                )
+                key = list(cmetadata.keys())[0]
+                val = list(cmetadata.values())[0]
+                stmt = delete(self.EmbeddingStore).where(self.EmbeddingStore.cmetadata[key].astext == val)
+
+                if collection_only:
+                    collection = await self.aget_collection(session)
+                    if not collection:
+                        self.logger.warning("Collection not found")
+                        return
+
+                    stmt = stmt.where(
+                        self.EmbeddingStore.collection_id == collection.uuid
+                    )
+                await session.execute(stmt)
+            elif ids is None and not cmetadata:
+                self.logger.debug(
+                    "Trying to delete all vectors"
+                )
+                stmt = delete(self.EmbeddingStore)
+
+                if collection_only:
+                    collection = await self.aget_collection(session)
+                    if not collection:
+                        self.logger.warning("Collection not found")
+                        return
+
+                    stmt = stmt.where(
+                        self.EmbeddingStore.collection_id == collection.uuid
+                    )
                 await session.execute(stmt)
             await session.commit()
 
