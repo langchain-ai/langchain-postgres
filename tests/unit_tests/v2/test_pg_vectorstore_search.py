@@ -158,13 +158,6 @@ class TestVectorStoreSearch:
         await vs_custom_filter.aadd_documents(filter_docs, ids=ids)
         yield vs_custom_filter
 
-    async def test_asimilarity_search(self, vs: PGVectorStore) -> None:
-        results = await vs.asimilarity_search("foo", k=1)
-        assert len(results) == 1
-        assert results == [Document(page_content="foo", id=ids[0])]
-        results = await vs.asimilarity_search("foo", k=1, filter="content = 'bar'")
-        assert results == [Document(page_content="bar", id=ids[1])]
-
     async def test_asimilarity_search_score(self, vs: PGVectorStore) -> None:
         results = await vs.asimilarity_search_with_score("foo")
         assert len(results) == 4
@@ -221,14 +214,6 @@ class TestVectorStoreSearch:
         )
         assert len(results) == 1
         assert results[0][0] == Document(page_content="foo", id=ids[0])
-
-    async def test_amax_marginal_relevance_search(self, vs: PGVectorStore) -> None:
-        results = await vs.amax_marginal_relevance_search("bar")
-        assert results[0] == Document(page_content="bar", id=ids[1])
-        results = await vs.amax_marginal_relevance_search(
-            "bar", filter="content = 'boo'"
-        )
-        assert results[0] == Document(page_content="boo", id=ids[3])
 
     async def test_amax_marginal_relevance_search_vector(
         self, vs: PGVectorStore
@@ -354,13 +339,6 @@ class TestVectorStoreSearchSync:
         vs_custom_filter_sync.add_documents(filter_docs, ids=ids)
         yield vs_custom_filter_sync
 
-    def test_similarity_search(self, vs_custom: PGVectorStore) -> None:
-        results = vs_custom.similarity_search("foo", k=1)
-        assert len(results) == 1
-        assert results == [Document(page_content="foo", id=ids[0])]
-        results = vs_custom.similarity_search("foo", k=1, filter="mycontent = 'bar'")
-        assert results == [Document(page_content="bar", id=ids[1])]
-
     def test_similarity_search_score(self, vs_custom: PGVectorStore) -> None:
         results = vs_custom.similarity_search_with_score("foo")
         assert len(results) == 4
@@ -375,14 +353,6 @@ class TestVectorStoreSearchSync:
         result = vs_custom.similarity_search_with_score_by_vector(embedding=embedding)
         assert result[0][0] == Document(page_content="foo", id=ids[0])
         assert result[0][1] == 0
-
-    def test_max_marginal_relevance_search(self, vs_custom: PGVectorStore) -> None:
-        results = vs_custom.max_marginal_relevance_search("bar")
-        assert results[0] == Document(page_content="bar", id=ids[1])
-        results = vs_custom.max_marginal_relevance_search(
-            "bar", filter="mycontent = 'boo'"
-        )
-        assert results[0] == Document(page_content="boo", id=ids[3])
 
     def test_max_marginal_relevance_search_vector(
         self, vs_custom: PGVectorStore
