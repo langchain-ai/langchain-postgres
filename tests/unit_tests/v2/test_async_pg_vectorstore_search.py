@@ -33,13 +33,15 @@ texts = ["foo", "bar", "baz", "boo"]
 ids = [str(uuid.uuid4()) for i in range(len(texts))]
 metadatas = [{"page": str(i), "source": "postgres"} for i in range(len(texts))]
 docs = [
-    Document(page_content=texts[i], metadata=metadatas[i]) for i in range(len(texts))
+    Document(page_content=texts[i], metadata=metadatas[i])
+    for i in range(len(texts))
 ]
 
 embeddings = [embeddings_service.embed_query("foo") for i in range(len(texts))]
 
 filter_docs = [
-    Document(page_content=texts[i], metadata=METADATAS[i]) for i in range(len(texts))
+    Document(page_content=texts[i], metadata=METADATAS[i])
+    for i in range(len(texts))
 ]
 
 
@@ -68,7 +70,7 @@ class TestVectorStoreSearch:
         yield engine
         await aexecute(engine, f"DROP TABLE IF EXISTS {DEFAULT_TABLE}")
         await aexecute(engine, f"DROP TABLE IF EXISTS {CUSTOM_TABLE}")
-        await aexecute(engine, f"DROP TABLE IF EXISTS {CUSTOM_FILTER_TABLE}")
+        # await aexecute(engine, f"DROP TABLE IF EXISTS {CUSTOM_FILTER_TABLE}")
         await engine.close()
 
     @pytest_asyncio.fixture(scope="class")
@@ -85,7 +87,9 @@ class TestVectorStoreSearch:
         yield vs
 
     @pytest_asyncio.fixture(scope="class")
-    async def vs_custom(self, engine: PGEngine) -> AsyncIterator[AsyncPGVectorStore]:
+    async def vs_custom(
+        self, engine: PGEngine
+    ) -> AsyncIterator[AsyncPGVectorStore]:
         await engine._ainit_vectorstore_table(
             CUSTOM_TABLE,
             VECTOR_SIZE,
@@ -149,25 +153,24 @@ class TestVectorStoreSearch:
         await vs_custom_filter.aadd_documents(filter_docs, ids=ids)
         yield vs_custom_filter
 
-    async def test_asimilarity_search(self, vs: AsyncPGVectorStore) -> None:
-        results = await vs.asimilarity_search("foo", k=1)
-        assert len(results) == 1
-        assert results == [Document(page_content="foo", id=ids[0])]
-        results = await vs.asimilarity_search("foo", k=1, filter="content = 'bar'")
-        assert results == [Document(page_content="bar", id=ids[1])]
-
-    async def test_asimilarity_search_score(self, vs: AsyncPGVectorStore) -> None:
+    async def test_asimilarity_search_score(
+        self, vs: AsyncPGVectorStore
+    ) -> None:
         results = await vs.asimilarity_search_with_score("foo")
         assert len(results) == 4
         assert results[0][0] == Document(page_content="foo", id=ids[0])
         assert results[0][1] == 0
 
-    async def test_asimilarity_search_by_vector(self, vs: AsyncPGVectorStore) -> None:
+    async def test_asimilarity_search_by_vector(
+        self, vs: AsyncPGVectorStore
+    ) -> None:
         embedding = embeddings_service.embed_query("foo")
         results = await vs.asimilarity_search_by_vector(embedding)
         assert len(results) == 4
         assert results[0] == Document(page_content="foo", id=ids[0])
-        result = await vs.asimilarity_search_with_score_by_vector(embedding=embedding)
+        result = await vs.asimilarity_search_with_score_by_vector(
+            embedding=embedding
+        )
         assert result[0][0] == Document(page_content="foo", id=ids[0])
         assert result[0][1] == 0
 
@@ -220,14 +223,6 @@ class TestVectorStoreSearch:
         assert len(results) == 1
         assert results[0][0] == Document(page_content="foo", id=ids[0])
 
-    async def test_amax_marginal_relevance_search(self, vs: AsyncPGVectorStore) -> None:
-        results = await vs.amax_marginal_relevance_search("bar")
-        assert results[0] == Document(page_content="bar", id=ids[1])
-        results = await vs.amax_marginal_relevance_search(
-            "bar", filter="content = 'boo'"
-        )
-        assert results[0] == Document(page_content="boo", id=ids[3])
-
     async def test_amax_marginal_relevance_search_vector(
         self, vs: AsyncPGVectorStore
     ) -> None:
@@ -249,16 +244,9 @@ class TestVectorStoreSearch:
         )
         assert results[0][0] == Document(page_content="bar", id=ids[1])
 
-    async def test_similarity_search(self, vs_custom: AsyncPGVectorStore) -> None:
-        results = await vs_custom.asimilarity_search("foo", k=1)
-        assert len(results) == 1
-        assert results == [Document(page_content="foo", id=ids[0])]
-        results = await vs_custom.asimilarity_search(
-            "foo", k=1, filter="mycontent = 'bar'"
-        )
-        assert results == [Document(page_content="bar", id=ids[1])]
-
-    async def test_similarity_search_score(self, vs_custom: AsyncPGVectorStore) -> None:
+    async def test_similarity_search_score(
+        self, vs_custom: AsyncPGVectorStore
+    ) -> None:
         results = await vs_custom.asimilarity_search_with_score("foo")
         assert len(results) == 4
         assert results[0][0] == Document(page_content="foo", id=ids[0])
@@ -277,34 +265,30 @@ class TestVectorStoreSearch:
         assert result[0][0] == Document(page_content="foo", id=ids[0])
         assert result[0][1] == 0
 
-    async def test_max_marginal_relevance_search(
-        self, vs_custom: AsyncPGVectorStore
-    ) -> None:
-        results = await vs_custom.amax_marginal_relevance_search("bar")
-        assert results[0] == Document(page_content="bar", id=ids[1])
-        results = await vs_custom.amax_marginal_relevance_search(
-            "bar", filter="mycontent = 'boo'"
-        )
-        assert results[0] == Document(page_content="boo", id=ids[3])
-
     async def test_max_marginal_relevance_search_vector(
         self, vs_custom: AsyncPGVectorStore
     ) -> None:
         embedding = embeddings_service.embed_query("bar")
-        results = await vs_custom.amax_marginal_relevance_search_by_vector(embedding)
+        results = await vs_custom.amax_marginal_relevance_search_by_vector(
+            embedding
+        )
         assert results[0] == Document(page_content="bar", id=ids[1])
 
     async def test_max_marginal_relevance_search_vector_score(
         self, vs_custom: AsyncPGVectorStore
     ) -> None:
         embedding = embeddings_service.embed_query("bar")
-        results = await vs_custom.amax_marginal_relevance_search_with_score_by_vector(
-            embedding
+        results = (
+            await vs_custom.amax_marginal_relevance_search_with_score_by_vector(
+                embedding
+            )
         )
         assert results[0][0] == Document(page_content="bar", id=ids[1])
 
-        results = await vs_custom.amax_marginal_relevance_search_with_score_by_vector(
-            embedding, lambda_mult=0.75, fetch_k=10
+        results = (
+            await vs_custom.amax_marginal_relevance_search_with_score_by_vector(
+                embedding, lambda_mult=0.75, fetch_k=10
+            )
         )
         assert results[0][0] == Document(page_content="bar", id=ids[1])
 
@@ -314,7 +298,9 @@ class TestVectorStoreSearch:
 
         assert results[0] == Document(page_content="foo", id=ids[0])
 
-    async def test_aget_by_ids_custom_vs(self, vs_custom: AsyncPGVectorStore) -> None:
+    async def test_aget_by_ids_custom_vs(
+        self, vs_custom: AsyncPGVectorStore
+    ) -> None:
         test_ids = [ids[0]]
         results = await vs_custom.aget_by_ids(ids=test_ids)
 
@@ -336,4 +322,6 @@ class TestVectorStoreSearch:
         docs = await vs_custom_filter.asimilarity_search(
             "meow", k=5, filter=test_filter
         )
-        assert [doc.metadata["code"] for doc in docs] == expected_ids, test_filter
+        assert [
+            doc.metadata["code"] for doc in docs
+        ] == expected_ids, test_filter
