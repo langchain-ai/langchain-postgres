@@ -11,7 +11,6 @@ from sqlalchemy import text
 from langchain_postgres import PGEngine
 from langchain_postgres.v2.async_vectorstore import AsyncPGVectorStore
 from langchain_postgres.v2.indexes import (
-    DEFAULT_INDEX_NAME_SUFFIX,
     DistanceStrategy,
     HNSWIndex,
     IVFFlatIndex,
