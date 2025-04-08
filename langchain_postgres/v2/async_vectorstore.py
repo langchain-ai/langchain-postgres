@@ -957,8 +957,6 @@ class AsyncPGVectorStore(VectorStore):
         if operator in COMPARISONS_TO_NATIVE:
             # Then we implement an equality filter
             # native is trusted input
-            # if isinstance(filter_value, str):
-            #     filter_value = f"'{filter_value}'"
             native = COMPARISONS_TO_NATIVE[operator]
             id = str(uuid.uuid4()).split("-")[0]
             return f"{field} {native} :{field}_{id}", {f"{field}_{id}": filter_value}
