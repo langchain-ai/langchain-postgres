@@ -557,14 +557,14 @@ class AsyncPGVectorStore(VectorStore):
         filter_dict = None
         if filter and isinstance(filter, dict):
             safe_filter, filter_dict = self._create_filter_clause(filter)
-        filter = f"WHERE {safe_filter}" if safe_filter else ""
+        param_filter = f"WHERE {safe_filter}" if safe_filter else ""
         inline_embed_func = getattr(self.embedding_service, "embed_query_inline", None)
         if not embedding and callable(inline_embed_func) and "query" in kwargs:
             query_embedding = self.embedding_service.embed_query_inline(kwargs["query"])  # type: ignore
         else:
             query_embedding = f"{[float(dimension) for dimension in embedding]}"
         stmt = f"""SELECT {column_names}, {search_function}("{self.embedding_column}", :query_embedding) as distance
-        FROM "{self.schema_name}"."{self.table_name}" {filter} ORDER BY "{self.embedding_column}" {operator} :query_embedding LIMIT :k;
+        FROM "{self.schema_name}"."{self.table_name}" {param_filter} ORDER BY "{self.embedding_column}" {operator} :query_embedding LIMIT :k;
         """
         param_dict = {"query_embedding": query_embedding, "k": k}
         if filter_dict:
