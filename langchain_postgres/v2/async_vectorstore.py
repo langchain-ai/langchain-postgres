@@ -111,9 +111,7 @@ class AsyncPGVectorStore(VectorStore):
         self.schema_name = schema_name
         self.content_column = content_column
         self.embedding_column = embedding_column
-        self.metadata_columns = (
-            metadata_columns if metadata_columns is not None else []
-        )
+        self.metadata_columns = metadata_columns if metadata_columns is not None else []
         self.id_column = id_column
         self.metadata_json_column = metadata_json_column
         self.distance_strategy = distance_strategy
@@ -189,27 +187,21 @@ class AsyncPGVectorStore(VectorStore):
         if id_column not in columns:
             raise ValueError(f"Id column, {id_column}, does not exist.")
         if content_column not in columns:
-            raise ValueError(
-                f"Content column, {content_column}, does not exist."
-            )
+            raise ValueError(f"Content column, {content_column}, does not exist.")
         content_type = columns[content_column]
         if content_type != "text" and "char" not in content_type:
             raise ValueError(
                 f"Content column, {content_column}, is type, {content_type}. It must be a type of character string."
             )
         if embedding_column not in columns:
-            raise ValueError(
-                f"Embedding column, {embedding_column}, does not exist."
-            )
+            raise ValueError(f"Embedding column, {embedding_column}, does not exist.")
         if columns[embedding_column] != "USER-DEFINED":
             raise ValueError(
                 f"Embedding column, {embedding_column}, is not type Vector."
             )
 
         metadata_json_column = (
-            None
-            if metadata_json_column not in columns
-            else metadata_json_column
+            None if metadata_json_column not in columns else metadata_json_column
         )
 
         # If using metadata_columns check to make sure column exists
@@ -272,14 +264,10 @@ class AsyncPGVectorStore(VectorStore):
             metadatas = [{} for _ in texts]
 
         # Check for inline embedding capability
-        inline_embed_func = getattr(
-            self.embedding_service, "embed_query_inline", None
-        )
+        inline_embed_func = getattr(self.embedding_service, "embed_query_inline", None)
         can_inline_embed = callable(inline_embed_func)
         # Insert embeddings
-        for id, content, embedding, metadata in zip(
-            ids, texts, embeddings, metadatas
-        ):
+        for id, content, embedding, metadata in zip(ids, texts, embeddings, metadatas):
             metadata_col_names = (
                 ", " + ", ".join(f'"{col}"' for col in self.metadata_columns)
                 if len(self.metadata_columns) > 0
@@ -348,15 +336,11 @@ class AsyncPGVectorStore(VectorStore):
             :class:`InvalidTextRepresentationError <asyncpg.exceptions.InvalidTextRepresentationError>`: if the `ids` data type does not match that of the `id_column`.
         """
         # Check for inline embedding query
-        inline_embed_func = getattr(
-            self.embedding_service, "embed_query_inline", None
-        )
+        inline_embed_func = getattr(self.embedding_service, "embed_query_inline", None)
         if callable(inline_embed_func):
             embeddings: list[list[float]] = [[] for _ in list(texts)]
         else:
-            embeddings = await self.embedding_service.aembed_documents(
-                list(texts)
-            )
+            embeddings = await self.embedding_service.aembed_documents(list(texts))
 
         ids = await self.aadd_embeddings(
             texts, embeddings, metadatas=metadatas, ids=ids, **kwargs
@@ -378,9 +362,7 @@ class AsyncPGVectorStore(VectorStore):
         metadatas = [doc.metadata for doc in documents]
         if not ids:
             ids = [doc.id for doc in documents]
-        ids = await self.aadd_texts(
-            texts, metadatas=metadatas, ids=ids, **kwargs
-        )
+        ids = await self.aadd_texts(texts, metadatas=metadatas, ids=ids, **kwargs)
         return ids
 
     async def adelete(
@@ -576,9 +558,7 @@ class AsyncPGVectorStore(VectorStore):
         if filter and isinstance(filter, dict):
             safe_filter, filter_dict = self._create_filter_clause(filter)
         filter = f"WHERE {safe_filter}" if safe_filter else ""
-        inline_embed_func = getattr(
-            self.embedding_service, "embed_query_inline", None
-        )
+        inline_embed_func = getattr(self.embedding_service, "embed_query_inline", None)
         if not embedding and callable(inline_embed_func) and "query" in kwargs:
             query_embedding = self.embedding_service.embed_query_inline(kwargs["query"])  # type: ignore
         else:
@@ -613,9 +593,7 @@ class AsyncPGVectorStore(VectorStore):
         **kwargs: Any,
     ) -> list[Document]:
         """Return docs selected by similarity search on query."""
-        inline_embed_func = getattr(
-            self.embedding_service, "embed_query_inline", None
-        )
+        inline_embed_func = getattr(self.embedding_service, "embed_query_inline", None)
         embedding = (
             []
             if callable(inline_embed_func)
@@ -646,9 +624,7 @@ class AsyncPGVectorStore(VectorStore):
         **kwargs: Any,
     ) -> list[tuple[Document, float]]:
         """Return docs and distance scores selected by similarity search on query."""
-        inline_embed_func = getattr(
-            self.embedding_service, "embed_query_inline", None
-        )
+        inline_embed_func = getattr(self.embedding_service, "embed_query_inline", None)
         embedding = (
             []
             if callable(inline_embed_func)
@@ -770,9 +746,7 @@ class AsyncPGVectorStore(VectorStore):
         k = k if k else self.k
         fetch_k = fetch_k if fetch_k else self.fetch_k
         lambda_mult = lambda_mult if lambda_mult else self.lambda_mult
-        embedding_list = [
-            json.loads(row[self.embedding_column]) for row in results
-        ]
+        embedding_list = [json.loads(row[self.embedding_column]) for row in results]
         mmr_selected = utils.maximal_marginal_relevance(
             np.array(embedding, dtype=np.float32),
             embedding_list,
@@ -800,9 +774,7 @@ class AsyncPGVectorStore(VectorStore):
                 )
             )
 
-        return [
-            r for i, r in enumerate(documents_with_scores) if i in mmr_selected
-        ]
+        return [r for i, r in enumerate(documents_with_scores) if i in mmr_selected]
 
     async def aapply_vector_index(
         self,
@@ -820,16 +792,12 @@ class AsyncPGVectorStore(VectorStore):
         if index.extension_name:
             async with self.engine.connect() as conn:
                 await conn.execute(
-                    text(
-                        f"CREATE EXTENSION IF NOT EXISTS {index.extension_name}"
-                    )
+                    text(f"CREATE EXTENSION IF NOT EXISTS {index.extension_name}")
                 )
                 await conn.commit()
         function = index.get_index_function()
 
-        filter = (
-            f"WHERE ({index.partial_indexes})" if index.partial_indexes else ""
-        )
+        filter = f"WHERE ({index.partial_indexes})" if index.partial_indexes else ""
         params = "WITH " + index.index_options()
         if name is None:
             if index.name == None:
@@ -993,9 +961,7 @@ class AsyncPGVectorStore(VectorStore):
             #     filter_value = f"'{filter_value}'"
             native = COMPARISONS_TO_NATIVE[operator]
             id = str(uuid.uuid4()).split("-")[0]
-            return f"{field} {native} :{field}_{id}", {
-                f"{field}_{id}": filter_value
-            }
+            return f"{field} {native} :{field}_{id}", {f"{field}_{id}": filter_value}
         elif operator == "$between":
             # Use AND with two comparisons
             low, high = filter_value
@@ -1019,17 +985,11 @@ class AsyncPGVectorStore(VectorStore):
                         )
 
             if operator in {"$in"}:
-                return f"{field} = ANY(:{field}_in)", {
-                    f"{field}_in": filter_value
-                }
+                return f"{field} = ANY(:{field}_in)", {f"{field}_in": filter_value}
             elif operator in {"$nin"}:
-                return f"{field} <> ALL (:{field}_nin)", {
-                    f"{field}_nin": filter_value
-                }
+                return f"{field} <> ALL (:{field}_nin)", {f"{field}_nin": filter_value}
             elif operator in {"$like"}:
-                return f"({field} LIKE :{field}_like)", {
-                    f"{field}_like": filter_value
-                }
+                return f"({field} LIKE :{field}_like)", {f"{field}_like": filter_value}
             elif operator in {"$ilike"}:
                 return f"({field} ILIKE :{field}_ilike)", {
                     f"{field}_ilike": filter_value
@@ -1108,9 +1068,7 @@ class AsyncPGVectorStore(VectorStore):
                     params = {}
                     for clause in not_conditions:
                         params.update(clause[1])
-                    not_stmts = [
-                        f"NOT {condition}" for condition in all_clauses
-                    ]
+                    not_stmts = [f"NOT {condition}" for condition in all_clauses]
                     return f"({' AND '.join(not_stmts)})", params
                 elif isinstance(value, dict):
                     not_, params = self._create_filter_clause(value)
@@ -1134,8 +1092,7 @@ class AsyncPGVectorStore(VectorStore):
                     )
             # These should all be fields and combined using an $and operator
             and_ = [
-                self._handle_field_filter(field=k, value=v)
-                for k, v in filters.items()
+                self._handle_field_filter(field=k, value=v) for k, v in filters.items()
             ]
             if len(and_) > 1:
                 all_clauses = [clause[0] for clause in and_]
