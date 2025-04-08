@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import copy
 import json
-import re
 import uuid
 from typing import Any, Callable, Iterable, Optional, Sequence
 
@@ -834,7 +833,7 @@ class AsyncPGVectorStore(VectorStore):
     ) -> bool:
         """Check if index exists in the table."""
         index_name = index_name or self.table_name + DEFAULT_INDEX_NAME_SUFFIX
-        query = f"""
+        query = """
         SELECT tablename, indexname
         FROM pg_indexes
         WHERE tablename = :table_name AND schemaname = :schema_name AND indexname = :index_name;

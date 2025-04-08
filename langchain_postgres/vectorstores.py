@@ -5,6 +5,7 @@ import contextlib
 import enum
 import logging
 import uuid
+import warnings
 from typing import (
     Any,
     AsyncGenerator,
@@ -19,7 +20,6 @@ from typing import (
     Type,
     Union,
 )
-import warnings
 from typing import (
     cast as typing_cast,
 )

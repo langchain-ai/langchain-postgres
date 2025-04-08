@@ -3,14 +3,14 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass
 from threading import Thread
-from typing import TYPE_CHECKING, Any, Awaitable, Optional, TypeVar, TypedDict, Union
+from typing import TYPE_CHECKING, Any, Awaitable, Optional, TypedDict, TypeVar, Union
 
 from sqlalchemy import text
 from sqlalchemy.engine import URL
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 
 if TYPE_CHECKING:
-    import asyncpg  # type: ignore
+    pass  # type: ignore
 
 T = TypeVar("T")
 
