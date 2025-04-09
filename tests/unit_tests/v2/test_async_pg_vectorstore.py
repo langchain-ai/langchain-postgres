@@ -50,8 +50,8 @@ class TestVectorStore:
         engine = PGEngine.from_connection_string(url=CONNECTION_STRING)
 
         yield engine
-        await aexecute(engine, f'DROP TABLE IF EXISTS "{DEFAULT_TABLE}"')
-        await aexecute(engine, f'DROP TABLE IF EXISTS "{CUSTOM_TABLE}"')
+        await engine.adrop_table("{DEFAULT_TABLE}")
+        await engine.adrop_table("{CUSTOM_TABLE}")
         await engine.close()
 
     @pytest_asyncio.fixture(scope="class")

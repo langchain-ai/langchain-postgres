@@ -346,3 +346,35 @@ class PGEngine:
                 store_metadata=store_metadata,
             )
         )
+
+    async def _adrop_table(
+        self,
+        table_name: str,
+        *,
+        schema_name: str = "public",
+    ) -> None:
+        """Drop the vector store table"""
+        query = f'DROP TABLE "{schema_name}"."{table_name}";'
+        async with self._pool.connect() as conn:
+            await conn.execute(text(query))
+            await conn.commit()
+
+    async def adrop_table(
+        self,
+        table_name: str,
+        *,
+        schema_name: str = "public",
+    ) -> None:
+        await self._run_as_async(
+            self._adrop_table(table_name=table_name, schema_name=schema_name)
+        )
+
+    async def drop_table(
+        self,
+        table_name: str,
+        *,
+        schema_name: str = "public",
+    ) -> None:
+        self._run_as_sync(
+            self._adrop_table(table_name=table_name, schema_name=schema_name)
+        )
