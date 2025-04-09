@@ -66,9 +66,9 @@ class TestVectorStoreSearch:
     async def engine(self) -> AsyncIterator[PGEngine]:
         engine = PGEngine.from_connection_string(url=CONNECTION_STRING)
         yield engine
-        await engine.adrop_table("{DEFAULT_TABLE}")
-        await engine.adrop_table("{CUSTOM_TABLE}")
-        await engine.adrop_table("{CUSTOM_FILTER_TABLE}")
+        await engine.adrop_table(DEFAULT_TABLE)
+        await engine.adrop_table(CUSTOM_TABLE)
+        await engine.adrop_table(CUSTOM_FILTER_TABLE)
         await engine.close()
 
     @pytest_asyncio.fixture(scope="class")
