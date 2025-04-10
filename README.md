@@ -32,7 +32,12 @@ pip install -U langchain-postgres
 > for improved performance and manageability.
 > See the [migration guide](https://github.com/langchain-ai/langchain-postgres/blob/main/examples/migrate_pgvector_to_pgvectorstore.md) for details on how to migrate from `PGVector` to `PGVectorStore`.
 
-For a detailed example on `PGVectorStore` see [here](https://github.com/langchain-ai/langchain-postgres/blob/main/examples/pg_vectorstore.ipynb).
+### Quickstart
+
+* [Quickstart](https://github.com/langchain-ai/langchain-postgres/blob/main/examples/pg_vectorstore.ipynb)
+* [How-to](https://github.com/langchain-ai/langchain-postgres/blob/main/examples/pg_vectorstore_how_to.ipynb)
+
+### Example
 
 ```python
 from langchain_core.documents import Document
