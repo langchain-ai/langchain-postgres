@@ -29,7 +29,6 @@ pip install -U langchain-postgres
 
 > [!WARNING]
 > In v0.0.14+, `PGVector` is deprecated. Please migrate to `PGVectorStore`
-> Version 0.0.14+ has not been released yet, but you can test version of the vectorstore on the main branch. Until official release do not use in production.
 > for improved performance and manageability.
 > See the [migration guide](https://github.com/langchain-ai/langchain-postgres/blob/main/examples/migrate_pgvector_to_pgvectorstore.md) for details on how to migrate from `PGVector` to `PGVectorStore`.
 
