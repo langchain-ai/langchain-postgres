@@ -6,9 +6,8 @@ import pytest
 import pytest_asyncio
 from langchain_core.documents import Document
 from langchain_core.embeddings import DeterministicFakeEmbedding
-from sqlalchemy import VARCHAR, text
+from sqlalchemy import text
 from sqlalchemy.engine.row import RowMapping
-from sqlalchemy.ext.asyncio import create_async_engine
 
 from langchain_postgres import Column, PGEngine, PGVectorStore
 from tests.utils import VECTORSTORE_CONNECTION_STRING as CONNECTION_STRING

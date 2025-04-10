@@ -10,7 +10,6 @@ from sqlalchemy import text
 
 from langchain_postgres import PGEngine, PGVectorStore
 from langchain_postgres.v2.indexes import (
-    DEFAULT_INDEX_NAME_SUFFIX,
     DistanceStrategy,
     HNSWIndex,
     IVFFlatIndex,

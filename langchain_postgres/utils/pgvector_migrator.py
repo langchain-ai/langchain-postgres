@@ -68,7 +68,7 @@ async def __aextract_pgvector_collection(
                 if not rows:
                     break
                 yield [row._mapping for row in rows]
-    except ValueError as e:
+    except ValueError:
         raise ValueError(f"Collection, {collection_name} does not exist.")
     except SQLAlchemyError as e:
         raise ProgrammingError(

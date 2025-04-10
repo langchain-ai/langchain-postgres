@@ -23,16 +23,19 @@ The package supports the [asyncpg](https://github.com/MagicStack/asyncpg) and [p
 pip install -U langchain-postgres
 ```
 
-## Usage
-
-### Vectorstore
+## Vectorstore
 
 > [!WARNING]
 > In v0.0.14+, `PGVector` is deprecated. Please migrate to `PGVectorStore`
 > for improved performance and manageability.
 > See the [migration guide](https://github.com/langchain-ai/langchain-postgres/blob/main/examples/migrate_pgvector_to_pgvectorstore.ipynb) for details on how to migrate from `PGVector` to `PGVectorStore`.
 
-For a detailed example on `PGVectorStore` see [here](https://github.com/langchain-ai/langchain-postgres/blob/main/examples/pg_vectorstore.ipynb).
+### Documentation
+
+* [Quickstart](https://github.com/langchain-ai/langchain-postgres/blob/main/examples/pg_vectorstore.ipynb)
+* [How-to](https://github.com/langchain-ai/langchain-postgres/blob/main/examples/pg_vectorstore_how_to.ipynb)
+
+### Example
 
 ```python
 from langchain_core.documents import Document
@@ -76,7 +79,7 @@ print(docs)
 > [!TIP]
 > All synchronous functions have corresponding asynchronous functions
 
-### ChatMessageHistory
+## ChatMessageHistory
 
 The chat message history abstraction helps to persist chat message history
 in a postgres table.

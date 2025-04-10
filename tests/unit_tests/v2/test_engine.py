@@ -2,7 +2,6 @@ import os
 import uuid
 from typing import AsyncIterator, Sequence
 
-import asyncpg  # type: ignore
 import pytest
 import pytest_asyncio
 from langchain_core.embeddings import DeterministicFakeEmbedding
@@ -11,7 +10,7 @@ from sqlalchemy.engine.row import RowMapping
 from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy.pool import NullPool
 
-from langchain_postgres import Column, PGEngine, ColumnDict
+from langchain_postgres import Column, PGEngine
 from tests.utils import VECTORSTORE_CONNECTION_STRING as CONNECTION_STRING
 
 DEFAULT_TABLE = "default" + str(uuid.uuid4()).replace("-", "_")
@@ -214,7 +213,7 @@ class TestEngineAsync:
     ) -> None:
         with pytest.raises(ValueError):
             PGEngine.from_connection_string(
-                f"postgresql+pg8000://user:password@host:port/db_name",
+                "postgresql+pg8000://user:password@host:port/db_name",
             )
 
     async def test_column(self, engine: PGEngine) -> None:

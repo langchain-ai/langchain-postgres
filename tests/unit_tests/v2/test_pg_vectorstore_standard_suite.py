@@ -1,6 +1,6 @@
 import os
 import uuid
-from typing import AsyncIterator, Iterator
+from typing import AsyncIterator
 
 import pytest
 import pytest_asyncio
