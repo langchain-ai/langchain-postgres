@@ -15,14 +15,14 @@ This foundation ensures the core database interactions are fast and scalable.
 
 To cater to different application architectures while maintaining performance, we provide two classes:
 
-1.  **`AsyncPGVectorstore` (Core Asynchronous Implementation):**
+1.  **`AsyncPGVectorStore` (Core Asynchronous Implementation):**
     * This class contains the pure `async/await` logic for all database operations using `asyncpg`.
     * It's designed for **direct use within asynchronous applications**. Users working in an `asyncio` environment can `await` its methods for maximum efficiency and direct control within the event loop.
     * It represents the fundamental, non-blocking way of interacting with the database.
 
-2.  **`PGVectorstore` (Synchronous Interface / Asynchronous Internals):**
+2.  **`PGVectorStore` (Synchronous Interface / Asynchronous Internals):**
     * This class provides both asynchronous & synchronous APIs.
-    * When one of its methods is called, it internally invokes the corresponding `async` method from `AsyncPGVectorstore`.
+    * When one of its methods is called, it internally invokes the corresponding `async` method from `AsyncPGVectorStore`.
     * It **manages the execution of this underlying asynchronous logic**, handling the necessary `asyncio` event loop interactions (e.g., starting/running the coroutine) behind the scenes.
     * This allows users of synchronous codebases to leverage the performance benefits of the asynchronous core without needing to rewrite their application structure.
 
@@ -31,8 +31,8 @@ To cater to different application architectures while maintaining performance, w
 This two-class structure provides significant advantages:
 
 -   **Interface Flexibility:** Developers can **choose the interface that best fits their needs**:
-    * Use `PGVectorstore` for easy integration into existing synchronous applications.
-    * Use `AsyncPGVectorstore` for optimal performance and integration within `asyncio`-based applications.
--   **Ease of Use:** `PGVectorstore` offers a familiar synchronous programming model, hiding the complexity of managing async execution from the end-user.
+    * Use `PGVectorStore` for easy integration into existing synchronous applications.
+    * Use `AsyncPGVectorStore` for optimal performance and integration within `asyncio`-based applications.
+-   **Ease of Use:** `PGVectorStore` offers a familiar synchronous programming model, hiding the complexity of managing async execution from the end-user.
 -   **Robustness:** The clear separation helps prevent common errors associated with mixing synchronous and asynchronous code incorrectly, such as blocking the event loop from synchronous calls within an async context.
--   **Efficiency for Async Users:** `AsyncPGVectorstore` provides a direct path for async applications, avoiding any potential overhead from the sync-to-async bridging layer present in `PGVectorstore`.
+-   **Efficiency for Async Users:** `AsyncPGVectorStore` provides a direct path for async applications, avoiding any potential overhead from the sync-to-async bridging layer present in `PGVectorStore`.
