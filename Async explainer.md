@@ -1,4 +1,4 @@
-# Design Rationale: Mixed Interface Postgres VectorStore
+# Design Rationale: Mixed Interface PGVectorStore
 
 This document outlines the design choices behind the PGVectorStore integration for LangChain, focusing on its dual interface that supports both synchronous and asynchronous usage patterns.
 
