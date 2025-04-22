@@ -561,10 +561,12 @@ class AsyncPGVectorStore(VectorStore):
         inline_embed_func = getattr(self.embedding_service, "embed_query_inline", None)
         if not embedding and callable(inline_embed_func) and "query" in kwargs:
             query_embedding = self.embedding_service.embed_query_inline(kwargs["query"])  # type: ignore
+            embedding_data_string = f"{query_embedding}"
         else:
             query_embedding = f"{[float(dimension) for dimension in embedding]}"
-        stmt = f"""SELECT {column_names}, {search_function}("{self.embedding_column}", :query_embedding) as distance
-        FROM "{self.schema_name}"."{self.table_name}" {param_filter} ORDER BY "{self.embedding_column}" {operator} :query_embedding LIMIT :k;
+            embedding_data_string = ":query_embedding"
+        stmt = f"""SELECT {column_names}, {search_function}("{self.embedding_column}", {embedding_data_string}) as distance
+        FROM "{self.schema_name}"."{self.table_name}" {param_filter} ORDER BY "{self.embedding_column}" {operator} {embedding_data_string} LIMIT :k;
         """
         param_dict = {"query_embedding": query_embedding, "k": k}
         if filter_dict:
