@@ -74,17 +74,26 @@ def test_chat_table(engine: Any) -> None:
         )
 
 
-@pytest.mark.asyncio
-async def test_chat_schema(engine: Any) -> None:
-    doc_table_name = "test_table" + str(uuid.uuid4())
-    engine.init_document_table(table_name=doc_table_name)
+async def test_incorrect_schema_async(async_engine: PGEngine) -> None:
+    table_name = "incorrect_schema_" + str(uuid.uuid4())
+    await async_engine.ainit_vectorstore_table(table_name=table_name, vector_size=1024)
+    with pytest.raises(IndexError):
+        await PGChatMessageHistory.create(
+            engine=async_engine, session_id="test", table_name=table_name
+        )
+    query = f'DROP TABLE IF EXISTS "{table_name}"'
+    await aexecute(async_engine, query)
+
+
+async def test_incorrect_schema_sync(async_engine: PGEngine) -> None:
+    table_name = "incorrect_schema_" + str(uuid.uuid4())
+    async_engine.init_vectorstore_table(table_name=table_name, vector_size=1024)
     with pytest.raises(IndexError):
         PGChatMessageHistory.create_sync(
-            engine=engine, session_id="test", table_name=doc_table_name
+            engine=async_engine, session_id="test", table_name=table_name
         )
-
-    query = f'DROP TABLE IF EXISTS "{doc_table_name}"'
-    await aexecute(engine, query)
+    query = f'DROP TABLE IF EXISTS "{table_name}"'
+    await aexecute(async_engine, query)
 
 
 @pytest.mark.asyncio

@@ -126,3 +126,14 @@ async def test_v1_schema_support(async_engine: PGEngine) -> None:
     assert len(messages) == 4
 
     await async_engine._adrop_table(table_name=table_name)
+
+
+async def test_incorrect_schema(async_engine: PGEngine) -> None:
+    table_name = "incorrect_schema_" + str(uuid.uuid4())
+    await async_engine._ainit_vectorstore_table(table_name=table_name, vector_size=1024)
+    with pytest.raises(IndexError):
+        await AsyncPGChatMessageHistory.create(
+            engine=async_engine, session_id="test", table_name=table_name
+        )
+    query = f'DROP TABLE IF EXISTS "{table_name}"'
+    await aexecute(async_engine, query)
