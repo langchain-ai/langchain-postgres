@@ -5,6 +5,7 @@ import contextlib
 import enum
 import logging
 import uuid
+import warnings
 from typing import (
     Any,
     AsyncGenerator,
@@ -47,6 +48,8 @@ from sqlalchemy.orm import (
 )
 
 from langchain_postgres._utils import maximal_marginal_relevance
+
+warnings.simplefilter("once", PendingDeprecationWarning)
 
 
 class DistanceStrategy(str, enum.Enum):
@@ -197,9 +200,7 @@ def _get_embedding_collection_store(vector_dimension: Optional[int] = None) -> A
 
         __tablename__ = "langchain_pg_embedding"
 
-        id = sqlalchemy.Column(
-            sqlalchemy.String, nullable=True, primary_key=True, index=True, unique=True
-        )
+        id = sqlalchemy.Column(sqlalchemy.String, primary_key=True)
 
         collection_id = sqlalchemy.Column(
             UUID(as_uuid=True),

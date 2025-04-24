@@ -9,13 +9,13 @@
 
 The `langchain-postgres` package implementations of core LangChain abstractions using `Postgres`.
 
-The package is released under the MIT license. 
+The package is released under the MIT license.
 
 Feel free to use the abstraction as provided or else modify them / extend them as appropriate for your own application.
 
 ## Requirements
 
-The package currently only supports the [psycogp3](https://www.psycopg.org/psycopg3/) driver.
+The package supports the [asyncpg](https://github.com/MagicStack/asyncpg) and [psycogp3](https://www.psycopg.org/psycopg3/) drivers.
 
 ## Installation
 
@@ -23,22 +23,70 @@ The package currently only supports the [psycogp3](https://www.psycopg.org/psyco
 pip install -U langchain-postgres
 ```
 
-## Change Log
+## Vectorstore
 
-0.0.6: 
-- Remove langgraph as a dependency as it was causing dependency conflicts.
-- Base interface for checkpointer changed in langgraph, so existing implementation would've broken regardless.
+> [!WARNING]
+> In v0.0.14+, `PGVector` is deprecated. Please migrate to `PGVectorStore`
+> for improved performance and manageability.
+> See the [migration guide](https://github.com/langchain-ai/langchain-postgres/blob/main/examples/migrate_pgvector_to_pgvectorstore.ipynb) for details on how to migrate from `PGVector` to `PGVectorStore`.
 
-## Usage
+### Documentation
 
-### ChatMessageHistory
+* [Quickstart](https://github.com/langchain-ai/langchain-postgres/blob/main/examples/pg_vectorstore.ipynb)
+* [How-to](https://github.com/langchain-ai/langchain-postgres/blob/main/examples/pg_vectorstore_how_to.ipynb)
 
-The chat message history abstraction helps to persist chat message history 
+### Example
+
+```python
+from langchain_core.documents import Document
+from langchain_core.embeddings import DeterministicFakeEmbedding
+from langchain_postgres import PGEngine, PGVectorStore
+
+# Replace the connection string with your own Postgres connection string
+CONNECTION_STRING = "postgresql+psycopg3://langchain:langchain@localhost:6024/langchain"
+engine = PGEngine.from_connection_string(url=CONNECTION_STRING)
+
+# Replace the vector size with your own vector size
+VECTOR_SIZE = 768
+embedding = DeterministicFakeEmbedding(size=VECTOR_SIZE)
+
+TABLE_NAME = "my_doc_collection"
+
+engine.init_vectorstore_table(
+    table_name=TABLE_NAME,
+    vector_size=VECTOR_SIZE,
+)
+
+store = PGVectorStore.create_sync(
+    engine=engine,
+    table_name=TABLE_NAME,
+    embedding_service=embedding,
+)
+
+docs = [
+    Document(page_content="Apples and oranges"),
+    Document(page_content="Cars and airplanes"),
+    Document(page_content="Train")
+]
+
+store.add_documents(docs)
+
+query = "I'd like a fruit."
+docs = store.similarity_search(query)
+print(docs)
+```
+
+> [!TIP]
+> All synchronous functions have corresponding asynchronous functions
+
+## ChatMessageHistory
+
+The chat message history abstraction helps to persist chat message history
 in a postgres table.
 
 PostgresChatMessageHistory is parameterized using a `table_name` and a `session_id`.
 
-The `table_name` is the name of the table in the database where 
+The `table_name` is the name of the table in the database where
 the chat messages will be stored.
 
 The `session_id` is a unique identifier for the chat session. It can be assigned
@@ -78,11 +126,6 @@ chat_history.add_messages([
 
 print(chat_history.messages)
 ```
-
-
-### Vectorstore
-
-See example for the [PGVector vectorstore here](https://github.com/langchain-ai/langchain-postgres/blob/main/examples/vectorstore.ipynb)
 
 ## Google Cloud Integrations
 

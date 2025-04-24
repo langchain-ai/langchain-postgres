@@ -4,7 +4,7 @@ import pytest
 from langchain_core.vectorstores import VectorStore
 from langchain_tests.integration_tests import VectorStoreIntegrationTests
 
-from tests.unit_tests.test_vectorstore import aget_vectorstore, get_vectorstore
+from tests.unit_tests.v1.test_vectorstore import aget_vectorstore, get_vectorstore
 
 
 class TestSync(VectorStoreIntegrationTests):

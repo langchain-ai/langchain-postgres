@@ -27,11 +27,12 @@ lint_diff format_diff: PYTHON_FILES=$(shell git diff --relative=. --name-only --
 
 lint lint_diff:
 	[ "$(PYTHON_FILES)" = "" ] ||	poetry run ruff format $(PYTHON_FILES) --diff
+	[ "$(PYTHON_FILES)" = "" ] ||	poetry run ruff check $(PYTHON_FILES) --diff
 	[ "$(PYTHON_FILES)" = "" ] || poetry run mypy $(PYTHON_FILES)
 
 format format_diff:
 	[ "$(PYTHON_FILES)" = "" ] || poetry run ruff format $(PYTHON_FILES)
-	[ "$(PYTHON_FILES)" = "" ] || poetry run ruff --fix $(PYTHON_FILES)
+	[ "$(PYTHON_FILES)" = "" ] || poetry run ruff check --fix $(PYTHON_FILES)
 
 spell_check:
 	poetry run codespell --toml pyproject.toml
