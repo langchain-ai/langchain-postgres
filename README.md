@@ -15,7 +15,7 @@ Feel free to use the abstraction as provided or else modify them / extend them a
 
 ## Requirements
 
-The package supports the [asyncpg](https://github.com/MagicStack/asyncpg) and [psycogp3](https://www.psycopg.org/psycopg3/) drivers.
+The package supports the [asyncpg](https://github.com/MagicStack/asyncpg) and [psycopg3](https://www.psycopg.org/psycopg3/) drivers.
 
 ## Installation
 
