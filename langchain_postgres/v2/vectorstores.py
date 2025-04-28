@@ -39,7 +39,7 @@ class PGVectorStore(VectorStore):
             )
 
         self._engine = engine
-        self.__vs = vs
+        self._vs = vs
 
     @classmethod
     async def create(
@@ -166,7 +166,7 @@ class PGVectorStore(VectorStore):
 
     @property
     def embeddings(self) -> Embeddings:
-        return self.__vs.embedding_service
+        return self._vs.embedding_service
 
     async def aadd_embeddings(
         self,
@@ -178,7 +178,7 @@ class PGVectorStore(VectorStore):
     ) -> list[str]:
         """Add data along with embeddings to the table."""
         return await self._engine._run_as_async(
-            self.__vs.aadd_embeddings(texts, embeddings, metadatas, ids, **kwargs)
+            self._vs.aadd_embeddings(texts, embeddings, metadatas, ids, **kwargs)
         )
 
     async def aadd_texts(
@@ -194,7 +194,7 @@ class PGVectorStore(VectorStore):
             :class:`InvalidTextRepresentationError <asyncpg.exceptions.InvalidTextRepresentationError>`: if the `ids` data type does not match that of the `id_column`.
         """
         return await self._engine._run_as_async(
-            self.__vs.aadd_texts(texts, metadatas, ids, **kwargs)
+            self._vs.aadd_texts(texts, metadatas, ids, **kwargs)
         )
 
     async def aadd_documents(
@@ -209,7 +209,7 @@ class PGVectorStore(VectorStore):
             :class:`InvalidTextRepresentationError <asyncpg.exceptions.InvalidTextRepresentationError>`: if the `ids` data type does not match that of the `id_column`.
         """
         return await self._engine._run_as_async(
-            self.__vs.aadd_documents(documents, ids, **kwargs)
+            self._vs.aadd_documents(documents, ids, **kwargs)
         )
 
     def add_embeddings(
@@ -222,7 +222,7 @@ class PGVectorStore(VectorStore):
     ) -> list[str]:
         """Add data along with embeddings to the table."""
         return self._engine._run_as_sync(
-            self.__vs.aadd_embeddings(texts, embeddings, metadatas, ids, **kwargs)
+            self._vs.aadd_embeddings(texts, embeddings, metadatas, ids, **kwargs)
         )
 
     def add_texts(
@@ -238,7 +238,7 @@ class PGVectorStore(VectorStore):
             :class:`InvalidTextRepresentationError <asyncpg.exceptions.InvalidTextRepresentationError>`: if the `ids` data type does not match that of the `id_column`.
         """
         return self._engine._run_as_sync(
-            self.__vs.aadd_texts(texts, metadatas, ids, **kwargs)
+            self._vs.aadd_texts(texts, metadatas, ids, **kwargs)
         )
 
     def add_documents(
@@ -253,7 +253,7 @@ class PGVectorStore(VectorStore):
             :class:`InvalidTextRepresentationError <asyncpg.exceptions.InvalidTextRepresentationError>`: if the `ids` data type does not match that of the `id_column`.
         """
         return self._engine._run_as_sync(
-            self.__vs.aadd_documents(documents, ids, **kwargs)
+            self._vs.aadd_documents(documents, ids, **kwargs)
         )
 
     async def adelete(
@@ -266,7 +266,7 @@ class PGVectorStore(VectorStore):
         Raises:
             :class:`InvalidTextRepresentationError <asyncpg.exceptions.InvalidTextRepresentationError>`: if the `ids` data type does not match that of the `id_column`.
         """
-        return await self._engine._run_as_async(self.__vs.adelete(ids, **kwargs))
+        return await self._engine._run_as_async(self._vs.adelete(ids, **kwargs))
 
     def delete(
         self,
@@ -278,7 +278,7 @@ class PGVectorStore(VectorStore):
         Raises:
             :class:`InvalidTextRepresentationError <asyncpg.exceptions.InvalidTextRepresentationError>`: if the `ids` data type does not match that of the `id_column`.
         """
-        return self._engine._run_as_sync(self.__vs.adelete(ids, **kwargs))
+        return self._engine._run_as_sync(self._vs.adelete(ids, **kwargs))
 
     @classmethod
     async def afrom_texts(  # type: ignore[override]
@@ -572,7 +572,7 @@ class PGVectorStore(VectorStore):
     ) -> list[Document]:
         """Return docs selected by similarity search on query."""
         return self._engine._run_as_sync(
-            self.__vs.asimilarity_search(query, k, filter, **kwargs)
+            self._vs.asimilarity_search(query, k, filter, **kwargs)
         )
 
     async def asimilarity_search(
@@ -584,18 +584,18 @@ class PGVectorStore(VectorStore):
     ) -> list[Document]:
         """Return docs selected by similarity search on query."""
         return await self._engine._run_as_async(
-            self.__vs.asimilarity_search(query, k, filter, **kwargs)
+            self._vs.asimilarity_search(query, k, filter, **kwargs)
         )
 
     # Required for (a)similarity_search_with_relevance_scores
     def _select_relevance_score_fn(self) -> Callable[[float], float]:
         """Select a relevance function based on distance strategy."""
         # Calculate distance strategy provided in vectorstore constructor
-        if self.__vs.distance_strategy == DistanceStrategy.COSINE_DISTANCE:
+        if self._vs.distance_strategy == DistanceStrategy.COSINE_DISTANCE:
             return self._cosine_relevance_score_fn
-        if self.__vs.distance_strategy == DistanceStrategy.INNER_PRODUCT:
+        if self._vs.distance_strategy == DistanceStrategy.INNER_PRODUCT:
             return self._max_inner_product_relevance_score_fn
-        elif self.__vs.distance_strategy == DistanceStrategy.EUCLIDEAN:
+        elif self._vs.distance_strategy == DistanceStrategy.EUCLIDEAN:
             return self._euclidean_relevance_score_fn
 
     async def asimilarity_search_with_score(
@@ -607,7 +607,7 @@ class PGVectorStore(VectorStore):
     ) -> list[tuple[Document, float]]:
         """Return docs and distance scores selected by similarity search on query."""
         return await self._engine._run_as_async(
-            self.__vs.asimilarity_search_with_score(query, k, filter, **kwargs)
+            self._vs.asimilarity_search_with_score(query, k, filter, **kwargs)
         )
 
     async def asimilarity_search_by_vector(
@@ -619,7 +619,7 @@ class PGVectorStore(VectorStore):
     ) -> list[Document]:
         """Return docs selected by vector similarity search."""
         return await self._engine._run_as_async(
-            self.__vs.asimilarity_search_by_vector(embedding, k, filter, **kwargs)
+            self._vs.asimilarity_search_by_vector(embedding, k, filter, **kwargs)
         )
 
     async def asimilarity_search_with_score_by_vector(
@@ -631,7 +631,7 @@ class PGVectorStore(VectorStore):
     ) -> list[tuple[Document, float]]:
         """Return docs and distance scores selected by vector similarity search."""
         return await self._engine._run_as_async(
-            self.__vs.asimilarity_search_with_score_by_vector(
+            self._vs.asimilarity_search_with_score_by_vector(
                 embedding, k, filter, **kwargs
             )
         )
@@ -647,7 +647,7 @@ class PGVectorStore(VectorStore):
     ) -> list[Document]:
         """Return docs selected using the maximal marginal relevance."""
         return await self._engine._run_as_async(
-            self.__vs.amax_marginal_relevance_search(
+            self._vs.amax_marginal_relevance_search(
                 query, k, fetch_k, lambda_mult, filter, **kwargs
             )
         )
@@ -663,7 +663,7 @@ class PGVectorStore(VectorStore):
     ) -> list[Document]:
         """Return docs selected using the maximal marginal relevance."""
         return await self._engine._run_as_async(
-            self.__vs.amax_marginal_relevance_search_by_vector(
+            self._vs.amax_marginal_relevance_search_by_vector(
                 embedding, k, fetch_k, lambda_mult, filter, **kwargs
             )
         )
@@ -679,7 +679,7 @@ class PGVectorStore(VectorStore):
     ) -> list[tuple[Document, float]]:
         """Return docs and distance scores selected using the maximal marginal relevance."""
         return await self._engine._run_as_async(
-            self.__vs.amax_marginal_relevance_search_with_score_by_vector(
+            self._vs.amax_marginal_relevance_search_with_score_by_vector(
                 embedding, k, fetch_k, lambda_mult, filter, **kwargs
             )
         )
@@ -693,7 +693,7 @@ class PGVectorStore(VectorStore):
     ) -> list[tuple[Document, float]]:
         """Return docs and distance scores selected by similarity search on query."""
         return self._engine._run_as_sync(
-            self.__vs.asimilarity_search_with_score(query, k, filter, **kwargs)
+            self._vs.asimilarity_search_with_score(query, k, filter, **kwargs)
         )
 
     def similarity_search_by_vector(
@@ -705,7 +705,7 @@ class PGVectorStore(VectorStore):
     ) -> list[Document]:
         """Return docs selected by vector similarity search."""
         return self._engine._run_as_sync(
-            self.__vs.asimilarity_search_by_vector(embedding, k, filter, **kwargs)
+            self._vs.asimilarity_search_by_vector(embedding, k, filter, **kwargs)
         )
 
     def similarity_search_with_score_by_vector(
@@ -717,7 +717,7 @@ class PGVectorStore(VectorStore):
     ) -> list[tuple[Document, float]]:
         """Return docs and distance scores selected by similarity search on vector."""
         return self._engine._run_as_sync(
-            self.__vs.asimilarity_search_with_score_by_vector(
+            self._vs.asimilarity_search_with_score_by_vector(
                 embedding, k, filter, **kwargs
             )
         )
@@ -733,7 +733,7 @@ class PGVectorStore(VectorStore):
     ) -> list[Document]:
         """Return docs selected using the maximal marginal relevance."""
         return self._engine._run_as_sync(
-            self.__vs.amax_marginal_relevance_search(
+            self._vs.amax_marginal_relevance_search(
                 query, k, fetch_k, lambda_mult, filter, **kwargs
             )
         )
@@ -749,7 +749,7 @@ class PGVectorStore(VectorStore):
     ) -> list[Document]:
         """Return docs selected using the maximal marginal relevance."""
         return self._engine._run_as_sync(
-            self.__vs.amax_marginal_relevance_search_by_vector(
+            self._vs.amax_marginal_relevance_search_by_vector(
                 embedding, k, fetch_k, lambda_mult, filter, **kwargs
             )
         )
@@ -765,7 +765,7 @@ class PGVectorStore(VectorStore):
     ) -> list[tuple[Document, float]]:
         """Return docs and distance scores selected using the maximal marginal relevance."""
         return self._engine._run_as_sync(
-            self.__vs.amax_marginal_relevance_search_with_score_by_vector(
+            self._vs.amax_marginal_relevance_search_with_score_by_vector(
                 embedding, k, fetch_k, lambda_mult, filter, **kwargs
             )
         )
@@ -778,7 +778,7 @@ class PGVectorStore(VectorStore):
     ) -> None:
         """Create an index on the vector store table."""
         return await self._engine._run_as_async(
-            self.__vs.aapply_vector_index(index, name, concurrently=concurrently)
+            self._vs.aapply_vector_index(index, name, concurrently=concurrently)
         )
 
     def apply_vector_index(
@@ -789,16 +789,16 @@ class PGVectorStore(VectorStore):
     ) -> None:
         """Create an index on the vector store table."""
         return self._engine._run_as_sync(
-            self.__vs.aapply_vector_index(index, name, concurrently=concurrently)
+            self._vs.aapply_vector_index(index, name, concurrently=concurrently)
         )
 
     async def areindex(self, index_name: Optional[str] = None) -> None:
         """Re-index the vector store table."""
-        return await self._engine._run_as_async(self.__vs.areindex(index_name))
+        return await self._engine._run_as_async(self._vs.areindex(index_name))
 
     def reindex(self, index_name: Optional[str] = None) -> None:
         """Re-index the vector store table."""
-        return self._engine._run_as_sync(self.__vs.areindex(index_name))
+        return self._engine._run_as_sync(self._vs.areindex(index_name))
 
     async def adrop_vector_index(
         self,
@@ -806,7 +806,7 @@ class PGVectorStore(VectorStore):
     ) -> None:
         """Drop the vector index."""
         return await self._engine._run_as_async(
-            self.__vs.adrop_vector_index(index_name)
+            self._vs.adrop_vector_index(index_name)
         )
 
     def drop_vector_index(
@@ -814,29 +814,29 @@ class PGVectorStore(VectorStore):
         index_name: Optional[str] = None,
     ) -> None:
         """Drop the vector index."""
-        return self._engine._run_as_sync(self.__vs.adrop_vector_index(index_name))
+        return self._engine._run_as_sync(self._vs.adrop_vector_index(index_name))
 
     async def ais_valid_index(
         self,
         index_name: Optional[str] = None,
     ) -> bool:
         """Check if index exists in the table."""
-        return await self._engine._run_as_async(self.__vs.is_valid_index(index_name))
+        return await self._engine._run_as_async(self._vs.is_valid_index(index_name))
 
     def is_valid_index(
         self,
         index_name: Optional[str] = None,
     ) -> bool:
         """Check if index exists in the table."""
-        return self._engine._run_as_sync(self.__vs.is_valid_index(index_name))
+        return self._engine._run_as_sync(self._vs.is_valid_index(index_name))
 
     async def aget_by_ids(self, ids: Sequence[str]) -> list[Document]:
         """Get documents by ids."""
-        return await self._engine._run_as_async(self.__vs.aget_by_ids(ids=ids))
+        return await self._engine._run_as_async(self._vs.aget_by_ids(ids=ids))
 
     def get_by_ids(self, ids: Sequence[str]) -> list[Document]:
         """Get documents by ids."""
-        return self._engine._run_as_sync(self.__vs.aget_by_ids(ids=ids))
+        return self._engine._run_as_sync(self._vs.aget_by_ids(ids=ids))
 
     def get_table_name(self) -> str:
-        return self.__vs.table_name
+        return self._vs.table_name
