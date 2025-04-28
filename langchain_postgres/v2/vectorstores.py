@@ -805,9 +805,7 @@ class PGVectorStore(VectorStore):
         index_name: Optional[str] = None,
     ) -> None:
         """Drop the vector index."""
-        return await self._engine._run_as_async(
-            self._vs.adrop_vector_index(index_name)
-        )
+        return await self._engine._run_as_async(self._vs.adrop_vector_index(index_name))
 
     def drop_vector_index(
         self,
