@@ -1,3 +1,4 @@
+import os
 import uuid
 from typing import AsyncIterator, Sequence
 
@@ -5,6 +6,7 @@ import pytest
 import pytest_asyncio
 from langchain_core.documents import Document
 from langchain_core.embeddings import DeterministicFakeEmbedding
+from PIL import Image
 from sqlalchemy import text
 from sqlalchemy.engine.row import RowMapping
 
@@ -15,6 +17,7 @@ from tests.utils import VECTORSTORE_CONNECTION_STRING as CONNECTION_STRING
 DEFAULT_TABLE = "default" + str(uuid.uuid4())
 DEFAULT_TABLE_SYNC = "default_sync" + str(uuid.uuid4())
 CUSTOM_TABLE = "custom" + str(uuid.uuid4())
+IMAGE_TABLE = "image_table" + str(uuid.uuid4())
 VECTOR_SIZE = 768
 
 embeddings_service = DeterministicFakeEmbedding(size=VECTOR_SIZE)
@@ -26,6 +29,14 @@ docs = [
 ]
 
 embeddings = [embeddings_service.embed_query(texts[i]) for i in range(len(texts))]
+
+
+class FakeImageEmbedding(DeterministicFakeEmbedding):
+    def embed_image(self, image_paths: list[str]) -> list[list[float]]:
+        return [self.embed_query(path) for path in image_paths]
+
+
+image_embedding_service = FakeImageEmbedding(size=VECTOR_SIZE)
 
 
 async def aexecute(engine: PGEngine, query: str) -> None:
@@ -52,6 +63,7 @@ class TestVectorStore:
         yield engine
         await engine.adrop_table(DEFAULT_TABLE)
         await engine.adrop_table(CUSTOM_TABLE)
+        await engine.adrop_table(IMAGE_TABLE)
         await engine.close()
 
     @pytest_asyncio.fixture(scope="class")
@@ -86,6 +98,45 @@ class TestVectorStore:
             metadata_json_column="mymeta",
         )
         yield vs
+
+    @pytest_asyncio.fixture(scope="class")
+    async def image_vs(self, engine: PGEngine) -> AsyncIterator[AsyncPGVectorStore]:
+        await engine._ainit_vectorstore_table(
+            IMAGE_TABLE,
+            VECTOR_SIZE,
+            metadata_columns=[
+                Column("image_id", "TEXT"),
+                Column("source", "TEXT"),
+            ],
+        )
+        vs = await AsyncPGVectorStore.create(
+            engine,
+            embedding_service=image_embedding_service,
+            table_name=IMAGE_TABLE,
+            metadata_columns=["image_id", "source"],
+            metadata_json_column="mymeta",
+        )
+        yield vs
+
+    @pytest_asyncio.fixture(scope="class")
+    async def image_uris(self) -> AsyncIterator[list[str]]:
+        red_uri = str(uuid.uuid4()).replace("-", "_") + "test_image_red.jpg"
+        green_uri = str(uuid.uuid4()).replace("-", "_") + "test_image_green.jpg"
+        blue_uri = str(uuid.uuid4()).replace("-", "_") + "test_image_blue.jpg"
+        gcs_uri = "gs://github-repo/img/vision/google-cloud-next.jpeg"
+        image = Image.new("RGB", (100, 100), color="red")
+        image.save(red_uri)
+        image = Image.new("RGB", (100, 100), color="green")
+        image.save(green_uri)
+        image = Image.new("RGB", (100, 100), color="blue")
+        image.save(blue_uri)
+        image_uris = [red_uri, green_uri, blue_uri, gcs_uri]
+        yield image_uris
+        for uri in image_uris:
+            try:
+                os.remove(uri)
+            except FileNotFoundError:
+                pass
 
     async def test_init_with_constructor(self, engine: PGEngine) -> None:
         with pytest.raises(Exception):
@@ -164,6 +215,20 @@ class TestVectorStore:
         result = await vs.adelete()
         assert result == False
         await aexecute(engine, f'TRUNCATE TABLE "{DEFAULT_TABLE}"')
+
+    async def test_aadd_images(
+        self, engine: PGEngine, image_vs: AsyncPGVectorStore, image_uris: list[str]
+    ) -> None:
+        ids = [str(uuid.uuid4()) for i in range(len(image_uris))]
+        metadatas = [
+            {"image_id": str(i), "source": "postgres"} for i in range(len(image_uris))
+        ]
+        await image_vs.aadd_images(image_uris, metadatas, ids)
+        results = await afetch(engine, (f'SELECT * FROM "{IMAGE_TABLE}"'))
+        assert len(results) == len(image_uris)
+        assert results[0]["image_id"] == "0"
+        assert results[0]["source"] == "postgres"
+        await aexecute(engine, (f'TRUNCATE TABLE "{IMAGE_TABLE}"'))
 
     ##### Custom Vector Store  #####
     async def test_aadd_embeddings(

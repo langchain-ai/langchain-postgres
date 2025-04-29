@@ -840,3 +840,55 @@ class PGVectorStore(VectorStore):
 
     def get_table_name(self) -> str:
         return self.__vs.table_name
+
+    async def aadd_images(
+        self,
+        uris: list[str],
+        metadatas: Optional[list[dict]] = None,
+        ids: Optional[list[str]] = None,
+        **kwargs: Any,
+    ) -> list[str]:
+        """Embed images and add to the table."""
+        return await self._engine._run_as_async(
+            self._PGVectorStore__vs.aadd_images(uris, metadatas, ids, **kwargs)  # type: ignore
+        )
+
+    def add_images(
+        self,
+        uris: list[str],
+        metadatas: Optional[list[dict]] = None,
+        ids: Optional[list[str]] = None,
+        **kwargs: Any,
+    ) -> list[str]:
+        """Embed images and add to the table."""
+        return self._engine._run_as_sync(
+            self._PGVectorStore__vs.aadd_images(uris, metadatas, ids, **kwargs)  # type: ignore
+        )
+
+    def similarity_search_image(
+        self,
+        image_uri: str,
+        k: Optional[int] = None,
+        filter: Optional[dict] = None,
+        **kwargs: Any,
+    ) -> list[Document]:
+        """Return docs selected by similarity search on image."""
+        return self._engine._run_as_sync(
+            self._PGVectorStore__vs.asimilarity_search_image(
+                image_uri, k, filter, **kwargs
+            )  # type: ignore
+        )
+
+    async def asimilarity_search_image(
+        self,
+        image_uri: str,
+        k: Optional[int] = None,
+        filter: Optional[dict] = None,
+        **kwargs: Any,
+    ) -> list[Document]:
+        """Return docs selected by similarity search on image_uri."""
+        return await self._engine._run_as_async(
+            self._PGVectorStore__vs.asimilarity_search_image(
+                image_uri, k, filter, **kwargs
+            )  # type: ignore
+        )

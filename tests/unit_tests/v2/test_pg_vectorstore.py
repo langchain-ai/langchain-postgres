@@ -8,6 +8,7 @@ import pytest
 import pytest_asyncio
 from langchain_core.documents import Document
 from langchain_core.embeddings import DeterministicFakeEmbedding
+from PIL import Image
 from sqlalchemy import text
 from sqlalchemy.engine.row import RowMapping
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
@@ -18,6 +19,8 @@ from tests.utils import VECTORSTORE_CONNECTION_STRING as CONNECTION_STRING
 DEFAULT_TABLE = "test_table" + str(uuid.uuid4())
 DEFAULT_TABLE_SYNC = "test_table_sync" + str(uuid.uuid4())
 CUSTOM_TABLE = "test-table-custom" + str(uuid.uuid4())
+IMAGE_TABLE = "image_table" + str(uuid.uuid4())
+IMAGE_TABLE_SYNC = "image_table_sync" + str(uuid.uuid4())
 VECTOR_SIZE = 768
 
 embeddings_service = DeterministicFakeEmbedding(size=VECTOR_SIZE)
@@ -29,6 +32,14 @@ docs = [
 ]
 
 embeddings = [embeddings_service.embed_query(texts[i]) for i in range(len(texts))]
+
+
+class FakeImageEmbedding(DeterministicFakeEmbedding):
+    def embed_image(self, image_paths: list[str]) -> list[list[float]]:
+        return [self.embed_query(path) for path in image_paths]
+
+
+image_embedding_service = FakeImageEmbedding(size=VECTOR_SIZE)
 
 
 def get_env_var(key: str, desc: str) -> str:
@@ -70,6 +81,8 @@ class TestVectorStore:
 
         yield engine
         await aexecute(engine, f'DROP TABLE IF EXISTS "{DEFAULT_TABLE}"')
+        await aexecute(engine, f'DROP TABLE IF EXISTS "{IMAGE_TABLE}"')
+        await aexecute(engine, f'DROP TABLE IF EXISTS "{CUSTOM_TABLE}"')
         await engine.close()
 
     @pytest_asyncio.fixture(scope="class")
@@ -88,6 +101,7 @@ class TestVectorStore:
         yield engine_sync
 
         await aexecute(engine_sync, f'DROP TABLE IF EXISTS "{DEFAULT_TABLE_SYNC}"')
+        await aexecute(engine_sync, f'DROP TABLE IF EXISTS "{IMAGE_TABLE_SYNC}"')
         await engine_sync.close()
 
     @pytest_asyncio.fixture(scope="class")
@@ -124,6 +138,26 @@ class TestVectorStore:
         )
         yield vs
         await aexecute(engine, f'DROP TABLE IF EXISTS "{CUSTOM_TABLE}"')
+
+    @pytest_asyncio.fixture(scope="class")
+    def image_uris(self) -> Iterator[list[str]]:
+        red_uri = str(uuid.uuid4()).replace("-", "_") + "test_image_red.jpg"
+        green_uri = str(uuid.uuid4()).replace("-", "_") + "test_image_green.jpg"
+        blue_uri = str(uuid.uuid4()).replace("-", "_") + "test_image_blue.jpg"
+        gcs_uri = "gs://github-repo/img/vision/google-cloud-next.jpeg"
+        image = Image.new("RGB", (100, 100), color="red")
+        image.save(red_uri)
+        image = Image.new("RGB", (100, 100), color="green")
+        image.save(green_uri)
+        image = Image.new("RGB", (100, 100), color="blue")
+        image.save(blue_uri)
+        image_uris = [red_uri, green_uri, blue_uri, gcs_uri]
+        yield image_uris
+        for uri in image_uris:
+            try:
+                os.remove(uri)
+            except FileNotFoundError:
+                pass
 
     async def test_init_with_constructor(self, engine: PGEngine) -> None:
         with pytest.raises(Exception):
@@ -189,6 +223,52 @@ class TestVectorStore:
         results = await afetch(engine, f'SELECT * FROM "{DEFAULT_TABLE}"')
         assert len(results) == 3
         await aexecute(engine, f'TRUNCATE TABLE "{DEFAULT_TABLE}"')
+
+    async def test_aadd_images(
+        self, engine_sync: PGVectorStore, image_uris: list[str]
+    ) -> None:
+        engine_sync.init_vectorstore_table(
+            IMAGE_TABLE,
+            VECTOR_SIZE,
+            metadata_columns=[
+                Column("image_id", "TEXT"),
+                Column("source", "TEXT"),
+            ],
+        )
+        vs = PGVectorStore.create_sync(
+            engine_sync,
+            embedding_service=image_embedding_service,
+            table_name=IMAGE_TABLE,
+            metadata_columns=["image_id", "source"],
+            metadata_json_column="mymeta",
+        )
+        ids = [str(uuid.uuid4()) for i in range(len(image_uris))]
+        metadatas = [
+            {"image_id": str(i), "source": "postgres"} for i in range(len(image_uris))
+        ]
+        await vs.aadd_images(image_uris, metadatas, ids)
+        results = await afetch(engine_sync, f'SELECT * FROM "{IMAGE_TABLE}"')
+        assert len(results) == len(image_uris)
+        assert results[0]["image_id"] == "0"
+        assert results[0]["source"] == "postgres"
+        await aexecute(engine_sync, f'TRUNCATE TABLE "{IMAGE_TABLE}"')
+
+    async def test_add_images(
+        self, engine_sync: PGVectorStore, image_uris: list[str]
+    ) -> None:
+        engine_sync.init_vectorstore_table(IMAGE_TABLE_SYNC, VECTOR_SIZE)
+        vs = PGVectorStore.create_sync(
+            engine_sync,
+            embedding_service=image_embedding_service,
+            table_name=IMAGE_TABLE_SYNC,
+        )
+
+        ids = [str(uuid.uuid4()) for i in range(len(image_uris))]
+        vs.add_images(image_uris, ids=ids)
+        results = await afetch(engine_sync, (f'SELECT * FROM "{IMAGE_TABLE_SYNC}"'))
+        assert len(results) == len(image_uris)
+        await vs.adelete(ids)
+        await aexecute(engine_sync, f'DROP TABLE IF EXISTS "{IMAGE_TABLE_SYNC}"')
 
     async def test_aadd_embeddings(
         self, engine: PGEngine, vs_custom: PGVectorStore

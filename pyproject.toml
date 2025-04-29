@@ -19,6 +19,7 @@ sqlalchemy = "^2"
 pgvector = ">=0.2.5,<0.4"
 numpy = "^1.21"
 asyncpg = "^0.30.0"
+google-cloud-storage = ">=2.18.2, <4.0.0"
 
 [tool.poetry.group.docs.dependencies]
 
@@ -37,6 +38,7 @@ pytest-socket = "^0.7.0"
 pytest-cov = "^5.0.0"
 pytest-timeout = "^2.3.1"
 langchain-tests = "0.3.7"
+pillow = "11.1.0"
 
 [tool.poetry.group.codespell]
 optional = true

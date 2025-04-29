@@ -6,6 +6,7 @@ import pytest
 import pytest_asyncio
 from langchain_core.documents import Document
 from langchain_core.embeddings import DeterministicFakeEmbedding
+from PIL import Image
 from sqlalchemy import text
 
 from langchain_postgres import Column, PGEngine
@@ -20,6 +21,7 @@ from tests.utils import VECTORSTORE_CONNECTION_STRING as CONNECTION_STRING
 DEFAULT_TABLE = "default" + str(uuid.uuid4()).replace("-", "_")
 CUSTOM_TABLE = "custom" + str(uuid.uuid4()).replace("-", "_")
 CUSTOM_FILTER_TABLE = "custom_filter" + str(uuid.uuid4()).replace("-", "_")
+IMAGE_TABLE = "image_table" + str(uuid.uuid4()).replace("-", "_")
 VECTOR_SIZE = 768
 sync_method_exception_str = "Sync methods are not implemented for AsyncPGVectorStore. Use PGVectorStore interface instead."
 
@@ -41,6 +43,14 @@ embeddings = [embeddings_service.embed_query("foo") for i in range(len(texts))]
 filter_docs = [
     Document(page_content=texts[i], metadata=METADATAS[i]) for i in range(len(texts))
 ]
+
+
+class FakeImageEmbedding(DeterministicFakeEmbedding):
+    def embed_image(self, image_paths: list[str]) -> list[list[float]]:
+        return [self.embed_query(path) for path in image_paths]
+
+
+image_embedding_service = FakeImageEmbedding(size=VECTOR_SIZE)
 
 
 def get_env_var(key: str, desc: str) -> str:
@@ -69,6 +79,7 @@ class TestVectorStoreSearch:
         await engine.adrop_table(DEFAULT_TABLE)
         await engine.adrop_table(CUSTOM_TABLE)
         await engine.adrop_table(CUSTOM_FILTER_TABLE)
+        await engine.adrop_table(IMAGE_TABLE)
         await engine.close()
 
     @pytest_asyncio.fixture(scope="class")
@@ -148,6 +159,40 @@ class TestVectorStoreSearch:
         )
         await vs_custom_filter.aadd_documents(filter_docs, ids=ids)
         yield vs_custom_filter
+
+    @pytest_asyncio.fixture(scope="class")
+    async def image_uris(self) -> AsyncIterator[list[str]]:
+        red_uri = str(uuid.uuid4()).replace("-", "_") + "test_image_red.jpg"
+        green_uri = str(uuid.uuid4()).replace("-", "_") + "test_image_green.jpg"
+        blue_uri = str(uuid.uuid4()).replace("-", "_") + "test_image_blue.jpg"
+        gcs_uri = "gs://github-repo/img/vision/google-cloud-next.jpeg"
+        image = Image.new("RGB", (100, 100), color="red")
+        image.save(red_uri)
+        image = Image.new("RGB", (100, 100), color="green")
+        image.save(green_uri)
+        image = Image.new("RGB", (100, 100), color="blue")
+        image.save(blue_uri)
+        image_uris = [red_uri, green_uri, blue_uri, gcs_uri]
+        yield image_uris
+        for uri in image_uris:
+            try:
+                os.remove(uri)
+            except FileNotFoundError:
+                pass
+
+    @pytest_asyncio.fixture(scope="class")
+    async def image_vs(
+        self, engine: PGEngine, image_uris: list[str]
+    ) -> AsyncIterator[AsyncPGVectorStore]:
+        await engine._ainit_vectorstore_table(IMAGE_TABLE, VECTOR_SIZE)
+        vs = await AsyncPGVectorStore.create(
+            engine,
+            embedding_service=image_embedding_service,
+            table_name=IMAGE_TABLE,
+            distance_strategy=DistanceStrategy.COSINE_DISTANCE,
+        )
+        await vs.aadd_images(image_uris, ids=ids)
+        yield vs
 
     async def test_asimilarity_search_score(self, vs: AsyncPGVectorStore) -> None:
         results = await vs.asimilarity_search_with_score("foo")
@@ -303,3 +348,19 @@ class TestVectorStoreSearch:
             "meow", k=5, filter=test_filter
         )
         assert [doc.metadata["code"] for doc in docs] == expected_ids, test_filter
+
+    async def test_asimilarity_search_image(
+        self, image_vs: AsyncPGVectorStore, image_uris: list[str]
+    ) -> None:
+        results = await image_vs.asimilarity_search_image(image_uris[0], k=1)
+        assert len(results) == 1
+        assert results[0].metadata["image_uri"] == image_uris[0]
+        results = await image_vs.asimilarity_search_image(image_uris[3], k=1)
+        assert len(results) == 1
+        assert results[0].metadata["image_uri"] == image_uris[3]
+
+    async def test_similarity_search_image(
+        self, image_vs: AsyncPGVectorStore, image_uris: list[str]
+    ) -> None:
+        with pytest.raises(NotImplementedError):
+            image_vs.similarity_search_image(image_uris[0], k=1)

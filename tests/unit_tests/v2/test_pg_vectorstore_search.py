@@ -1,11 +1,12 @@
 import os
 import uuid
-from typing import AsyncIterator
+from typing import AsyncIterator, Iterator
 
 import pytest
 import pytest_asyncio
 from langchain_core.documents import Document
 from langchain_core.embeddings import DeterministicFakeEmbedding
+from PIL import Image
 from sqlalchemy import text
 
 from langchain_postgres import Column, PGEngine, PGVectorStore
@@ -22,6 +23,8 @@ DEFAULT_TABLE_SYNC = "default_sync" + str(uuid.uuid4()).replace("-", "_")
 CUSTOM_TABLE = "custom" + str(uuid.uuid4()).replace("-", "_")
 CUSTOM_FILTER_TABLE = "custom_filter" + str(uuid.uuid4()).replace("-", "_")
 CUSTOM_FILTER_TABLE_SYNC = "custom_filter_sync" + str(uuid.uuid4()).replace("-", "_")
+IMAGE_TABLE = "image_table" + str(uuid.uuid4()).replace("-", "_")
+IMAGE_TABLE_SYNC = "image_table_sync" + str(uuid.uuid4()).replace("-", "_")
 VECTOR_SIZE = 768
 
 embeddings_service = DeterministicFakeEmbedding(size=VECTOR_SIZE)
@@ -41,6 +44,14 @@ filter_docs = [
 ]
 
 embeddings = [embeddings_service.embed_query("foo") for i in range(len(texts))]
+
+
+class FakeImageEmbedding(DeterministicFakeEmbedding):
+    def embed_image(self, image_paths: list[str]) -> list[list[float]]:
+        return [self.embed_query(path) for path in image_paths]
+
+
+image_embedding_service = FakeImageEmbedding(size=VECTOR_SIZE)
 
 
 def get_env_var(key: str, desc: str) -> str:
@@ -71,6 +82,7 @@ class TestVectorStoreSearch:
         yield engine
         await aexecute(engine, f"DROP TABLE IF EXISTS {DEFAULT_TABLE}")
         await aexecute(engine, f"DROP TABLE IF EXISTS {CUSTOM_FILTER_TABLE}")
+        await aexecute(engine, f"DROP TABLE IF EXISTS {IMAGE_TABLE}")
         await engine.close()
 
     @pytest_asyncio.fixture(scope="class")
@@ -158,6 +170,41 @@ class TestVectorStoreSearch:
         await vs_custom_filter.aadd_documents(filter_docs, ids=ids)
         yield vs_custom_filter
 
+    @pytest_asyncio.fixture(scope="class")
+    async def image_uris(self) -> AsyncIterator[list[str]]:
+        red_uri = str(uuid.uuid4()).replace("-", "_") + "test_image_red.jpg"
+        green_uri = str(uuid.uuid4()).replace("-", "_") + "test_image_green.jpg"
+        blue_uri = str(uuid.uuid4()).replace("-", "_") + "test_image_blue.jpg"
+        gcs_uri = "gs://github-repo/img/vision/google-cloud-next.jpeg"
+        image = Image.new("RGB", (100, 100), color="red")
+        image.save(red_uri)
+        image = Image.new("RGB", (100, 100), color="green")
+        image.save(green_uri)
+        image = Image.new("RGB", (100, 100), color="blue")
+        image.save(blue_uri)
+        image_uris = [red_uri, green_uri, blue_uri, gcs_uri]
+        yield image_uris
+        for uri in image_uris:
+            try:
+                os.remove(uri)
+            except FileNotFoundError:
+                pass
+
+    @pytest_asyncio.fixture(scope="class")
+    async def image_vs(
+        self, engine: PGEngine, image_uris: list[str]
+    ) -> AsyncIterator[PGVectorStore]:
+        await engine.ainit_vectorstore_table(IMAGE_TABLE, VECTOR_SIZE)
+        vs = await PGVectorStore.create(
+            engine,
+            embedding_service=image_embedding_service,
+            table_name=IMAGE_TABLE,
+            distance_strategy=DistanceStrategy.COSINE_DISTANCE,
+        )
+        ids = [str(uuid.uuid4()) for i in range(len(image_uris))]
+        await vs.aadd_images(image_uris, ids=ids)
+        yield vs
+
     async def test_asimilarity_search_score(self, vs: PGVectorStore) -> None:
         results = await vs.asimilarity_search_with_score("foo")
         assert len(results) == 4
@@ -172,6 +219,14 @@ class TestVectorStoreSearch:
         result = await vs.asimilarity_search_with_score_by_vector(embedding=embedding)
         assert result[0][0] == Document(page_content="foo", id=ids[0])
         assert result[0][1] == 0
+
+    async def test_asimilarity_search_image(self, image_vs, image_uris):
+        results = await image_vs.asimilarity_search_image(image_uris[0], k=1)
+        assert len(results) == 1
+        assert results[0].metadata["image_uri"] == image_uris[0]
+        results = await image_vs.asimilarity_search_image(image_uris[3], k=1)
+        assert len(results) == 1
+        assert results[0].metadata["image_uri"] == image_uris[3]
 
     async def test_similarity_search_with_relevance_scores_threshold_cosine(
         self, vs: PGVectorStore
@@ -270,6 +325,7 @@ class TestVectorStoreSearchSync:
         yield engine
         await aexecute(engine, f"DROP TABLE IF EXISTS {DEFAULT_TABLE_SYNC}")
         await aexecute(engine, f"DROP TABLE IF EXISTS {CUSTOM_FILTER_TABLE_SYNC}")
+        await aexecute(engine, f"DROP TABLE IF EXISTS {IMAGE_TABLE_SYNC}")
         await engine.close()
 
     @pytest_asyncio.fixture(scope="class")
@@ -339,6 +395,37 @@ class TestVectorStoreSearchSync:
         vs_custom_filter_sync.add_documents(filter_docs, ids=ids)
         yield vs_custom_filter_sync
 
+    @pytest_asyncio.fixture(scope="class")
+    async def image_uris(self) -> AsyncIterator[list[str]]:
+        red_uri = str(uuid.uuid4()).replace("-", "_") + "test_image_red.jpg"
+        green_uri = str(uuid.uuid4()).replace("-", "_") + "test_image_green.jpg"
+        blue_uri = str(uuid.uuid4()).replace("-", "_") + "test_image_blue.jpg"
+        image = Image.new("RGB", (100, 100), color="red")
+        image.save(red_uri)
+        image = Image.new("RGB", (100, 100), color="green")
+        image.save(green_uri)
+        image = Image.new("RGB", (100, 100), color="blue")
+        image.save(blue_uri)
+        image_uris = [red_uri, green_uri, blue_uri]
+        yield image_uris
+        for uri in image_uris:
+            os.remove(uri)
+
+    @pytest_asyncio.fixture(scope="class")
+    def image_vs(
+        self, engine_sync: PGEngine, image_uris: list[str]
+    ) -> Iterator[PGVectorStore]:
+        engine_sync.init_vectorstore_table(IMAGE_TABLE_SYNC, VECTOR_SIZE)
+        vs = PGVectorStore.create_sync(
+            engine_sync,
+            embedding_service=image_embedding_service,
+            table_name=IMAGE_TABLE_SYNC,
+            distance_strategy=DistanceStrategy.COSINE_DISTANCE,
+        )
+        ids = [str(uuid.uuid4()) for i in range(len(image_uris))]
+        vs.add_images(image_uris, ids=ids)
+        yield vs
+
     def test_similarity_search_score(self, vs_custom: PGVectorStore) -> None:
         results = vs_custom.similarity_search_with_score("foo")
         assert len(results) == 4
@@ -353,6 +440,11 @@ class TestVectorStoreSearchSync:
         result = vs_custom.similarity_search_with_score_by_vector(embedding=embedding)
         assert result[0][0] == Document(page_content="foo", id=ids[0])
         assert result[0][1] == 0
+
+    def test_similarity_search_image(self, image_vs, image_uris):
+        results = image_vs.similarity_search_image(image_uris[0], k=1)
+        assert len(results) == 1
+        assert results[0].metadata["image_uri"] == image_uris[0]
 
     def test_max_marginal_relevance_search_vector(
         self, vs_custom: PGVectorStore
