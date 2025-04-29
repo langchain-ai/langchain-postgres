@@ -874,9 +874,7 @@ class PGVectorStore(VectorStore):
     ) -> list[Document]:
         """Return docs selected by similarity search on image."""
         return self._engine._run_as_sync(
-            self.__vs.asimilarity_search_image(
-                image_uri, k, filter, **kwargs
-            )  # type: ignore
+            self.__vs.asimilarity_search_image(image_uri, k, filter, **kwargs)  # type: ignore
         )
 
     async def asimilarity_search_image(
@@ -888,7 +886,5 @@ class PGVectorStore(VectorStore):
     ) -> list[Document]:
         """Return docs selected by similarity search on image_uri."""
         return await self._engine._run_as_async(
-            self.__vs.asimilarity_search_image(
-                image_uri, k, filter, **kwargs
-            )  # type: ignore
+            self.__vs.asimilarity_search_image(image_uri, k, filter, **kwargs)  # type: ignore
         )
