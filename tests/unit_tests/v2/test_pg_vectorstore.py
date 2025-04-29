@@ -225,7 +225,7 @@ class TestVectorStore:
         await aexecute(engine, f'TRUNCATE TABLE "{DEFAULT_TABLE}"')
 
     async def test_aadd_images(
-        self, engine_sync: PGVectorStore, image_uris: list[str]
+        self, engine_sync: PGEngine, image_uris: list[str]
     ) -> None:
         engine_sync.init_vectorstore_table(
             IMAGE_TABLE,
@@ -254,7 +254,7 @@ class TestVectorStore:
         await aexecute(engine_sync, f'TRUNCATE TABLE "{IMAGE_TABLE}"')
 
     async def test_add_images(
-        self, engine_sync: PGVectorStore, image_uris: list[str]
+        self, engine_sync: PGEngine, image_uris: list[str]
     ) -> None:
         engine_sync.init_vectorstore_table(IMAGE_TABLE_SYNC, VECTOR_SIZE)
         vs = PGVectorStore.create_sync(

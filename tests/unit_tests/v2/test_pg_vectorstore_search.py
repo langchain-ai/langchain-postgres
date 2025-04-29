@@ -220,7 +220,7 @@ class TestVectorStoreSearch:
         assert result[0][0] == Document(page_content="foo", id=ids[0])
         assert result[0][1] == 0
 
-    async def test_asimilarity_search_image(self, image_vs, image_uris):
+    async def test_asimilarity_search_image(self, image_vs: PGVectorStore, image_uris: list[str]) -> None:
         results = await image_vs.asimilarity_search_image(image_uris[0], k=1)
         assert len(results) == 1
         assert results[0].metadata["image_uri"] == image_uris[0]
@@ -441,7 +441,7 @@ class TestVectorStoreSearchSync:
         assert result[0][0] == Document(page_content="foo", id=ids[0])
         assert result[0][1] == 0
 
-    def test_similarity_search_image(self, image_vs, image_uris):
+    def test_similarity_search_image(self, image_vs: PGVectorStore, image_uris: list[str]) -> None:
         results = image_vs.similarity_search_image(image_uris[0], k=1)
         assert len(results) == 1
         assert results[0].metadata["image_uri"] == image_uris[0]

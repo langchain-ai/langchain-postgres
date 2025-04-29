@@ -850,7 +850,7 @@ class PGVectorStore(VectorStore):
     ) -> list[str]:
         """Embed images and add to the table."""
         return await self._engine._run_as_async(
-            self._PGVectorStore__vs.aadd_images(uris, metadatas, ids, **kwargs)  # type: ignore
+            self.__vs.aadd_images(uris, metadatas, ids, **kwargs)  # type: ignore
         )
 
     def add_images(
@@ -862,7 +862,7 @@ class PGVectorStore(VectorStore):
     ) -> list[str]:
         """Embed images and add to the table."""
         return self._engine._run_as_sync(
-            self._PGVectorStore__vs.aadd_images(uris, metadatas, ids, **kwargs)  # type: ignore
+            self.__vs.aadd_images(uris, metadatas, ids, **kwargs)  # type: ignore
         )
 
     def similarity_search_image(
@@ -874,7 +874,7 @@ class PGVectorStore(VectorStore):
     ) -> list[Document]:
         """Return docs selected by similarity search on image."""
         return self._engine._run_as_sync(
-            self._PGVectorStore__vs.asimilarity_search_image(
+            self.__vs.asimilarity_search_image(
                 image_uri, k, filter, **kwargs
             )  # type: ignore
         )
@@ -888,7 +888,7 @@ class PGVectorStore(VectorStore):
     ) -> list[Document]:
         """Return docs selected by similarity search on image_uri."""
         return await self._engine._run_as_async(
-            self._PGVectorStore__vs.asimilarity_search_image(
+            self.__vs.asimilarity_search_image(
                 image_uri, k, filter, **kwargs
             )  # type: ignore
         )
