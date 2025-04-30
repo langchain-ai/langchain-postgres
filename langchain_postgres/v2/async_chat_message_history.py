@@ -84,7 +84,7 @@ class AsyncPGChatMessageHistory(BaseChatMessageHistory):
                     f"\nCREATE TABLE {schema_name}.{table_name} ("
                     "\n    id INT AUTO_INCREMENT PRIMARY KEY,"
                     "\n    session_id TEXT NOT NULL,"
-                    "\n    data JSON NOT NULL,"
+                    "\n    data JSONB NOT NULL,"
                     "\n    type TEXT NOT NULL"
                     "\n);"
                 )
@@ -153,9 +153,7 @@ class AsyncPGChatMessageHistory(BaseChatMessageHistory):
 
     async def _aget_messages(self) -> list[BaseMessage]:
         """Retrieve the messages from Postgres."""
-
         query = self._select_query()
-
         async with self.pool.connect() as conn:
             result = await conn.execute(text(query), {"session_id": self.session_id})
             result_map = result.mappings()
