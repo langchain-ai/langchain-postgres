@@ -19,8 +19,11 @@ sqlalchemy = "^2"
 pgvector = ">=0.2.5,<0.4"
 numpy = "^1.21"
 asyncpg = "^0.30.0"
-google-cloud-storage = ">=2.18.2, <4.0.0"
 types-requests = "^2.0.0"
+google-cloud-storage = { version = ">=2.18.2, <4.0.0", optional = true }
+
+[tool.poetry.extras]
+gcs = ["google-cloud-storage"]
 
 [tool.poetry.group.docs.dependencies]
 
