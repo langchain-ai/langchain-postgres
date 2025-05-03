@@ -565,9 +565,34 @@ class AsyncPGVectorStore(VectorStore):
         else:
             query_embedding = f"{[float(dimension) for dimension in embedding]}"
             embedding_data_string = ":query_embedding"
-        stmt = f"""SELECT {column_names}, {search_function}("{self.embedding_column}", {embedding_data_string}) as distance
-        FROM "{self.schema_name}"."{self.table_name}" {param_filter} ORDER BY "{self.embedding_column}" {operator} {embedding_data_string} LIMIT :k;
-        """
+
+        if "query" in kwargs and "full_text_weight" in kwargs:
+            if not isinstance(kwargs["full_text_weight"], (int, float)) or kwargs["full_text_weight"] < 0 or kwargs["full_text_weight"] > 1:
+                raise ValueError("full_text_weight must be a number between 0 and 1")
+
+            full_text_weight = float(kwargs["full_text_weight"])
+            full_text_query = " | ".join(kwargs["query"].split(" "))
+
+            stmt = f"""
+            WITH A AS (
+                SELECT {column_names}, 
+                {search_function}("{self.embedding_column}", {embedding_data_string}) as semantic_distance,
+                ts_rank(to_tsvector('english', "{self.content_column}"), to_tsquery('{full_text_query}')) as keyword_distance 
+                FROM "{self.schema_name}"."{self.table_name}" {param_filter}
+            ),
+            B AS (
+                SELECT *,
+                semantic_distance * {1.0 - full_text_weight} + keyword_distance * {full_text_weight} as distance
+                FROM A
+            )
+
+            SELECT * FROM B ORDER BY distance LIMIT :k;
+            """
+        else:
+            stmt = f"""SELECT {column_names}, {search_function}("{self.embedding_column}", {embedding_data_string}) as distance
+            FROM "{self.schema_name}"."{self.table_name}" {param_filter} ORDER BY "{self.embedding_column}" {operator} {embedding_data_string} LIMIT :k;
+            """
+
         param_dict = {"query_embedding": query_embedding, "k": k}
         if filter_dict:
             param_dict.update(filter_dict)

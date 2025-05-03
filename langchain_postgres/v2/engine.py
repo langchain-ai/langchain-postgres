@@ -156,6 +156,8 @@ class PGEngine:
         id_column: Union[str, Column, ColumnDict] = "langchain_id",
         overwrite_existing: bool = False,
         store_metadata: bool = True,
+        full_text_index: str | None = None
+
     ) -> None:
         """
         Create a table for saving of vectors to be used with PGVectorStore.
@@ -178,6 +180,8 @@ class PGEngine:
             overwrite_existing (bool): Whether to drop existing table. Default: False.
             store_metadata (bool): Whether to store metadata in the table.
                 Default: True.
+            full_text_index (str): Language used to construct full text index. If None then no index will be used.
+                Default: None
 
         Raises:
             :class:`DuplicateTableError <asyncpg.exceptions.DuplicateTableError>`: if table already exists.
@@ -241,6 +245,10 @@ class PGEngine:
             query += f""",\n"{metadata_json_column}" JSON"""
         query += "\n);"
 
+        if full_text_index:
+            query += f"""CREATE INDEX ON \"{schema_name}\".\"{table_name}\"
+                USING GIN (to_tsvector('{full_text_index}', "{content_column}"))"""
+
         async with self._pool.connect() as conn:
             await conn.execute(text(query))
             await conn.commit()
@@ -258,6 +266,7 @@ class PGEngine:
         id_column: Union[str, Column, ColumnDict] = "langchain_id",
         overwrite_existing: bool = False,
         store_metadata: bool = True,
+        full_text_index: str | None = None
     ) -> None:
         """
         Create a table for saving of vectors to be used with PGVectorStore.
@@ -280,6 +289,8 @@ class PGEngine:
             overwrite_existing (bool): Whether to drop existing table. Default: False.
             store_metadata (bool): Whether to store metadata in the table.
                 Default: True.
+            full_text_index (str): Language used to construct full text index. If None then no index will be used.
+                Default: None
         """
         await self._run_as_async(
             self._ainit_vectorstore_table(
@@ -293,6 +304,7 @@ class PGEngine:
                 id_column=id_column,
                 overwrite_existing=overwrite_existing,
                 store_metadata=store_metadata,
+                full_text_index=full_text_index
             )
         )
 
@@ -309,6 +321,7 @@ class PGEngine:
         id_column: Union[str, Column, ColumnDict] = "langchain_id",
         overwrite_existing: bool = False,
         store_metadata: bool = True,
+        full_text_index: str = None
     ) -> None:
         """
         Create a table for saving of vectors to be used with PGVectorStore.
@@ -331,6 +344,8 @@ class PGEngine:
             overwrite_existing (bool): Whether to drop existing table. Default: False.
             store_metadata (bool): Whether to store metadata in the table.
                 Default: True.
+            full_text_index (str): Language used to construct full text index. If None then no index will be used.
+                Default: None
         """
         self._run_as_sync(
             self._ainit_vectorstore_table(
@@ -344,6 +359,7 @@ class PGEngine:
                 id_column=id_column,
                 overwrite_existing=overwrite_existing,
                 store_metadata=store_metadata,
+                full_text_index=full_text_index
             )
         )
 
