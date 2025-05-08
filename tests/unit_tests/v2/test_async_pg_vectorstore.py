@@ -1,7 +1,7 @@
 import os
-from unittest.mock import MagicMock, patch
 import uuid
 from typing import AsyncIterator, Sequence
+from unittest.mock import MagicMock, patch
 
 import pytest
 import pytest_asyncio
@@ -217,12 +217,16 @@ class TestVectorStore:
         assert result == False
         await aexecute(engine, f'TRUNCATE TABLE "{DEFAULT_TABLE}"')
 
-    @patch('langchain_postgres.v2.async_vectorstore.storage.Client')
+    @patch("langchain_postgres.v2.async_vectorstore.storage.Client")
     async def test_aadd_images(
-        self, MockStorageClient: MagicMock, engine: PGEngine, image_vs: AsyncPGVectorStore, image_uris: list[str]
+        self,
+        MockStorageClient: MagicMock,
+        engine: PGEngine,
+        image_vs: AsyncPGVectorStore,
+        image_uris: list[str],
     ) -> None:
         mock_blob_instance = MagicMock()
-        fake_image_bytes = b"fake_gcs_image_data" # Differentiated fake data
+        fake_image_bytes = b"fake_gcs_image_data"  # Differentiated fake data
         mock_blob_instance.download_as_bytes.return_value = fake_image_bytes
 
         mock_bucket_instance = MagicMock()
