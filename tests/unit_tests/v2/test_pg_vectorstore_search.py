@@ -225,9 +225,9 @@ class TestVectorStoreSearch:
         results = await image_vs.asimilarity_search_image(image_uris[0], k=1)
         assert len(results) == 1
         assert results[0].metadata["image_uri"] == image_uris[0]
-        results = await image_vs.asimilarity_search_image(image_uris[3], k=1)
+        results = await image_vs.asimilarity_search_image(image_uris[2], k=1)
         assert len(results) == 1
-        assert results[0].metadata["image_uri"] == image_uris[3]
+        assert results[0].metadata["image_uri"] == image_uris[2]
 
     async def test_similarity_search_with_relevance_scores_threshold_cosine(
         self, vs: PGVectorStore
