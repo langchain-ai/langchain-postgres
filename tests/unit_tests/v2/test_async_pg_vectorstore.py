@@ -1,7 +1,6 @@
 import os
 import uuid
 from typing import AsyncIterator, Sequence
-from unittest.mock import MagicMock, patch
 
 import pytest
 import pytest_asyncio
@@ -124,14 +123,13 @@ class TestVectorStore:
         red_uri = str(uuid.uuid4()).replace("-", "_") + "test_image_red.jpg"
         green_uri = str(uuid.uuid4()).replace("-", "_") + "test_image_green.jpg"
         blue_uri = str(uuid.uuid4()).replace("-", "_") + "test_image_blue.jpg"
-        gcs_uri = "gs://github-repo/img/vision/google-cloud-next.jpeg"
         image = Image.new("RGB", (100, 100), color="red")
         image.save(red_uri)
         image = Image.new("RGB", (100, 100), color="green")
         image.save(green_uri)
         image = Image.new("RGB", (100, 100), color="blue")
         image.save(blue_uri)
-        image_uris = [red_uri, green_uri, blue_uri, gcs_uri]
+        image_uris = [red_uri, green_uri, blue_uri]
         yield image_uris
         for uri in image_uris:
             try:
@@ -217,25 +215,12 @@ class TestVectorStore:
         assert result == False
         await aexecute(engine, f'TRUNCATE TABLE "{DEFAULT_TABLE}"')
 
-    @patch("langchain_postgres.v2.async_vectorstore.storage.Client")
     async def test_aadd_images(
         self,
-        MockStorageClient: MagicMock,
         engine: PGEngine,
         image_vs: AsyncPGVectorStore,
         image_uris: list[str],
     ) -> None:
-        mock_blob_instance = MagicMock()
-        fake_image_bytes = b"fake_gcs_image_data"  # Differentiated fake data
-        mock_blob_instance.download_as_bytes.return_value = fake_image_bytes
-
-        mock_bucket_instance = MagicMock()
-        mock_bucket_instance.blob.return_value = mock_blob_instance
-
-        mock_storage_client_instance = MagicMock()
-        mock_storage_client_instance.bucket.return_value = mock_bucket_instance
-
-        MockStorageClient.return_value = mock_storage_client_instance
         ids = [str(uuid.uuid4()) for i in range(len(image_uris))]
         metadatas = [
             {"image_id": str(i), "source": "postgres"} for i in range(len(image_uris))

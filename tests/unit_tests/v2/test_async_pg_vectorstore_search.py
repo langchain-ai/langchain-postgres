@@ -165,14 +165,13 @@ class TestVectorStoreSearch:
         red_uri = str(uuid.uuid4()).replace("-", "_") + "test_image_red.jpg"
         green_uri = str(uuid.uuid4()).replace("-", "_") + "test_image_green.jpg"
         blue_uri = str(uuid.uuid4()).replace("-", "_") + "test_image_blue.jpg"
-        gcs_uri = "gs://github-repo/img/vision/google-cloud-next.jpeg"
         image = Image.new("RGB", (100, 100), color="red")
         image.save(red_uri)
         image = Image.new("RGB", (100, 100), color="green")
         image.save(green_uri)
         image = Image.new("RGB", (100, 100), color="blue")
         image.save(blue_uri)
-        image_uris = [red_uri, green_uri, blue_uri, gcs_uri]
+        image_uris = [red_uri, green_uri, blue_uri]
         yield image_uris
         for uri in image_uris:
             try:
@@ -191,7 +190,7 @@ class TestVectorStoreSearch:
             table_name=IMAGE_TABLE,
             distance_strategy=DistanceStrategy.COSINE_DISTANCE,
         )
-        await vs.aadd_images(image_uris, ids=ids)
+        await vs.aadd_images(image_uris, ids=ids[:3])
         yield vs
 
     async def test_asimilarity_search_score(self, vs: AsyncPGVectorStore) -> None:
