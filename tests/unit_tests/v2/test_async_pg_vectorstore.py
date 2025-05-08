@@ -1,4 +1,5 @@
 import os
+from unittest.mock import MagicMock, patch
 import uuid
 from typing import AsyncIterator, Sequence
 
@@ -216,9 +217,21 @@ class TestVectorStore:
         assert result == False
         await aexecute(engine, f'TRUNCATE TABLE "{DEFAULT_TABLE}"')
 
+    @patch('langchain_postgres.v2.async_vectorstore.storage.Client')
     async def test_aadd_images(
-        self, engine: PGEngine, image_vs: AsyncPGVectorStore, image_uris: list[str]
+        self, MockStorageClient: MagicMock, engine: PGEngine, image_vs: AsyncPGVectorStore, image_uris: list[str]
     ) -> None:
+        mock_blob_instance = MagicMock()
+        fake_image_bytes = b"fake_gcs_image_data" # Differentiated fake data
+        mock_blob_instance.download_as_bytes.return_value = fake_image_bytes
+
+        mock_bucket_instance = MagicMock()
+        mock_bucket_instance.blob.return_value = mock_blob_instance
+
+        mock_storage_client_instance = MagicMock()
+        mock_storage_client_instance.bucket.return_value = mock_bucket_instance
+
+        MockStorageClient.return_value = mock_storage_client_instance
         ids = [str(uuid.uuid4()) for i in range(len(image_uris))]
         metadatas = [
             {"image_id": str(i), "source": "postgres"} for i in range(len(image_uris))
