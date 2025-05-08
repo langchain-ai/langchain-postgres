@@ -37,7 +37,7 @@ jobs:
 
       - name: Install dependencies
         shell: bash
-        run: poetry install
+        run: poetry install --extras gcs
 
       - name: Run core tests
         shell: bash
