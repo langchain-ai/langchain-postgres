@@ -18,7 +18,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  POETRY_VERSION: "1.7.1"
+  POETRY_VERSION: "2.1.1"
   WORKDIR: "."
 
 jobs:
@@ -89,7 +89,7 @@ jobs:
         shell: bash
         run: |
           echo "Running tests, installing dependencies with poetry..."
-          poetry install --with test,lint,typing,docs
+          poetry install --with test,lint,typing,docs --extras gcs
       - name: Run tests
         run: make test
         env:
