@@ -103,7 +103,7 @@ SUPPORTED_OPERATORS = (
 
 _embedding_collection_store_lock = threading.Lock()
 
-def _get_embedding_collection_store(vector_dimension: Optional[int] = None) -> Any:
+def _get_embedding_collection_store(vector_dimension: Optional[int] = None, extend_existing: bool = False) -> Any:
     global _classes
     
     with _embedding_collection_store_lock:
@@ -116,6 +116,9 @@ def _get_embedding_collection_store(vector_dimension: Optional[int] = None) -> A
         """Collection store."""
 
         __tablename__ = "langchain_pg_collection"
+
+        if extend_existing:
+            __table_args__ = {'extend_existing': True}
 
         uuid = sqlalchemy.Column(
             UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
@@ -219,14 +222,25 @@ def _get_embedding_collection_store(vector_dimension: Optional[int] = None) -> A
         document = sqlalchemy.Column(sqlalchemy.String, nullable=True)
         cmetadata = sqlalchemy.Column(JSONB, nullable=True)
 
-        __table_args__ = (
-            sqlalchemy.Index(
-                "ix_cmetadata_gin",
-                "cmetadata",
-                postgresql_using="gin",
-                postgresql_ops={"cmetadata": "jsonb_path_ops"},
-            ),
-        )
+        if extend_existing:
+            __table_args__ = (
+                sqlalchemy.Index(
+                    "ix_cmetadata_gin",
+                    "cmetadata",
+                    postgresql_using="gin",
+                    postgresql_ops={"cmetadata": "jsonb_path_ops"},
+                ),
+                {'extend_existing': True}
+            )
+        else:
+            __table_args__ = (
+                sqlalchemy.Index(
+                    "ix_cmetadata_gin",
+                    "cmetadata",
+                    postgresql_using="gin",
+                    postgresql_ops={"cmetadata": "jsonb_path_ops"},
+                ),
+            )
 
     _classes = (EmbeddingStore, CollectionStore)
 
@@ -391,6 +405,7 @@ class PGVector(VectorStore):
         use_jsonb: bool = True,
         create_extension: bool = True,
         async_mode: bool = False,
+        extend_existing: bool = False,  
     ) -> None:
         """Initialize the PGVector store.
         For an async version, use `PGVector.acreate()` instead.
@@ -419,6 +434,9 @@ class PGVector(VectorStore):
             create_extension: If True, will create the vector extension if it
                 doesn't exist. disabling creation is useful when using ReadOnly
                 Databases.
+            extend_existing: If True, will set extend_existing=True in table_args for
+                SQLAlchemy models. This helps prevent race conditions when multiple
+                threads try to create tables simultaneously. (default: False)
         """
         self.async_mode = async_mode
         self.embedding_function = embeddings
@@ -432,6 +450,7 @@ class PGVector(VectorStore):
         self._engine: Optional[Engine] = None
         self._async_engine: Optional[AsyncEngine] = None
         self._async_init = False
+        self.extend_existing = extend_existing
 
         if isinstance(connection, str):
             if async_mode:
@@ -474,7 +493,8 @@ class PGVector(VectorStore):
             self.create_vector_extension()
 
         EmbeddingStore, CollectionStore = _get_embedding_collection_store(
-            self._embedding_length
+            self._embedding_length,
+            extend_existing=self.extend_existing,
         )
         self.CollectionStore = CollectionStore
         self.EmbeddingStore = EmbeddingStore
@@ -490,7 +510,8 @@ class PGVector(VectorStore):
         self._async_init = True
 
         EmbeddingStore, CollectionStore = _get_embedding_collection_store(
-            self._embedding_length
+            self._embedding_length,
+            extend_existing=self.extend_existing,
         )
         self.CollectionStore = CollectionStore
         self.EmbeddingStore = EmbeddingStore
