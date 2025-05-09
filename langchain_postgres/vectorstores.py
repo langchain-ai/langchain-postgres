@@ -6,6 +6,7 @@ import enum
 import logging
 import uuid
 import warnings
+import threading
 from typing import (
     Any,
     AsyncGenerator,
@@ -100,11 +101,14 @@ SUPPORTED_OPERATORS = (
     .union(SPECIAL_CASED_OPERATORS)
 )
 
+_embedding_collection_store_lock = threading.Lock()
 
 def _get_embedding_collection_store(vector_dimension: Optional[int] = None) -> Any:
     global _classes
-    if _classes is not None:
-        return _classes
+    
+    with _embedding_collection_store_lock:
+        if _classes is not None:
+            return _classes
 
     from pgvector.sqlalchemy import Vector  # type: ignore
 
@@ -514,10 +518,13 @@ class PGVector(VectorStore):
         async with self._async_engine.begin() as conn:
             await conn.run_sync(_create_vector_extension)
 
+    _create_tables_lock = threading.Lock()    
     def create_tables_if_not_exists(self) -> None:
-        with self._make_sync_session() as session:
-            Base.metadata.create_all(session.get_bind())
-            session.commit()
+        """Create tables if they don't exist in a thread-safe manner."""
+        with _create_tables_lock:
+            with self._make_sync_session() as session:
+                Base.metadata.create_all(session.get_bind())
+                session.commit()
 
     async def acreate_tables_if_not_exists(self) -> None:
         assert self._async_engine, "This method must be called with async_mode"
