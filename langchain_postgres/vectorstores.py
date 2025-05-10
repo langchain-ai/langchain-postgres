@@ -222,25 +222,16 @@ def _get_embedding_collection_store(vector_dimension: Optional[int] = None, exte
         document = sqlalchemy.Column(sqlalchemy.String, nullable=True)
         cmetadata = sqlalchemy.Column(JSONB, nullable=True)
 
+        __table_args__ = (
+                sqlalchemy.Index(
+                    "ix_cmetadata_gin",
+                    "cmetadata",
+                    postgresql_using="gin",
+                    postgresql_ops={"cmetadata": "jsonb_path_ops"},
+                ),
+            )
         if extend_existing:
-            __table_args__ = (
-                sqlalchemy.Index(
-                    "ix_cmetadata_gin",
-                    "cmetadata",
-                    postgresql_using="gin",
-                    postgresql_ops={"cmetadata": "jsonb_path_ops"},
-                ),
-                {'extend_existing': True}
-            )
-        else:
-            __table_args__ = (
-                sqlalchemy.Index(
-                    "ix_cmetadata_gin",
-                    "cmetadata",
-                    postgresql_using="gin",
-                    postgresql_ops={"cmetadata": "jsonb_path_ops"},
-                ),
-            )
+            __table_args__ = __table_args__ + ({'extend_existing': True}, )
 
     _classes = (EmbeddingStore, CollectionStore)
 
