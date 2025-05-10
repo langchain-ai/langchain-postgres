@@ -441,7 +441,7 @@ class PGVector(VectorStore):
         self._engine: Optional[Engine] = None
         self._async_engine: Optional[AsyncEngine] = None
         self._async_init = False
-        self.extend_existing = extend_existing
+        self._extend_existing = extend_existing
 
         if isinstance(connection, str):
             if async_mode:
@@ -485,7 +485,7 @@ class PGVector(VectorStore):
 
         EmbeddingStore, CollectionStore = _get_embedding_collection_store(
             self._embedding_length,
-            extend_existing=self.extend_existing,
+            extend_existing=self._extend_existing,
         )
         self.CollectionStore = CollectionStore
         self.EmbeddingStore = EmbeddingStore
@@ -502,7 +502,7 @@ class PGVector(VectorStore):
 
         EmbeddingStore, CollectionStore = _get_embedding_collection_store(
             self._embedding_length,
-            extend_existing=self.extend_existing,
+            extend_existing=self._extend_existing,
         )
         self.CollectionStore = CollectionStore
         self.EmbeddingStore = EmbeddingStore
