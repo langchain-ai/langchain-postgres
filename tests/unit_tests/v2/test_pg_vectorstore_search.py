@@ -76,7 +76,7 @@ class TestVectorStoreSearch:
     @pytest_asyncio.fixture(scope="class")
     async def vs(self, engine: PGEngine) -> AsyncIterator[PGVectorStore]:
         await engine.ainit_vectorstore_table(
-            DEFAULT_TABLE, VECTOR_SIZE, store_metadata=False
+            DEFAULT_TABLE, VECTOR_SIZE, store_metadata=False, full_text_index="english"
         )
         vs = await PGVectorStore.create(
             engine,
@@ -196,6 +196,19 @@ class TestVectorStoreSearch:
         )
         assert len(results) == 1
         assert results[0][0] == Document(page_content="foo", id=ids[0])
+
+    @pytest.mark.parametrize(("full_text_weight", "expected_result", "expected_score"), [(1.0, "foo", 1.0), (0.5, "foo", 1.4392072893679142), (0.0, "bar", 2.0)])
+    async def test_similarity_search_hybrid_1(
+        self, vs: PGVectorStore, full_text_weight, expected_result, expected_score
+    ) -> None:
+        results = await vs.asimilarity_search_with_relevance_scores(
+            "foo", full_text_weight=full_text_weight
+        )
+        top_doc, top_score = results[0]
+        assert top_doc.page_content == expected_result
+        assert top_score == expected_score
+
+
 
     async def test_similarity_search_with_relevance_scores_threshold_euclidean(
         self, engine: PGEngine
