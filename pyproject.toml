@@ -17,7 +17,7 @@ psycopg = "^3"
 psycopg-pool = "^3.2.1"
 sqlalchemy = "^2"
 pgvector = ">=0.2.5,<0.4"
-numpy = "^1.21"
+numpy = ">=1.21,<3"
 asyncpg = "^0.30.0"
 types-requests = "^2.0.0"
 google-cloud-storage = { version = ">=2.18.2, <4.0.0", optional = true }
