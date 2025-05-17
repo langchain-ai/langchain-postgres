@@ -4,13 +4,12 @@ from __future__ import annotations
 import base64
 import copy
 import json
-import re
 import uuid
 from typing import Any, Callable, Iterable, Optional, Sequence
+from urllib.parse import urlparse
 
 import numpy as np
 import requests
-from google.cloud import storage  # type: ignore
 from langchain_core.documents import Document
 from langchain_core.embeddings import Embeddings
 from langchain_core.vectorstores import VectorStore, utils
@@ -371,16 +370,22 @@ class AsyncPGVectorStore(VectorStore):
 
     def _encode_image(self, uri: str) -> str:
         """Get base64 string from a image URI."""
-        gcs_uri = re.match("gs://(.*?)/(.*)", uri)
-        if gcs_uri:
-            bucket_name, object_name = gcs_uri.groups()
+        if uri.startswith("gs://"):
+            from google.cloud import storage  # type: ignore
+
+            path_without_prefix = uri[len("gs://") :]
+            parts = path_without_prefix.split("/", 1)
+            bucket_name = parts[0]
+            object_name = ""  # Default for bucket root if no object specified
+            if len(parts) == 2:
+                object_name = parts[1]
             storage_client = storage.Client()
             bucket = storage_client.bucket(bucket_name)
             blob = bucket.blob(object_name)
             return base64.b64encode(blob.download_as_bytes()).decode("utf-8")
 
-        web_uri = re.match(r"^(https?://).*", uri)
-        if web_uri:
+        parsed_uri = urlparse(uri)
+        if parsed_uri.scheme in ["http", "https"]:
             response = requests.get(uri, stream=True)
             response.raise_for_status()
             return base64.b64encode(response.content).decode("utf-8")
