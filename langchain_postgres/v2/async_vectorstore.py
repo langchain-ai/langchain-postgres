@@ -1,12 +1,15 @@
 # TODO: Remove below import when minimum supported Python version is 3.10
 from __future__ import annotations
 
+import base64
 import copy
 import json
 import uuid
 from typing import Any, Callable, Iterable, Optional, Sequence
+from urllib.parse import urlparse
 
 import numpy as np
+import requests
 from langchain_core.documents import Document
 from langchain_core.embeddings import Embeddings
 from langchain_core.vectorstores import VectorStore, utils
@@ -364,6 +367,98 @@ class AsyncPGVectorStore(VectorStore):
             ids = [doc.id for doc in documents]
         ids = await self.aadd_texts(texts, metadatas=metadatas, ids=ids, **kwargs)
         return ids
+
+    def _encode_image(self, uri: str) -> str:
+        """Get base64 string from a image URI."""
+        if uri.startswith("gs://"):
+            from google.cloud import storage  # type: ignore
+
+            path_without_prefix = uri[len("gs://") :]
+            parts = path_without_prefix.split("/", 1)
+            bucket_name = parts[0]
+            object_name = ""  # Default for bucket root if no object specified
+            if len(parts) == 2:
+                object_name = parts[1]
+            storage_client = storage.Client()
+            bucket = storage_client.bucket(bucket_name)
+            blob = bucket.blob(object_name)
+            return base64.b64encode(blob.download_as_bytes()).decode("utf-8")
+
+        parsed_uri = urlparse(uri)
+        if parsed_uri.scheme in ["http", "https"]:
+            response = requests.get(uri, stream=True)
+            response.raise_for_status()
+            return base64.b64encode(response.content).decode("utf-8")
+
+        with open(uri, "rb") as image_file:
+            return base64.b64encode(image_file.read()).decode("utf-8")
+
+    async def aadd_images(
+        self,
+        uris: list[str],
+        metadatas: Optional[list[dict]] = None,
+        ids: Optional[list[str]] = None,
+        **kwargs: Any,
+    ) -> list[str]:
+        """Embed images and add to the table.
+
+        Args:
+            uris (list[str]): List of local image URIs to add to the table.
+            metadatas (Optional[list[dict]]): List of metadatas to add to table records.
+            ids: (Optional[list[str]]): List of IDs to add to table records.
+
+        Returns:
+            List of record IDs added.
+        """
+        encoded_images = []
+        if metadatas is None:
+            metadatas = [{"image_uri": uri} for uri in uris]
+
+        for uri in uris:
+            encoded_image = self._encode_image(uri)
+            encoded_images.append(encoded_image)
+
+        embeddings = self._images_embedding_helper(uris)
+        ids = await self.aadd_embeddings(
+            encoded_images, embeddings, metadatas=metadatas, ids=ids, **kwargs
+        )
+        return ids
+
+    def _images_embedding_helper(self, image_uris: list[str]) -> list[list[float]]:
+        # check if either `embed_images()` or `embed_image()` API is supported by the embedding service used
+        if hasattr(self.embedding_service, "embed_images"):
+            try:
+                embeddings = self.embedding_service.embed_images(image_uris)
+            except Exception as e:
+                raise Exception(
+                    f"Make sure your selected embedding model supports list of image URIs as input. {str(e)}"
+                )
+        elif hasattr(self.embedding_service, "embed_image"):
+            try:
+                embeddings = self.embedding_service.embed_image(image_uris)
+            except Exception as e:
+                raise Exception(
+                    f"Make sure your selected embedding model supports list of image URIs as input. {str(e)}"
+                )
+        else:
+            raise ValueError(
+                "Please use an embedding model that supports image embedding."
+            )
+        return embeddings
+
+    async def asimilarity_search_image(
+        self,
+        image_uri: str,
+        k: Optional[int] = None,
+        filter: Optional[dict] = None,
+        **kwargs: Any,
+    ) -> list[Document]:
+        """Return docs selected by similarity search on query."""
+        embedding = self._images_embedding_helper([image_uri])[0]
+
+        return await self.asimilarity_search_by_vector(
+            embedding=embedding, k=k, filter=filter, **kwargs
+        )
 
     async def adelete(
         self,
@@ -1267,4 +1362,26 @@ class AsyncPGVectorStore(VectorStore):
     ) -> list[tuple[Document, float]]:
         raise NotImplementedError(
             "Sync methods are not implemented for AsyncPGVectorStore. Use PGVectorStore interface instead."
+        )
+
+    def add_images(
+        self,
+        uris: list[str],
+        metadatas: Optional[list[dict]] = None,
+        ids: Optional[list[str]] = None,
+        **kwargs: Any,
+    ) -> list[str]:
+        raise NotImplementedError(
+            "Sync methods are not implemented for AsyncAlloyDBVectorStore. Use AlloyDBVectorStore interface instead."
+        )
+
+    def similarity_search_image(
+        self,
+        image_uri: str,
+        k: Optional[int] = None,
+        filter: Optional[dict] = None,
+        **kwargs: Any,
+    ) -> list[Document]:
+        raise NotImplementedError(
+            "Sync methods are not implemented for AsyncAlloyDBVectorStore. Use AlloyDBVectorStore interface instead."
         )
