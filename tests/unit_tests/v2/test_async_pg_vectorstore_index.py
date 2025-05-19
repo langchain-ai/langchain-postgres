@@ -10,15 +10,14 @@ from sqlalchemy import text
 
 from langchain_postgres import PGEngine
 from langchain_postgres.v2.async_vectorstore import AsyncPGVectorStore
-from langchain_postgres.v2.indexes import (
-    DistanceStrategy,
-    HNSWIndex,
-    IVFFlatIndex,
-)
+from langchain_postgres.v2.hybrid_search_config import HybridSearchConfig
+from langchain_postgres.v2.indexes import (DistanceStrategy, HNSWIndex,
+                                           IVFFlatIndex)
 from tests.utils import VECTORSTORE_CONNECTION_STRING as CONNECTION_STRING
 
 uuid_str = str(uuid.uuid4()).replace("-", "_")
 DEFAULT_TABLE = "default" + uuid_str
+DEFAULT_HYBRID_TABLE = "hybrid" + uuid_str
 DEFAULT_INDEX_NAME = "index" + uuid_str
 VECTOR_SIZE = 768
 SIMPLE_TABLE = "default_table"
@@ -55,8 +54,10 @@ class TestIndex:
     async def engine(self) -> AsyncIterator[PGEngine]:
         engine = PGEngine.from_connection_string(url=CONNECTION_STRING)
         yield engine
-        await aexecute(engine, f"DROP TABLE IF EXISTS {DEFAULT_TABLE}")
-        await aexecute(engine, f"DROP TABLE IF EXISTS {SIMPLE_TABLE}")
+
+        engine._adrop_table(DEFAULT_TABLE)
+        engine._adrop_table(DEFAULT_HYBRID_TABLE)
+        engine._adrop_table(SIMPLE_TABLE)
         await engine.close()
 
     @pytest_asyncio.fixture(scope="class")
@@ -91,6 +92,68 @@ class TestIndex:
         await vs.aapply_vector_index(index)
         assert await vs.is_valid_index(DEFAULT_INDEX_NAME)
         await vs.adrop_vector_index(DEFAULT_INDEX_NAME)
+
+    async def test_aapply_vector_index_non_hybrid_search_vs_without_tsv_column(
+        self, vs
+    ) -> None:
+        index = HNSWIndex(name="test_index_hybrid" + uuid_str)
+
+        tsv_index_name = DEFAULT_TABLE + "langchain_tsv_index"
+        is_valid_index = await vs.is_valid_index(tsv_index_name)
+        assert is_valid_index == False
+        await vs.aapply_vector_index(index)
+        is_valid_index = await vs.is_valid_index(tsv_index_name)
+        assert is_valid_index == False
+        await vs.adrop_vector_index(tsv_index_name)
+        is_valid_index = await vs.is_valid_index(tsv_index_name)
+        assert is_valid_index == False
+
+    async def test_aapply_vector_index_hybrid_search_vs_without_tsv_column(
+        self, engine, vs
+    ) -> None:
+        # overwriting vs to get a hybrid vs
+        vs = await AsyncPGVectorStore.create(
+            engine,
+            embedding_service=embeddings_service,
+            table_name=DEFAULT_TABLE,
+            hybrid_search_config=HybridSearchConfig(),
+        )
+        index = HNSWIndex(name="test_index_hybrid" + uuid_str)
+
+        tsv_index_name = DEFAULT_TABLE + "langchain_tsv_index"
+        is_valid_index = await vs.is_valid_index(tsv_index_name)
+        assert is_valid_index == False
+        await vs.adrop_vector_index(index.name)
+        await vs.aapply_vector_index(index)
+        assert await vs.is_valid_index(tsv_index_name)
+        await vs.areindex(tsv_index_name)
+        assert await vs.is_valid_index(tsv_index_name)
+        await vs.adrop_vector_index(tsv_index_name)
+        is_valid_index = await vs.is_valid_index(tsv_index_name)
+        assert is_valid_index == False
+        await vs.adrop_vector_index(index.name)
+
+    async def test_aapply_vector_index_hybrid_search_with_tsv_column(
+        self, engine
+    ) -> None:
+        await engine._ainit_vectorstore_table(
+            DEFAULT_HYBRID_TABLE, VECTOR_SIZE, hybrid_search_config=HybridSearchConfig()
+        )
+        vs = await AsyncPGVectorStore.create(
+            engine,
+            embedding_service=embeddings_service,
+            table_name=DEFAULT_HYBRID_TABLE,
+            hybrid_search_config=HybridSearchConfig(),
+        )
+        tsv_index_name = DEFAULT_HYBRID_TABLE + "langchain_tsv_index"
+        is_valid_index = await vs.is_valid_index(tsv_index_name)
+        assert is_valid_index == False
+        index = HNSWIndex(name=DEFAULT_INDEX_NAME)
+        await vs.aapply_vector_index(index)
+        await vs.adrop_vector_index(tsv_index_name)
+        await vs.adrop_vector_index(index.name)
+        is_valid_index = await vs.is_valid_index(tsv_index_name)
+        assert is_valid_index == False
 
     async def test_areindex(self, vs: AsyncPGVectorStore) -> None:
         if not await vs.is_valid_index(DEFAULT_INDEX_NAME):
