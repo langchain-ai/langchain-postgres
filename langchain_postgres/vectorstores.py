@@ -1171,7 +1171,7 @@ class PGVector(VectorStore):
             )
         ]
 
-        for chunk in chunkerize(data, 1000):
+        for chunk in chunkerize(data, 500):
             stmt = insert(self.EmbeddingStore).values(chunk)
 
             index_elements = ["id"]
