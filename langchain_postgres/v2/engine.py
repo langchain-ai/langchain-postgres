@@ -347,6 +347,65 @@ class PGEngine:
             )
         )
 
+    async def _ainit_chat_history_table(
+        self, table_name: str, schema_name: str = "public"
+    ) -> None:
+        """
+        Create a postgres table to save chat history messages.
+
+        Args:
+            table_name (str): The table name to store chat history.
+            schema_name (str): The schema name to store the chat history table.
+                Default: "public".
+
+        Returns:
+            None
+        """
+        create_table_query = f"""CREATE TABLE IF NOT EXISTS "{schema_name}"."{table_name}"(
+            id SERIAL PRIMARY KEY,
+            session_id TEXT NOT NULL,
+            message JSONB NOT NULL,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );"""
+        async with self._pool.connect() as conn:
+            await conn.execute(text(create_table_query))
+            await conn.commit()
+
+    async def ainit_chat_history_table(
+        self, table_name: str, schema_name: str = "public"
+    ) -> None:
+        """Create a postgres table to save chat history messages.
+
+        Args:
+            table_name (str): The table name to store chat history.
+            schema_name (str): The schema name to store chat history table.
+                Default: "public".
+
+        Returns:
+            None
+        """
+        await self._run_as_async(
+            self._ainit_chat_history_table(
+                table_name,
+                schema_name,
+            )
+        )
+
+    def init_chat_history_table(
+        self, table_name: str, schema_name: str = "public"
+    ) -> None:
+        """Create a postgres table to store chat history.
+
+        Args:
+            table_name (str): Table name to store chat history.
+            schema_name (str): The schema name to store chat history table.
+                Default: "public".
+
+        Returns:
+            None
+        """
+        self._run_as_sync(self._ainit_chat_history_table(table_name, schema_name))
+
     async def _adrop_table(
         self,
         table_name: str,
@@ -378,3 +437,40 @@ class PGEngine:
         self._run_as_sync(
             self._adrop_table(table_name=table_name, schema_name=schema_name)
         )
+
+    async def _aload_table_schema(
+        self, table_name: str, schema_name: str = "public"
+    ) -> list[str]:
+        """
+        Load table schema from an existing table in a PgSQL database, potentially from a specific database schema.
+
+        Args:
+            table_name: The name of the table to load the table schema from.
+            schema_name: The name of the database schema where the table resides.
+                Default: "public".
+
+        Returns:
+            (lsit[str]: list of all column names in the table.)
+        """
+
+        query = """
+            SELECT column_name
+            FROM information_schema.columns
+            WHERE table_schema = :schema
+              AND table_name = :table
+            ORDER BY ordinal_position;
+        """
+
+        async with self._pool.connect() as conn:
+            result = await conn.execute(
+                text(query), {"schema": schema_name, "table": table_name}
+            )
+            result_map = result.mappings()
+            results = result_map.fetchall()
+
+        column_names = [row["column_name"] for row in results]
+
+        if column_names:
+            return column_names
+        else:
+            raise ValueError(f'Table, "{schema_name}"."{table_name}", does not exist: ')
