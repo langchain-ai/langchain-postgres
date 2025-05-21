@@ -78,3 +78,8 @@ def maximal_marginal_relevance(
         idxs.append(idx_to_add)
         selected = np.append(selected, [embedding_list[idx_to_add]], axis=0)
     return idxs
+
+
+def chunkerize(lst: list, n: int):
+    for i in range(0, len(lst), n):
+        yield lst[i : i + n]
