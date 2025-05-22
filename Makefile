@@ -11,10 +11,10 @@ all: help
 TEST_FILE ?= tests/unit_tests/
 
 test:
-	poetry run pytest --disable-socket --allow-unix-socket $(TEST_FILE)
+	uv run pytest --disable-socket --allow-unix-socket $(TEST_FILE)
 
 test_watch:
-	poetry run ptw . -- $(TEST_FILE)
+	uv run ptw . -- $(TEST_FILE)
 
 
 ######################
@@ -26,19 +26,19 @@ lint format: PYTHON_FILES=.
 lint_diff format_diff: PYTHON_FILES=$(shell git diff --relative=. --name-only --diff-filter=d master | grep -E '\.py$$|\.ipynb$$')
 
 lint lint_diff:
-	[ "$(PYTHON_FILES)" = "" ] ||	poetry run ruff format $(PYTHON_FILES) --diff
-	[ "$(PYTHON_FILES)" = "" ] ||	poetry run ruff check $(PYTHON_FILES) --diff
-	[ "$(PYTHON_FILES)" = "" ] || poetry run mypy $(PYTHON_FILES)
+	[ "$(PYTHON_FILES)" = "" ] || uv run ruff format $(PYTHON_FILES) --diff
+	[ "$(PYTHON_FILES)" = "" ] || uv run ruff check $(PYTHON_FILES) --diff
+	[ "$(PYTHON_FILES)" = "" ] || uv run mypy $(PYTHON_FILES)
 
 format format_diff:
-	[ "$(PYTHON_FILES)" = "" ] || poetry run ruff format $(PYTHON_FILES)
-	[ "$(PYTHON_FILES)" = "" ] || poetry run ruff check --fix $(PYTHON_FILES)
+	[ "$(PYTHON_FILES)" = "" ] || uv run ruff format $(PYTHON_FILES)
+	[ "$(PYTHON_FILES)" = "" ] || uv run ruff check --fix $(PYTHON_FILES)
 
 spell_check:
-	poetry run codespell --toml pyproject.toml
+	uv run codespell --toml pyproject.toml
 
 spell_fix:
-	poetry run codespell --toml pyproject.toml -w
+	uv run codespell --toml pyproject.toml -w
 
 ######################
 # HELP

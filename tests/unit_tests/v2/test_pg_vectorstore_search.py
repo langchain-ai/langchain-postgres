@@ -398,6 +398,4 @@ class TestVectorStoreSearchSync:
         self, vs_custom_filter_sync: PGVectorStore, test_filter: dict
     ) -> None:
         with pytest.raises((ValueError, NotImplementedError)):
-            docs = vs_custom_filter_sync.similarity_search(
-                "meow", k=5, filter=test_filter
-            )
+            vs_custom_filter_sync.similarity_search("meow", k=5, filter=test_filter)

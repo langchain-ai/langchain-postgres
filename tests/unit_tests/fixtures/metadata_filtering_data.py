@@ -242,7 +242,7 @@ NEGATIVE_TEST_CASES = [
     {"is_available": {"$and": True}},
     {"is_available": {"name": "{Wireless Headphones", "code": "EC002"}},
     {"my column": {"$and": True}},
-    {"is_available": {"code": "WH001", "code": "EC002"}},
+    {"is_available": {"code": "WH001"}},
     {"$and": {}},
     {"$and": []},
     {"$not": True},

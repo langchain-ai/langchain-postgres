@@ -802,7 +802,7 @@ class AsyncPGVectorStore(VectorStore):
         filter = f"WHERE ({index.partial_indexes})" if index.partial_indexes else ""
         params = "WITH " + index.index_options()
         if name is None:
-            if index.name == None:
+            if index.name is None:
                 index.name = self.table_name + DEFAULT_INDEX_NAME_SUFFIX
             name = index.name
         stmt = f'CREATE INDEX {"CONCURRENTLY" if concurrently else ""} "{name}" ON "{self.schema_name}"."{self.table_name}" USING {index.index_type} ({self.embedding_column} {function}) {params} {filter};'

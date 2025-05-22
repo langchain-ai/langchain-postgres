@@ -1,6 +1,6 @@
 import os
 import uuid
-from typing import AsyncIterator
+from typing import AsyncGenerator, AsyncIterator
 
 import pytest
 import pytest_asyncio
@@ -39,7 +39,7 @@ async def aexecute(
 @pytest.mark.asyncio
 class TestStandardSuiteSync(VectorStoreIntegrationTests):
     @pytest_asyncio.fixture(scope="function")
-    async def sync_engine(self) -> AsyncIterator[PGEngine]:
+    async def sync_engine(self) -> AsyncGenerator[PGEngine, None]:
         sync_engine = PGEngine.from_connection_string(url=CONNECTION_STRING)
         yield sync_engine
         await aexecute(sync_engine, f'DROP TABLE IF EXISTS "{DEFAULT_TABLE_SYNC}"')
@@ -63,7 +63,6 @@ class TestStandardSuiteSync(VectorStoreIntegrationTests):
 
 
 @pytest.mark.enable_socket
-# @pytest.mark.filterwarnings("ignore")
 @pytest.mark.asyncio
 class TestStandardSuiteAsync(VectorStoreIntegrationTests):
     @pytest_asyncio.fixture(scope="function")
@@ -74,7 +73,9 @@ class TestStandardSuiteAsync(VectorStoreIntegrationTests):
         await async_engine.close()
 
     @pytest_asyncio.fixture(scope="function")
-    async def vectorstore(self, async_engine: PGEngine) -> AsyncIterator[PGVectorStore]:
+    async def vectorstore(  # type: ignore[override]
+        self, async_engine: PGEngine
+    ) -> AsyncGenerator[PGVectorStore, None]:  # type: ignore
         """Get an empty vectorstore for unit tests."""
         await async_engine.ainit_vectorstore_table(
             DEFAULT_TABLE,
