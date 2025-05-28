@@ -9,6 +9,7 @@ EXPECTED_ALL = [
     "PGVectorStore",
     "PGVectorTranslator",
     "PostgresChatMessageHistory",
+    "PGChatMessageHistory",
 ]
 
 

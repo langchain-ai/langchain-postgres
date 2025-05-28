@@ -2,6 +2,7 @@ from importlib import metadata
 
 from langchain_postgres.chat_message_histories import PostgresChatMessageHistory
 from langchain_postgres.translator import PGVectorTranslator
+from langchain_postgres.v2.chat_message_history import PGChatMessageHistory
 from langchain_postgres.v2.engine import Column, ColumnDict, PGEngine
 from langchain_postgres.v2.vectorstores import PGVectorStore
 from langchain_postgres.vectorstores import PGVector
@@ -18,6 +19,7 @@ __all__ = [
     "ColumnDict",
     "PGEngine",
     "PostgresChatMessageHistory",
+    "PGChatMessageHistory",
     "PGVector",
     "PGVectorStore",
     "PGVectorTranslator",
