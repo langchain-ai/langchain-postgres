@@ -123,4 +123,4 @@ class TestIndex:
 
     async def test_is_valid_index(self, vs: AsyncPGVectorStore) -> None:
         is_valid = await vs.is_valid_index("invalid_index")
-        assert is_valid == False
+        assert not is_valid
