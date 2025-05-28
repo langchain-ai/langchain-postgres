@@ -5,11 +5,11 @@ services:
     # postgres with the pgvector extension
     image: pgvector/pgvector:pg16
     environment:
-      POSTGRES_DB: langchain
+      POSTGRES_DB: langchain_test
       POSTGRES_USER: langchain
       POSTGRES_PASSWORD: langchain
     ports:
-      - "6024:5432"
+      - "5432:5432"
     command: |
       postgres -c log_statement=all
     healthcheck:

@@ -162,7 +162,7 @@ class TestVectorStore:
         assert len(results) == 2
         # delete with no ids
         result = await vs.adelete()
-        assert result == False
+        assert not result
         await aexecute(engine, f'TRUNCATE TABLE "{DEFAULT_TABLE}"')
 
     ##### Custom Vector Store  #####
