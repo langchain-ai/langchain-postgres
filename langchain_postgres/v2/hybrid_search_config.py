@@ -128,7 +128,13 @@ def reciprocal_rank_fusion(
 
 @dataclass
 class HybridSearchConfig(ABC):
-    """AlloyDB Vector Store Hybrid Search Config."""
+    """
+    AlloyDB Vector Store Hybrid Search Config.
+
+    Queries might be slow if the hybrid search column does not exist.
+    For best hybrid search performance, consider creating a TSV column
+    and adding GIN index.
+    """
 
     tsv_column: Optional[str] = ""
     tsv_lang: Optional[str] = "pg_catalog.english"
