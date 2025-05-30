@@ -128,7 +128,7 @@ def reciprocal_rank_fusion(
 
 @dataclass
 class HybridSearchConfig(ABC):
-    """Google AlloyDB Vector Store Hybrid Search Config."""
+    """AlloyDB Vector Store Hybrid Search Config."""
 
     tsv_column: Optional[str] = ""
     tsv_lang: Optional[str] = "pg_catalog.english"
