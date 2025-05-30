@@ -1,8 +1,9 @@
 import pytest
 
-from langchain_postgres.v2.hybrid_search_config import (reciprocal_rank_fusion,
-                                                        weighted_sum_ranking)
-
+from langchain_postgres.v2.hybrid_search_config import (
+    reciprocal_rank_fusion,
+    weighted_sum_ranking,
+)
 
 # Helper to create mock input items that mimic RowMapping for the fusion functions
 def get_row(doc_id: str, score: float, content: str = "content") -> dict:
