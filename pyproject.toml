@@ -1,57 +1,37 @@
-[tool.poetry]
+[project]
 name = "langchain-postgres"
 version = "0.0.14"
 description = "An integration package connecting Postgres and LangChain"
 authors = []
 readme = "README.md"
 repository = "https://github.com/langchain-ai/langchain-postgres"
+requires-python = ">=3.9"
 license = "MIT"
+dependencies = [
+    "asyncpg>=0.30.0",
+    "langchain-core>=0.2.13,<0.4.0",
+    "pgvector>=0.2.5,<0.4",
+    "psycopg>=3,<4",
+    "psycopg-pool>=3.2.1,<4",
+    "sqlalchemy>=2,<3",
+    "numpy>=1.21,<3",
+]
 
 [tool.poetry.urls]
 "Source Code" = "https://github.com/langchain-ai/langchain-postgres/tree/master/langchain_postgres"
 
-[tool.poetry.dependencies]
-python = "^3.9"
-langchain-core = ">=0.2.13,<0.4.0"
-psycopg = "^3"
-psycopg-pool = "^3.2.1"
-sqlalchemy = "^2"
-pgvector = ">=0.2.5,<0.4"
-numpy = ">=1.21,<3"
-asyncpg = "^0.30.0"
-
-[tool.poetry.group.docs.dependencies]
-
-[tool.poetry.group.dev.dependencies]
-jupyterlab = "^3.6.1"
-
-
-[tool.poetry.group.test]
-optional = true
-
-[tool.poetry.group.test.dependencies]
-greenlet = "<4"
-pytest = "^7.4.3"
-pytest-asyncio = "^0.23.2"
-pytest-socket = "^0.7.0"
-pytest-cov = "^5.0.0"
-pytest-timeout = "^2.3.1"
-langchain-tests = "0.3.7"
-
-[tool.poetry.group.codespell]
-optional = true
-
-[tool.poetry.group.codespell.dependencies]
-codespell = "^2.2.6"
-
-[tool.poetry.group.lint]
-optional = true
-
-[tool.poetry.group.lint.dependencies]
-ruff = "^0.1.8"
-
-[tool.poetry.group.typing.dependencies]
-mypy = "^1.7.1"
+[dependency-groups]
+test = [
+    "langchain-tests==0.3.7",
+    "mypy>=1.15.0",
+    "pytest>=8.3.4",
+    "pytest-asyncio>=0.25.3",
+    "pytest-cov>=6.0.0",
+    "pytest-mock>=3.14.0",
+    "pytest-socket>=0.7.0",
+    "pytest-timeout>=2.3.1",
+    "ruff>=0.9.7",
+]
 
 [tool.ruff.lint]
 select = [
@@ -68,8 +48,8 @@ disallow_untyped_defs = "True"
 omit = ["tests/*"]
 
 [build-system]
-requires = ["poetry-core>=1.0.0"]
-build-backend = "poetry.core.masonry.api"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
 [tool.pytest.ini_options]
 # --strict-markers will raise errors on unknown marks.
@@ -90,7 +70,31 @@ timeout = 30
 markers = []
 asyncio_mode = "auto"
 
+
 [tool.codespell]
 skip = '.git,*.pdf,*.svg,*.pdf,*.yaml,*.ipynb,poetry.lock,*.min.js,*.css,package-lock.json,example_data,_dist,examples,templates,*.trig'
 ignore-regex = '.*(Stati Uniti|Tense=Pres).*'
 ignore-words-list = 'momento,collison,ned,foor,reworkd,parth,whats,aapply,mysogyny,unsecure,damon,crate,aadd,symbl,precesses,accademia,nin'
+
+[tool.ruff.lint.extend-per-file-ignores]
+"tests/unit_tests/v2/**/*.py" = [
+  "E501",
+]
+
+"langchain_postgres/v2/**/*.py" = [
+  "E501",
+]
+
+"langchain_postgres/utils/**/*.py" = [
+  "E501",
+  "T201", # Allow print
+]
+
+
+"examples/**/*.ipynb" = [
+  "E501",
+  "T201", # Allow print
+]
+
+
+
