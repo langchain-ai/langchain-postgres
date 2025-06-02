@@ -10,12 +10,16 @@ from sqlalchemy import text
 
 from langchain_postgres import Column, PGEngine
 from langchain_postgres.v2.async_vectorstore import AsyncPGVectorStore
-from langchain_postgres.v2.hybrid_search_config import (HybridSearchConfig,
-                                                        reciprocal_rank_fusion,
-                                                        weighted_sum_ranking)
+from langchain_postgres.v2.hybrid_search_config import (
+    HybridSearchConfig,
+    reciprocal_rank_fusion,
+    weighted_sum_ranking,
+)
 from langchain_postgres.v2.indexes import DistanceStrategy, HNSWQueryOptions
 from tests.unit_tests.fixtures.metadata_filtering_data import (
-    FILTERING_TEST_CASES, METADATAS)
+    FILTERING_TEST_CASES,
+    METADATAS,
+)
 from tests.utils import VECTORSTORE_CONNECTION_STRING as CONNECTION_STRING
 
 DEFAULT_TABLE = "default" + str(uuid.uuid4()).replace("-", "_")
@@ -129,9 +133,11 @@ class TestVectorStoreSearch:
         yield vs_custom
 
     @pytest_asyncio.fixture(scope="class")
-    async def vs_hybrid_search_without_tsv_column(self, engine):
+    async def vs_hybrid_search_without_tsv_column(
+        self, engine: PGEngine
+    ) -> AsyncIterator[AsyncPGVectorStore]:
         hybrid_search_config = HybridSearchConfig(
-            tsv_column="my_tsv_col",
+            tsv_column="",
             tsv_lang="pg_catalog.english",
             fts_query="my_fts_query",
             fusion_function=reciprocal_rank_fusion,
@@ -166,37 +172,6 @@ class TestVectorStoreSearch:
             metadata_columns=["doc_id_key"],
             index_query_options=HNSWQueryOptions(ef_search=1),
             hybrid_search_config=hybrid_search_config,
-        )
-        await vs_custom.aadd_documents(hybrid_docs)
-        yield vs_custom
-
-    @pytest_asyncio.fixture(scope="class")
-    async def vs_hybrid_search_with_tsv_column(self, engine):
-        await engine._ainit_vectorstore_table(
-            HYBRID_SEARCH_TABLE2,
-            VECTOR_SIZE,
-            id_column=Column("myid", "TEXT"),
-            content_column="mycontent",
-            embedding_column="myembedding",
-            metadata_columns=[
-                Column("page", "TEXT"),
-                Column("source", "TEXT"),
-                Column("doc_id_key", "TEXT"),
-            ],
-            store_metadata=False,
-            hybrid_search_config=HybridSearchConfig(),
-        )
-
-        vs_custom = await AsyncPGVectorStore.create(
-            engine,
-            embedding_service=embeddings_service,
-            table_name=HYBRID_SEARCH_TABLE2,
-            id_column="myid",
-            content_column="mycontent",
-            embedding_column="myembedding",
-            metadata_columns=["doc_id_key"],
-            index_query_options=HNSWQueryOptions(ef_search=1),
-            hybrid_search_config=HybridSearchConfig(),
         )
         await vs_custom.aadd_documents(hybrid_docs)
         yield vs_custom
@@ -394,7 +369,7 @@ class TestVectorStoreSearch:
         )
         assert [doc.metadata["code"] for doc in docs] == expected_ids, test_filter
 
-    async def test_asimilarity_hybrid_search(self, vs):
+    async def test_asimilarity_hybrid_search(self, vs: AsyncPGVectorStore) -> None:
         results = await vs.asimilarity_search(
             "foo", k=1, hybrid_search_config=HybridSearchConfig()
         )
@@ -425,7 +400,7 @@ class TestVectorStoreSearch:
         )
         assert results == [Document(page_content="foo", id=ids[0])]
 
-    async def test_asimilarity_hybrid_search_rrk(self, vs):
+    async def test_asimilarity_hybrid_search_rrk(self, vs: AsyncPGVectorStore) -> None:
         results = await vs.asimilarity_search(
             "foo",
             k=1,
@@ -453,8 +428,9 @@ class TestVectorStoreSearch:
         assert results == [Document(page_content="bar", id=ids[1])]
 
     async def test_hybrid_search_weighted_sum_default(
-        self, vs_hybrid_search_with_tsv_column
-    ):
+        self,
+        vs_hybrid_search_with_tsv_column: AsyncPGVectorStore,
+    ) -> None:
         """Test hybrid search with default weighted sum (0.5 vector, 0.5 FTS)."""
         query = "apple"  # Should match "apple" in FTS and vector
 
@@ -482,8 +458,8 @@ class TestVectorStoreSearch:
 
     async def test_hybrid_search_weighted_sum_vector_bias(
         self,
-        vs_hybrid_search_without_tsv_column,
-    ):
+        vs_hybrid_search_with_tsv_column: AsyncPGVectorStore,
+    ) -> None:
         """Test weighted sum with higher weight for vector results."""
         query = "Apple Inc technology"  # More specific for vector similarity
 
@@ -495,7 +471,7 @@ class TestVectorStoreSearch:
             },
             # fts_query will default to main query
         )
-        results = await vs_hybrid_search_without_tsv_column.asimilarity_search(
+        results = await vs_hybrid_search_with_tsv_column.asimilarity_search(
             query, k=2, hybrid_search_config=config
         )
         result_ids = [doc.metadata["doc_id_key"] for doc in results]
@@ -505,8 +481,8 @@ class TestVectorStoreSearch:
 
     async def test_hybrid_search_weighted_sum_fts_bias(
         self,
-        vs_hybrid_search_with_tsv_column,
-    ):
+        vs_hybrid_search_with_tsv_column: AsyncPGVectorStore,
+    ) -> None:
         """Test weighted sum with higher weight for FTS results."""
         query = "fruit common tasty"  # Strong FTS signal for fruit docs
 
@@ -528,8 +504,8 @@ class TestVectorStoreSearch:
 
     async def test_hybrid_search_reciprocal_rank_fusion(
         self,
-        vs_hybrid_search_with_tsv_column,
-    ):
+        vs_hybrid_search_with_tsv_column: AsyncPGVectorStore,
+    ) -> None:
         """Test hybrid search with Reciprocal Rank Fusion."""
         query = "technology company"
 
@@ -560,8 +536,8 @@ class TestVectorStoreSearch:
         assert result_ids[0] == "hs_doc_apple_tech"  # Stronger combined signal
 
     async def test_hybrid_search_explicit_fts_query(
-        self, vs_hybrid_search_with_tsv_column
-    ):
+        self, vs_hybrid_search_with_tsv_column: AsyncPGVectorStore
+    ) -> None:
         """Test hybrid search when fts_query in HybridSearchConfig is different from main query."""
         main_vector_query = "Apple Inc."  # For vector search
         fts_specific_query = "fruit"  # For FTS
@@ -590,7 +566,9 @@ class TestVectorStoreSearch:
             or "hs_doc_orange_fruit" in result_ids
         )
 
-    async def test_hybrid_search_with_filter(self, vs_hybrid_search_with_tsv_column):
+    async def test_hybrid_search_with_filter(
+        self, vs_hybrid_search_with_tsv_column: AsyncPGVectorStore
+    ) -> None:
         """Test hybrid search with a metadata filter applied."""
         query = "apple"
         # Filter to only include "tech" related apple docs using metadata
@@ -609,8 +587,8 @@ class TestVectorStoreSearch:
         assert result_ids[0] == "hs_doc_apple_tech"
 
     async def test_hybrid_search_fts_empty_results(
-        self, vs_hybrid_search_with_tsv_column
-    ):
+        self, vs_hybrid_search_with_tsv_column: AsyncPGVectorStore
+    ) -> None:
         """Test when FTS query yields no results, should fall back to vector search."""
         vector_query = "apple"
         no_match_fts_query = "zzyyxx_gibberish_term_for_fts_nomatch"
@@ -636,8 +614,8 @@ class TestVectorStoreSearch:
 
     async def test_hybrid_search_vector_empty_results_effectively(
         self,
-        vs_hybrid_search_with_tsv_column,
-    ):
+        vs_hybrid_search_with_tsv_column: AsyncPGVectorStore,
+    ) -> None:
         """Test when vector query is very dissimilar to docs, should rely on FTS."""
         # This is hard to guarantee with fake embeddings, but we try.
         # A better way might be to use a filter that excludes all docs for the vector part,
@@ -661,3 +639,89 @@ class TestVectorStoreSearch:
         # Expect results based purely on FTS search for "orange fruit"
         assert len(result_ids) == 1
         assert result_ids[0] == "hs_doc_generic_tech"
+
+    async def test_hybrid_search_without_tsv_column(
+        self,
+        engine: PGEngine,
+    ) -> None:
+        """Test hybrid search without a TSV column."""
+        # This is hard to guarantee with fake embeddings, but we try.
+        # A better way might be to use a filter that excludes all docs for the vector part,
+        # but filters are applied to both.
+        vector_query_far_off = "apple iphone tech is better designed than macs"
+        fts_query_match = "apple fruit"
+
+        config = HybridSearchConfig(
+            tsv_column="mycontent_tsv",
+            fts_query=fts_query_match,
+            fusion_function_parameters={
+                "primary_results_weight": 0.1,
+                "secondary_results_weight": 0.9,
+            },
+        )
+        await engine._ainit_vectorstore_table(
+            HYBRID_SEARCH_TABLE2,
+            VECTOR_SIZE,
+            id_column=Column("myid", "TEXT"),
+            content_column="mycontent",
+            embedding_column="myembedding",
+            metadata_columns=[
+                Column("page", "TEXT"),
+                Column("source", "TEXT"),
+                Column("doc_id_key", "TEXT"),
+            ],
+            store_metadata=False,
+            hybrid_search_config=config,
+        )
+
+        vs_with_tsv_column = await AsyncPGVectorStore.create(
+            engine,
+            embedding_service=embeddings_service,
+            table_name=HYBRID_SEARCH_TABLE2,
+            id_column="myid",
+            content_column="mycontent",
+            embedding_column="myembedding",
+            metadata_columns=["doc_id_key"],
+            index_query_options=HNSWQueryOptions(ef_search=1),
+            hybrid_search_config=config,
+        )
+        await vs_with_tsv_column.aadd_documents(hybrid_docs)
+
+        config = HybridSearchConfig(
+            tsv_column="",  # no TSV column
+            fts_query=fts_query_match,
+            fusion_function_parameters={
+                "primary_results_weight": 0.9,
+                "secondary_results_weight": 0.1,
+            },
+        )
+        vs_without_tsv_column = await AsyncPGVectorStore.create(
+            engine,
+            embedding_service=embeddings_service,
+            table_name=HYBRID_SEARCH_TABLE2,
+            id_column="myid",
+            content_column="mycontent",
+            embedding_column="myembedding",
+            metadata_columns=["doc_id_key"],
+            index_query_options=HNSWQueryOptions(ef_search=1),
+            hybrid_search_config=config,
+        )
+
+        results_with_tsv_column = await vs_with_tsv_column.asimilarity_search(
+            vector_query_far_off, k=1, hybrid_search_config=config
+        )
+        results_without_tsv_column = await vs_without_tsv_column.asimilarity_search(
+            vector_query_far_off, k=1, hybrid_search_config=config
+        )
+        result_ids_with_tsv_column = [
+            doc.metadata["doc_id_key"] for doc in results_with_tsv_column
+        ]
+        result_ids_without_tsv_column = [
+            doc.metadata["doc_id_key"] for doc in results_without_tsv_column
+        ]
+
+        # Expect results based purely on FTS search for "orange fruit"
+        assert len(result_ids_with_tsv_column) == 1
+        assert len(result_ids_without_tsv_column) == 1
+        assert result_ids_with_tsv_column[0] == "hs_doc_apple_tech"
+        assert result_ids_without_tsv_column[0] == "hs_doc_apple_tech"

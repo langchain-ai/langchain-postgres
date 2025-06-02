@@ -15,9 +15,14 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 
 from .engine import PGEngine
 from .hybrid_search_config import HybridSearchConfig
-from .indexes import (DEFAULT_DISTANCE_STRATEGY, DEFAULT_INDEX_NAME_SUFFIX,
-                      BaseIndex, DistanceStrategy, ExactNearestNeighbor,
-                      QueryOptions)
+from .indexes import (
+    DEFAULT_DISTANCE_STRATEGY,
+    DEFAULT_INDEX_NAME_SUFFIX,
+    BaseIndex,
+    DistanceStrategy,
+    ExactNearestNeighbor,
+    QueryOptions,
+)
 
 COMPARISONS_TO_NATIVE = {
     "$eq": "=",
@@ -74,7 +79,6 @@ class AsyncPGVectorStore(VectorStore):
         lambda_mult: float = 0.5,
         index_query_options: Optional[QueryOptions] = None,
         hybrid_search_config: Optional[HybridSearchConfig] = None,
-        hybrid_search_column_exists: bool = False,
     ):
         """AsyncPGVectorStore constructor.
         Args:
@@ -94,7 +98,6 @@ class AsyncPGVectorStore(VectorStore):
             lambda_mult (float): Number between 0 and 1 that determines the degree of diversity among the results with 0 corresponding to maximum diversity and 1 to minimum diversity. Defaults to 0.5.
             index_query_options (QueryOptions): Index query option.
             hybrid_search_config (HybridSearchConfig): Hybrid search configuration. Defaults to None.
-            hybrid_search_column_exists (bool): Defines whether the existing table has the hybrid search column.
 
 
         Raises:
@@ -120,7 +123,6 @@ class AsyncPGVectorStore(VectorStore):
         self.lambda_mult = lambda_mult
         self.index_query_options = index_query_options
         self.hybrid_search_config = hybrid_search_config
-        self.hybrid_search_column_exists = hybrid_search_column_exists
 
     @classmethod
     async def create(
@@ -197,17 +199,15 @@ class AsyncPGVectorStore(VectorStore):
             raise ValueError(
                 f"Content column, {content_column}, is type, {content_type}. It must be a type of character string."
             )
-        hybrid_search_column_exists = False
         if hybrid_search_config:
             tsv_column_name = (
                 hybrid_search_config.tsv_column
                 if hybrid_search_config.tsv_column
                 else content_column + "_tsv"
             )
-            hybrid_search_config.tsv_column = tsv_column_name
-            hybrid_search_column_exists = (
-                tsv_column_name in columns and columns[tsv_column_name] == "tsvector"
-            )
+            if tsv_column_name not in columns or columns[tsv_column_name] != "tsvector":
+                # mark tsv_column as empty because there is no TSV column in table
+                hybrid_search_config.tsv_column = ""
         if embedding_column not in columns:
             raise ValueError(f"Embedding column, {embedding_column}, does not exist.")
         if columns[embedding_column] != "USER-DEFINED":
@@ -252,7 +252,6 @@ class AsyncPGVectorStore(VectorStore):
             lambda_mult=lambda_mult,
             index_query_options=index_query_options,
             hybrid_search_config=hybrid_search_config,
-            hybrid_search_column_exists=hybrid_search_column_exists,
         )
 
     @property
@@ -292,7 +291,7 @@ class AsyncPGVectorStore(VectorStore):
             )
             hybrid_search_column = (
                 f', "{self.hybrid_search_config.tsv_column}"'
-                if self.hybrid_search_config and self.hybrid_search_column_exists
+                if self.hybrid_search_config and self.hybrid_search_config.tsv_column
                 else ""
             )
             insert_stmt = f'INSERT INTO "{self.schema_name}"."{self.table_name}"("{self.id_column}", "{self.content_column}", "{self.embedding_column}"{hybrid_search_column}{metadata_col_names}'
@@ -306,7 +305,7 @@ class AsyncPGVectorStore(VectorStore):
             if not embedding and can_inline_embed:
                 values_stmt = f"VALUES (:id, :content, {self.embedding_service.embed_query_inline(content)}"  # type: ignore
 
-            if self.hybrid_search_config and self.hybrid_search_column_exists:
+            if self.hybrid_search_config and self.hybrid_search_config.tsv_column:
                 lang = (
                     f"'{self.hybrid_search_config.tsv_lang}',"
                     if self.hybrid_search_config.tsv_lang
@@ -338,7 +337,7 @@ class AsyncPGVectorStore(VectorStore):
 
             upsert_stmt = f' ON CONFLICT ("{self.id_column}") DO UPDATE SET "{self.content_column}" = EXCLUDED."{self.content_column}", "{self.embedding_column}" = EXCLUDED."{self.embedding_column}"'
 
-            if self.hybrid_search_config and self.hybrid_search_column_exists:
+            if self.hybrid_search_config and self.hybrid_search_config.tsv_column:
                 upsert_stmt += f', "{self.hybrid_search_config.tsv_column}" = EXCLUDED."{self.hybrid_search_config.tsv_column}"'
 
             if self.metadata_json_column:
@@ -464,7 +463,6 @@ class AsyncPGVectorStore(VectorStore):
             fetch_k (int): Number of Documents to fetch to pass to MMR algorithm.
             lambda_mult (float): Number between 0 and 1 that determines the degree of diversity among the results with 0 corresponding to maximum diversity and 1 to minimum diversity. Defaults to 0.5.
             index_query_options (QueryOptions): Index query option.
-            hybrid_search_column_exists (bool): Defines whether the existing table has the hybrid search column.
 
         Raises:
             :class:`InvalidTextRepresentationError <asyncpg.exceptions.InvalidTextRepresentationError>`: if the `ids` data type does not match that of the `id_column`.
@@ -537,7 +535,6 @@ class AsyncPGVectorStore(VectorStore):
             fetch_k (int): Number of Documents to fetch to pass to MMR algorithm.
             lambda_mult (float): Number between 0 and 1 that determines the degree of diversity among the results with 0 corresponding to maximum diversity and 1 to minimum diversity. Defaults to 0.5.
             index_query_options (QueryOptions): Index query option.
-            hybrid_search_column_exists (bool): Defines whether the existing table has the hybrid search column.
 
         Raises:
             :class:`InvalidTextRepresentationError <asyncpg.exceptions.InvalidTextRepresentationError>`: if the `ids` data type does not match that of the `id_column`.
@@ -610,8 +607,6 @@ class AsyncPGVectorStore(VectorStore):
         filter_dict = None
         if filter and isinstance(filter, dict):
             safe_filter, filter_dict = self._create_filter_clause(filter)
-        where_filters = f"WHERE {safe_filter}" if safe_filter else ""
-        and_filters = f"AND ({safe_filter})" if safe_filter else ""
 
         inline_embed_func = getattr(self.embedding_service, "embed_query_inline", None)
         if not embedding and callable(inline_embed_func) and "query" in kwargs:
@@ -620,6 +615,7 @@ class AsyncPGVectorStore(VectorStore):
         else:
             query_embedding = f"{[float(dimension) for dimension in embedding]}"
             embedding_data_string = ":query_embedding"
+        where_filters = f"WHERE {safe_filter}" if safe_filter else ""
         dense_query_stmt = f"""SELECT {column_names}, {search_function}("{self.embedding_column}", {embedding_data_string}) as distance
         FROM "{self.schema_name}"."{self.table_name}" {where_filters} ORDER BY "{self.embedding_column}" {operator} {embedding_data_string} LIMIT :k;
         """
@@ -659,10 +655,11 @@ class AsyncPGVectorStore(VectorStore):
             )
             query_tsv = f"plainto_tsquery({lang} :fts_query)"
             param_dict["fts_query"] = fts_query
-            if self.hybrid_search_column_exists:
+            if hybrid_search_config.tsv_column:
                 content_tsv = f'"{hybrid_search_config.tsv_column}"'
             else:
                 content_tsv = f'to_tsvector({lang} "{self.content_column}")'
+            and_filters = f"AND ({safe_filter})" if safe_filter else ""
             sparse_query_stmt = f'SELECT {column_names}, ts_rank_cd({content_tsv}, {query_tsv}) as distance FROM "{self.schema_name}"."{self.table_name}" WHERE {content_tsv} @@ {query_tsv} {and_filters}  ORDER BY distance desc LIMIT {hybrid_search_config.secondary_top_k};'
             async with self.engine.connect() as conn:
                 result = await conn.execute(text(sparse_query_stmt), param_dict)
@@ -884,6 +881,41 @@ class AsyncPGVectorStore(VectorStore):
 
         return [r for i, r in enumerate(documents_with_scores) if i in mmr_selected]
 
+    async def aapply_hybrid_search_index(
+        self,
+        concurrently: bool = False,
+    ) -> None:
+        """Creates a TSV index in the vector store table if possible."""
+        if (
+            not self.hybrid_search_config
+            or not self.hybrid_search_config.index_type
+            or not self.hybrid_search_config.index_name
+        ):
+            # no index needs to be created
+            raise ValueError("Hybrid Search Config cannot create index.")
+
+        lang = (
+            f"'{self.hybrid_search_config.tsv_lang}',"
+            if self.hybrid_search_config.tsv_lang
+            else ""
+        )
+        tsv_column_name = (
+            self.hybrid_search_config.tsv_column
+            if self.hybrid_search_config.tsv_column
+            else f"to_tsvector({lang} {self.content_column})"
+        )
+        tsv_index_query = f'CREATE INDEX {"CONCURRENTLY" if concurrently else ""} {self.hybrid_search_config.index_name} ON "{self.schema_name}"."{self.table_name}" USING {self.hybrid_search_config.index_type}({tsv_column_name});'
+        if concurrently:
+            async with self.engine.connect() as conn:
+                autocommit_conn = await conn.execution_options(
+                    isolation_level="AUTOCOMMIT"
+                )
+                await autocommit_conn.execute(text(tsv_index_query))
+        else:
+            async with self.engine.connect() as conn:
+                await conn.execute(text(tsv_index_query))
+                await conn.commit()
+
     async def aapply_vector_index(
         self,
         index: BaseIndex,
@@ -913,37 +945,15 @@ class AsyncPGVectorStore(VectorStore):
             name = index.name
         stmt = f'CREATE INDEX {"CONCURRENTLY" if concurrently else ""} "{name}" ON "{self.schema_name}"."{self.table_name}" USING {index.index_type} ({self.embedding_column} {function}) {params} {filter};'
 
-        if self.hybrid_search_config:
-            if self.hybrid_search_column_exists:
-                tsv_column_name = (
-                    self.hybrid_search_config.tsv_column
-                    if self.hybrid_search_config.tsv_column
-                    else self.content_column + "_tsv"
-                )
-                tsv_column_name = f'"{tsv_column_name}"'
-            else:
-                lang = (
-                    f"'{self.hybrid_search_config.tsv_lang}',"
-                    if self.hybrid_search_config.tsv_lang
-                    else ""
-                )
-                tsv_column_name = f"to_tsvector({lang} {self.content_column})"
-            tsv_index_name = self.table_name + self.hybrid_search_config.index_name
-            tsv_index_query = f'CREATE INDEX {"CONCURRENTLY" if concurrently else ""} {tsv_index_name} ON "{self.schema_name}"."{self.table_name}" USING {self.hybrid_search_config.index_type}({tsv_column_name});'
-        else:
-            tsv_index_query = ""
-
         if concurrently:
             async with self.engine.connect() as conn:
                 autocommit_conn = await conn.execution_options(
                     isolation_level="AUTOCOMMIT"
                 )
                 await autocommit_conn.execute(text(stmt))
-                await conn.execute(text(tsv_index_query))
         else:
             async with self.engine.connect() as conn:
                 await conn.execute(text(stmt))
-                await conn.execute(text(tsv_index_query))
                 await conn.commit()
 
     async def areindex(self, index_name: Optional[str] = None) -> None:
