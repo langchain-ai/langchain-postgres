@@ -300,6 +300,8 @@ class PGEngine:
             store_metadata (bool): Whether to store metadata in the table.
                 Default: True.
             hybrid_search_config (HybridSearchConfig): Hybrid search configuration.
+                Note that queries might be slow if the hybrid search column does not exist.
+                For best hybrid search performance, consider creating a TSV column and adding GIN index.
                 Default: None.
         """
         await self._run_as_async(
@@ -355,6 +357,8 @@ class PGEngine:
             store_metadata (bool): Whether to store metadata in the table.
                 Default: True.
             hybrid_search_config (HybridSearchConfig): Hybrid search configuration.
+                Note that queries might be slow if the hybrid search column does not exist.
+                For best hybrid search performance, consider creating a TSV column and adding GIN index.
                 Default: None.
         """
         self._run_as_sync(
