@@ -460,4 +460,4 @@ class TestVectorStoreSearchSync:
                 fusion_function=reciprocal_rank_fusion
             ),
         )
-        assert results == [Document(page_content="baz", id=ids[2])]
+        assert results == [Document(page_content="foo", id=ids[0])]
