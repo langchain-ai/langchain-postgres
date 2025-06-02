@@ -133,11 +133,11 @@ class TestVectorStoreSearch:
         yield vs_custom
 
     @pytest_asyncio.fixture(scope="class")
-    async def vs_hybrid_search_without_tsv_column(
+    async def vs_hybrid_search_with_tsv_column(
         self, engine: PGEngine
     ) -> AsyncIterator[AsyncPGVectorStore]:
         hybrid_search_config = HybridSearchConfig(
-            tsv_column="",
+            tsv_column="mycontent_tsv",
             tsv_lang="pg_catalog.english",
             fts_query="my_fts_query",
             fusion_function=reciprocal_rank_fusion,
@@ -159,6 +159,7 @@ class TestVectorStoreSearch:
             ],
             metadata_json_column="mymetadata",  # ignored
             store_metadata=False,
+            hybrid_search_config=hybrid_search_config,
         )
 
         vs_custom = await AsyncPGVectorStore.create(
