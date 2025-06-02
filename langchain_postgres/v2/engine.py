@@ -300,6 +300,8 @@ class PGEngine:
             store_metadata (bool): Whether to store metadata in the table.
                 Default: True.
             hybrid_search_config (HybridSearchConfig): Hybrid search configuration.
+                Note that queries might be slow if the hybrid search column does not exist.
+                For best hybrid search performance, consider creating a TSV column and adding GIN index.
                 Default: None.
         """
         await self._run_as_async(
@@ -355,6 +357,8 @@ class PGEngine:
             store_metadata (bool): Whether to store metadata in the table.
                 Default: True.
             hybrid_search_config (HybridSearchConfig): Hybrid search configuration.
+                Note that queries might be slow if the hybrid search column does not exist.
+                For best hybrid search performance, consider creating a TSV column and adding GIN index.
                 Default: None.
         """
         self._run_as_sync(
@@ -380,7 +384,7 @@ class PGEngine:
         schema_name: str = "public",
     ) -> None:
         """Drop the vector store table"""
-        query = f'DROP TABLE "{schema_name}"."{table_name}";'
+        query = f'DROP TABLE IF EXISTS "{schema_name}"."{table_name}";'
         async with self._pool.connect() as conn:
             await conn.execute(text(query))
             await conn.commit()

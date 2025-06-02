@@ -18,94 +18,33 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  POETRY_VERSION: "1.7.1"
+  UV_FROZEN: "true"
+  UV_NO_SYNC: "true"
+  UV_VERSION: "0.5.25"
   WORKDIR: "."
 
 jobs:
   lint:
+    strategy:
+      matrix:
+        # Only lint on the min and max supported Python versions.
+        # It's extremely unlikely that there's a lint issue on any version in between
+        # that doesn't show up on the min or max versions.
+        #
+        # GitHub rate-limits how many jobs can be running at any one time.
+        # Starting new jobs is also relatively slow,
+        # so linting on fewer versions makes CI faster.
+        python-version:
+          - "3.12"
     uses:
       ./.github/workflows/_lint.yml
     with:
-      working-directory: .
+      working-directory: "."
+      python-version: ${{ matrix.python-version }}
     secrets: inherit
   test:
-    timeout-minutes: 5
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: ${{ env.WORKDIR }}
-    services:
-      postgres:
-        # ensure postgres version this stays in sync with prod database
-        # and with postgres version used in docker compose
-        # Testing with postgres that has the pg vector extension
-        image: ankane/pgvector
-        env:
-          # optional (defaults to `postgres`)
-          POSTGRES_DB: langchain_test
-          # required
-          POSTGRES_PASSWORD: langchain
-          # optional (defaults to `5432`)
-          POSTGRES_PORT: 5432
-          # optional (defaults to `postgres`)
-          POSTGRES_USER: langchain
-        ports:
-          # maps tcp port 5432 on service container to the host
-          - 5432:5432
-        # set health checks to wait until postgres has started
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 3s
-          --health-timeout 5s
-          --health-retries 10
-    strategy:
-      matrix:
-        python-version:
-          - "3.9"
-          - "3.10"
-          - "3.11"
-    name: Python ${{ matrix.python-version }} tests
-    steps:
-      - uses: actions/checkout@v3
-      - name: Set up Python ${{ matrix.python-version }} + Poetry ${{ env.POETRY_VERSION }}
-        uses: "./.github/actions/poetry_setup"
-        with:
-          python-version: ${{ matrix.python-version }}
-          poetry-version: ${{ env.POETRY_VERSION }}
-          working-directory: ${{ env.WORKDIR }}
-          cache-key: langchain-extract-all
-      - name: Test database connection
-        run: |
-          # Set up postgresql-client
-          sudo apt-get install -y postgresql-client
-          # Test psql connection
-          psql -h localhost -p 5432 -U langchain -d langchain_test -c "SELECT 1;"
-        env:
-          # postgress password is required; alternatively, you can run:
-          # `PGPASSWORD=postgres_password psql ...`
-          PGPASSWORD: langchain
-
-      - name: Install dependencies
-        shell: bash
-        run: |
-          echo "Running tests, installing dependencies with poetry..."
-          poetry install --with test,lint,typing,docs
-      - name: Run tests
-        run: make test
-        env:
-          POSTGRES_DB: langchain_test
-          POSTGRES_PASSWORD: langchain
-          POSTGRES_USER: langchain
-          POSTGRES_HOST: localhost
-          POSTGRES_PORT: 5432
-      - name: Ensure the tests did not create any additional files
-        shell: bash
-        run: |
-          set -eu
-
-          STATUS="$(git status)"
-          echo "$STATUS"
-
-          # grep will exit non-zero if the target message isn't found,
-          # and `set -e` above will cause the step to fail.
-          echo "$STATUS" | grep 'nothing to commit, working tree clean'
+    uses:
+      ./.github/workflows/_test.yml
+    with:
+      working-directory: "."
+    secrets: inherit
