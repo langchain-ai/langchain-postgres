@@ -16,9 +16,9 @@ from typing_extensions import AsyncGenerator, Generator
 POSTGRES_USER = os.environ.get("POSTGRES_USER", "langchain")
 POSTGRES_HOST = os.environ.get("POSTGRES_HOST", "localhost")
 POSTGRES_PASSWORD = os.environ.get("POSTGRES_PASSWORD", "langchain")
-POSTGRES_DB = os.environ.get("POSTGRES_DB", "langchain")
+POSTGRES_DB = os.environ.get("POSTGRES_DB", "langchain_test")
 
-POSTGRES_PORT = os.environ.get("POSTGRES_PORT", "6024")
+POSTGRES_PORT = os.environ.get("POSTGRES_PORT", "5432")
 
 DSN = (
     f"postgresql://{POSTGRES_USER}:{POSTGRES_PASSWORD}@{POSTGRES_HOST}"

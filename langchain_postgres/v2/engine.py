@@ -9,6 +9,8 @@ from sqlalchemy import text
 from sqlalchemy.engine import URL
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 
+from .hybrid_search_config import HybridSearchConfig
+
 T = TypeVar("T")
 
 
@@ -156,6 +158,7 @@ class PGEngine:
         id_column: Union[str, Column, ColumnDict] = "langchain_id",
         overwrite_existing: bool = False,
         store_metadata: bool = True,
+        hybrid_search_config: Optional[HybridSearchConfig] = None,
     ) -> None:
         """
         Create a table for saving of vectors to be used with PGVectorStore.
@@ -178,6 +181,8 @@ class PGEngine:
             overwrite_existing (bool): Whether to drop existing table. Default: False.
             store_metadata (bool): Whether to store metadata in the table.
                 Default: True.
+            hybrid_search_config (HybridSearchConfig): Hybrid search configuration.
+                Default: None.
 
         Raises:
             :class:`DuplicateTableError <asyncpg.exceptions.DuplicateTableError>`: if table already exists.
@@ -186,6 +191,7 @@ class PGEngine:
 
         schema_name = self._escape_postgres_identifier(schema_name)
         table_name = self._escape_postgres_identifier(table_name)
+        hybrid_search_default_column_name = content_column + "_tsv"
         content_column = self._escape_postgres_identifier(content_column)
         embedding_column = self._escape_postgres_identifier(embedding_column)
         if metadata_columns is None:
@@ -226,10 +232,22 @@ class PGEngine:
             id_data_type = id_column["data_type"]
             id_column_name = id_column["name"]
 
+        hybrid_search_column = ""  # Default is no TSV column for hybrid search
+        if hybrid_search_config:
+            hybrid_search_column_name = (
+                hybrid_search_config.tsv_column or hybrid_search_default_column_name
+            )
+            hybrid_search_column_name = self._escape_postgres_identifier(
+                hybrid_search_column_name
+            )
+            hybrid_search_config.tsv_column = hybrid_search_column_name
+            hybrid_search_column = f',"{self._escape_postgres_identifier(hybrid_search_column_name)}" TSVECTOR NOT NULL'
+
         query = f"""CREATE TABLE "{schema_name}"."{table_name}"(
             "{id_column_name}" {id_data_type} PRIMARY KEY,
             "{content_column}" TEXT NOT NULL,
-            "{embedding_column}" vector({vector_size}) NOT NULL"""
+            "{embedding_column}" vector({vector_size}) NOT NULL
+            {hybrid_search_column}"""
         for column in metadata_columns:
             if isinstance(column, Column):
                 nullable = "NOT NULL" if not column.nullable else ""
@@ -258,6 +276,7 @@ class PGEngine:
         id_column: Union[str, Column, ColumnDict] = "langchain_id",
         overwrite_existing: bool = False,
         store_metadata: bool = True,
+        hybrid_search_config: Optional[HybridSearchConfig] = None,
     ) -> None:
         """
         Create a table for saving of vectors to be used with PGVectorStore.
@@ -280,6 +299,10 @@ class PGEngine:
             overwrite_existing (bool): Whether to drop existing table. Default: False.
             store_metadata (bool): Whether to store metadata in the table.
                 Default: True.
+            hybrid_search_config (HybridSearchConfig): Hybrid search configuration.
+                Note that queries might be slow if the hybrid search column does not exist.
+                For best hybrid search performance, consider creating a TSV column and adding GIN index.
+                Default: None.
         """
         await self._run_as_async(
             self._ainit_vectorstore_table(
@@ -293,6 +316,7 @@ class PGEngine:
                 id_column=id_column,
                 overwrite_existing=overwrite_existing,
                 store_metadata=store_metadata,
+                hybrid_search_config=hybrid_search_config,
             )
         )
 
@@ -309,6 +333,7 @@ class PGEngine:
         id_column: Union[str, Column, ColumnDict] = "langchain_id",
         overwrite_existing: bool = False,
         store_metadata: bool = True,
+        hybrid_search_config: Optional[HybridSearchConfig] = None,
     ) -> None:
         """
         Create a table for saving of vectors to be used with PGVectorStore.
@@ -331,6 +356,10 @@ class PGEngine:
             overwrite_existing (bool): Whether to drop existing table. Default: False.
             store_metadata (bool): Whether to store metadata in the table.
                 Default: True.
+            hybrid_search_config (HybridSearchConfig): Hybrid search configuration.
+                Note that queries might be slow if the hybrid search column does not exist.
+                For best hybrid search performance, consider creating a TSV column and adding GIN index.
+                Default: None.
         """
         self._run_as_sync(
             self._ainit_vectorstore_table(
@@ -344,6 +373,7 @@ class PGEngine:
                 id_column=id_column,
                 overwrite_existing=overwrite_existing,
                 store_metadata=store_metadata,
+                hybrid_search_config=hybrid_search_config,
             )
         )
 
@@ -354,7 +384,7 @@ class PGEngine:
         schema_name: str = "public",
     ) -> None:
         """Drop the vector store table"""
-        query = f'DROP TABLE "{schema_name}"."{table_name}";'
+        query = f'DROP TABLE IF EXISTS "{schema_name}"."{table_name}";'
         async with self._pool.connect() as conn:
             await conn.execute(text(query))
             await conn.commit()

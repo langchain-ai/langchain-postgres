@@ -90,7 +90,7 @@ class TestVectorStore:
         await aexecute(engine_sync, f'DROP TABLE IF EXISTS "{DEFAULT_TABLE_SYNC}"')
         await engine_sync.close()
 
-    @pytest_asyncio.fixture(scope="class")
+    @pytest_asyncio.fixture(scope="class")  # type: ignore
     def vs_sync(self, engine_sync: PGEngine) -> Iterator[PGVectorStore]:
         engine_sync.init_vectorstore_table(DEFAULT_TABLE_SYNC, VECTOR_SIZE)
 
