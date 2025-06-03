@@ -384,7 +384,7 @@ class PGEngine:
         schema_name: str = "public",
     ) -> None:
         """Drop the vector store table"""
-        query = f'DROP TABLE "{schema_name}"."{table_name}";'
+        query = f'DROP TABLE IF EXISTS "{schema_name}"."{table_name}";'
         async with self._pool.connect() as conn:
             await conn.execute(text(query))
             await conn.commit()
