@@ -9,6 +9,7 @@ from langchain_core.vectorstores import VectorStore
 
 from .async_vectorstore import AsyncPGVectorStore
 from .engine import PGEngine
+from .hybrid_search_config import HybridSearchConfig
 from .indexes import (
     DEFAULT_DISTANCE_STRATEGY,
     BaseIndex,
@@ -59,6 +60,7 @@ class PGVectorStore(VectorStore):
         fetch_k: int = 20,
         lambda_mult: float = 0.5,
         index_query_options: Optional[QueryOptions] = None,
+        hybrid_search_config: Optional[HybridSearchConfig] = None,
     ) -> PGVectorStore:
         """Create an PGVectorStore instance.
 
@@ -78,6 +80,7 @@ class PGVectorStore(VectorStore):
             fetch_k (int): Number of Documents to fetch to pass to MMR algorithm.
             lambda_mult (float): Number between 0 and 1 that determines the degree of diversity among the results with 0 corresponding to maximum diversity and 1 to minimum diversity. Defaults to 0.5.
             index_query_options (QueryOptions): Index query option.
+            hybrid_search_config (HybridSearchConfig): Hybrid search configuration. Defaults to None.
 
         Returns:
             PGVectorStore
@@ -98,6 +101,7 @@ class PGVectorStore(VectorStore):
             fetch_k=fetch_k,
             lambda_mult=lambda_mult,
             index_query_options=index_query_options,
+            hybrid_search_config=hybrid_search_config,
         )
         vs = await engine._run_as_async(coro)
         return cls(cls.__create_key, engine, vs)
@@ -120,6 +124,7 @@ class PGVectorStore(VectorStore):
         fetch_k: int = 20,
         lambda_mult: float = 0.5,
         index_query_options: Optional[QueryOptions] = None,
+        hybrid_search_config: Optional[HybridSearchConfig] = None,
     ) -> PGVectorStore:
         """Create an PGVectorStore instance.
 
@@ -140,6 +145,7 @@ class PGVectorStore(VectorStore):
             fetch_k (int, optional): Number of Documents to fetch to pass to MMR algorithm. Defaults to 20.
             lambda_mult (float, optional): Number between 0 and 1 that determines the degree of diversity among the results with 0 corresponding to maximum diversity and 1 to minimum diversity. Defaults to 0.5.
             index_query_options (Optional[QueryOptions], optional): Index query option. Defaults to None.
+            hybrid_search_config (HybridSearchConfig): Hybrid search configuration. Defaults to None.
 
         Returns:
             PGVectorStore
@@ -160,6 +166,7 @@ class PGVectorStore(VectorStore):
             fetch_k=fetch_k,
             lambda_mult=lambda_mult,
             index_query_options=index_query_options,
+            hybrid_search_config=hybrid_search_config,
         )
         vs = engine._run_as_sync(coro)
         return cls(cls.__create_key, engine, vs)
@@ -301,6 +308,7 @@ class PGVectorStore(VectorStore):
         fetch_k: int = 20,
         lambda_mult: float = 0.5,
         index_query_options: Optional[QueryOptions] = None,
+        hybrid_search_config: Optional[HybridSearchConfig] = None,
         **kwargs: Any,
     ) -> PGVectorStore:
         """Create an PGVectorStore instance from texts.
@@ -324,6 +332,7 @@ class PGVectorStore(VectorStore):
             fetch_k (int): Number of Documents to fetch to pass to MMR algorithm.
             lambda_mult (float): Number between 0 and 1 that determines the degree of diversity among the results with 0 corresponding to maximum diversity and 1 to minimum diversity. Defaults to 0.5.
             index_query_options (QueryOptions): Index query option.
+            hybrid_search_config (HybridSearchConfig): Hybrid search configuration. Defaults to None.
 
         Raises:
             :class:`InvalidTextRepresentationError <asyncpg.exceptions.InvalidTextRepresentationError>`: if the `ids` data type does not match that of the `id_column`.
@@ -347,6 +356,7 @@ class PGVectorStore(VectorStore):
             fetch_k=fetch_k,
             lambda_mult=lambda_mult,
             index_query_options=index_query_options,
+            hybrid_search_config=hybrid_search_config,
         )
         await vs.aadd_texts(texts, metadatas=metadatas, ids=ids)
         return vs
@@ -371,6 +381,7 @@ class PGVectorStore(VectorStore):
         fetch_k: int = 20,
         lambda_mult: float = 0.5,
         index_query_options: Optional[QueryOptions] = None,
+        hybrid_search_config: Optional[HybridSearchConfig] = None,
         **kwargs: Any,
     ) -> PGVectorStore:
         """Create an PGVectorStore instance from documents.
@@ -393,6 +404,7 @@ class PGVectorStore(VectorStore):
             fetch_k (int): Number of Documents to fetch to pass to MMR algorithm.
             lambda_mult (float): Number between 0 and 1 that determines the degree of diversity among the results with 0 corresponding to maximum diversity and 1 to minimum diversity. Defaults to 0.5.
             index_query_options (QueryOptions): Index query option.
+            hybrid_search_config (HybridSearchConfig): Hybrid search configuration. Defaults to None.
 
         Raises:
             :class:`InvalidTextRepresentationError <asyncpg.exceptions.InvalidTextRepresentationError>`: if the `ids` data type does not match that of the `id_column`.
@@ -417,6 +429,7 @@ class PGVectorStore(VectorStore):
             fetch_k=fetch_k,
             lambda_mult=lambda_mult,
             index_query_options=index_query_options,
+            hybrid_search_config=hybrid_search_config,
         )
         await vs.aadd_documents(documents, ids=ids)
         return vs
@@ -442,6 +455,7 @@ class PGVectorStore(VectorStore):
         fetch_k: int = 20,
         lambda_mult: float = 0.5,
         index_query_options: Optional[QueryOptions] = None,
+        hybrid_search_config: Optional[HybridSearchConfig] = None,
         **kwargs: Any,
     ) -> PGVectorStore:
         """Create an PGVectorStore instance from texts.
@@ -465,6 +479,7 @@ class PGVectorStore(VectorStore):
             fetch_k (int): Number of Documents to fetch to pass to MMR algorithm.
             lambda_mult (float): Number between 0 and 1 that determines the degree of diversity among the results with 0 corresponding to maximum diversity and 1 to minimum diversity. Defaults to 0.5.
             index_query_options (QueryOptions): Index query option.
+            hybrid_search_config (HybridSearchConfig): Hybrid search configuration. Defaults to None.
 
         Raises:
             :class:`InvalidTextRepresentationError <asyncpg.exceptions.InvalidTextRepresentationError>`: if the `ids` data type does not match that of the `id_column`.
@@ -488,6 +503,7 @@ class PGVectorStore(VectorStore):
             fetch_k=fetch_k,
             lambda_mult=lambda_mult,
             index_query_options=index_query_options,
+            hybrid_search_config=hybrid_search_config,
             **kwargs,
         )
         vs.add_texts(texts, metadatas=metadatas, ids=ids)
@@ -513,6 +529,7 @@ class PGVectorStore(VectorStore):
         fetch_k: int = 20,
         lambda_mult: float = 0.5,
         index_query_options: Optional[QueryOptions] = None,
+        hybrid_search_config: Optional[HybridSearchConfig] = None,
         **kwargs: Any,
     ) -> PGVectorStore:
         """Create an PGVectorStore instance from documents.
@@ -535,6 +552,7 @@ class PGVectorStore(VectorStore):
             fetch_k (int): Number of Documents to fetch to pass to MMR algorithm.
             lambda_mult (float): Number between 0 and 1 that determines the degree of diversity among the results with 0 corresponding to maximum diversity and 1 to minimum diversity. Defaults to 0.5.
             index_query_options (QueryOptions): Index query option.
+            hybrid_search_config (HybridSearchConfig): Hybrid search configuration. Defaults to None.
 
         Raises:
             :class:`InvalidTextRepresentationError <asyncpg.exceptions.InvalidTextRepresentationError>`: if the `ids` data type does not match that of the `id_column`.
@@ -558,6 +576,7 @@ class PGVectorStore(VectorStore):
             fetch_k=fetch_k,
             lambda_mult=lambda_mult,
             index_query_options=index_query_options,
+            hybrid_search_config=hybrid_search_config,
             **kwargs,
         )
         vs.add_documents(documents, ids=ids)
