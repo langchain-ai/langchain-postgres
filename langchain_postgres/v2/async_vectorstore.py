@@ -296,14 +296,14 @@ class AsyncPGVectorStore(VectorStore):
             )
             insert_stmt = f'INSERT INTO "{self.schema_name}"."{self.table_name}"("{self.id_column}", "{self.content_column}", "{self.embedding_column}"{hybrid_search_column}{metadata_col_names}'
             values = {
-                "id": id,
+                "langchain_id": id,
                 "content": content,
                 "embedding": str([float(dimension) for dimension in embedding]),
             }
-            values_stmt = "VALUES (:id, :content, :embedding"
+            values_stmt = "VALUES (:langchain_id, :content, :embedding"
 
             if not embedding and can_inline_embed:
-                values_stmt = f"VALUES (:id, :content, {self.embedding_service.embed_query_inline(content)}"  # type: ignore
+                values_stmt = f"VALUES (:langchain_id, :content, {self.embedding_service.embed_query_inline(content)}"  # type: ignore
 
             if self.hybrid_search_config and self.hybrid_search_config.tsv_column:
                 lang = (
