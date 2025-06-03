@@ -9,6 +9,11 @@ from langchain_core.embeddings import DeterministicFakeEmbedding
 from sqlalchemy import text
 
 from langchain_postgres import Column, PGEngine, PGVectorStore
+from langchain_postgres.v2.hybrid_search_config import (
+    HybridSearchConfig,
+    reciprocal_rank_fusion,
+    weighted_sum_ranking,
+)
 from langchain_postgres.v2.indexes import DistanceStrategy, HNSWQueryOptions
 from tests.unit_tests.fixtures.metadata_filtering_data import (
     FILTERING_TEST_CASES,
@@ -261,6 +266,37 @@ class TestVectorStoreSearch:
         )
         assert [doc.metadata["code"] for doc in docs] == expected_ids, test_filter
 
+    async def test_asimilarity_hybrid_search(self, vs: PGVectorStore) -> None:
+        results = await vs.asimilarity_search(
+            "foo", k=1, hybrid_search_config=HybridSearchConfig()
+        )
+        assert len(results) == 1
+        assert results == [Document(page_content="foo", id=ids[0])]
+
+        results = await vs.asimilarity_search(
+            "bar",
+            k=1,
+            hybrid_search_config=HybridSearchConfig(),
+        )
+        assert results[0] == Document(page_content="bar", id=ids[1])
+
+        results = await vs.asimilarity_search(
+            "foo",
+            k=1,
+            filter={"content": {"$ne": "baz"}},
+            hybrid_search_config=HybridSearchConfig(
+                fusion_function=weighted_sum_ranking,
+                fusion_function_parameters={
+                    "primary_results_weight": 0.1,
+                    "secondary_results_weight": 0.9,
+                    "fetch_top_k": 10,
+                },
+                primary_top_k=1,
+                secondary_top_k=1,
+            ),
+        )
+        assert results == [Document(page_content="foo", id=ids[0])]
+
 
 @pytest.mark.enable_socket
 class TestVectorStoreSearchSync:
@@ -398,4 +434,30 @@ class TestVectorStoreSearchSync:
         self, vs_custom_filter_sync: PGVectorStore, test_filter: dict
     ) -> None:
         with pytest.raises((ValueError, NotImplementedError)):
-            vs_custom_filter_sync.similarity_search("meow", k=5, filter=test_filter)
+            docs = vs_custom_filter_sync.similarity_search(
+                "meow", k=5, filter=test_filter
+            )
+
+    def test_similarity_hybrid_search(self, vs_custom: PGVectorStore) -> None:
+        results = vs_custom.similarity_search(
+            "foo", k=1, hybrid_search_config=HybridSearchConfig()
+        )
+        assert len(results) == 1
+        assert results == [Document(page_content="foo", id=ids[0])]
+
+        results = vs_custom.similarity_search(
+            "bar",
+            k=1,
+            hybrid_search_config=HybridSearchConfig(),
+        )
+        assert results == [Document(page_content="bar", id=ids[1])]
+
+        results = vs_custom.similarity_search(
+            "foo",
+            k=1,
+            filter={"mycontent": {"$ne": "baz"}},
+            hybrid_search_config=HybridSearchConfig(
+                fusion_function=reciprocal_rank_fusion
+            ),
+        )
+        assert results == [Document(page_content="foo", id=ids[0])]
