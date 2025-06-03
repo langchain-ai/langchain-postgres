@@ -266,7 +266,7 @@ class TestVectorStoreSearch:
         )
         assert [doc.metadata["code"] for doc in docs] == expected_ids, test_filter
 
-    async def test_asimilarity_hybrid_search(self, vs: PGVectorStore):
+    async def test_asimilarity_hybrid_search(self, vs: PGVectorStore) -> None:
         results = await vs.asimilarity_search(
             "foo", k=1, hybrid_search_config=HybridSearchConfig()
         )
@@ -438,7 +438,7 @@ class TestVectorStoreSearchSync:
                 "meow", k=5, filter=test_filter
             )
 
-    def test_similarity_hybrid_search(self, vs_custom):
+    def test_similarity_hybrid_search(self, vs_custom: PGVectorStore) -> None:
         results = vs_custom.similarity_search(
             "foo", k=1, hybrid_search_config=HybridSearchConfig()
         )
