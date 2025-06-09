@@ -30,7 +30,7 @@ from langchain_core.documents import Document
 from langchain_core.embeddings import Embeddings
 from langchain_core.utils import get_from_dict_or_env
 from langchain_core.vectorstores import VectorStore
-from sqlalchemy import SQLColumnExpression, cast, create_engine, delete, func, select
+from sqlalchemy import SQLColumnExpression, cast, create_engine, delete, func, select, or_, case
 from sqlalchemy.dialects.postgresql import JSON, JSONB, JSONPATH, UUID, insert
 from sqlalchemy.engine import Connection, Engine
 from sqlalchemy.ext.asyncio import (
@@ -1165,10 +1165,29 @@ class PGVector(VectorStore):
 
             queried_field = self.EmbeddingStore.cmetadata[field].astext
 
-            if operator in {"$in"}:
-                return queried_field.in_([str(val) for val in filter_value])
-            elif operator in {"$nin"}:
-                return ~queried_field.in_([str(val) for val in filter_value])
+            if operator in {"$in", "$nin"}:
+                for val in filter_value:
+                    if not isinstance(val, (str, int, float, bool)):
+                        raise NotImplementedError(
+                            f"Unsupported type: {type(val)} for value: {val}"
+                        )
+                is_array = func.jsonb_typeof(self.EmbeddingStore.cmetadata[field]) == 'array'
+
+                # For array fields, Use the @> operator to check if the JSONB field contains any of the values
+                array_check = or_(*[
+                    self.EmbeddingStore.cmetadata[field].op("@>")(cast(val, JSONB))
+                    for val in filter_value
+                ])
+
+                # For non-array fields, use in_
+                non_array_check = queried_field.in_([str(val) for val in filter_value])
+
+                result = case(
+                    (is_array, array_check),
+                    else_=non_array_check
+                )
+
+                return result if operator == "$in" else ~result
             elif operator in {"$like"}:
                 return queried_field.like(filter_value)
             elif operator in {"$ilike"}:
