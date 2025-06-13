@@ -227,7 +227,7 @@ FILTERING_TEST_CASES = [
     ),
     # Test combination of $like and $and
     (
-        {"$or": [{"code": {"$like": "WH001"}}, {"code": {"$like": "EC002"}}]},
+        {"$or": [{"code": {"$like": "WH00%"}}, {"code": {"$like": "EC00%"}}]},
         ["WH001", "EC002"],
     ),
     # These involve the special operator $exists
