@@ -303,8 +303,7 @@ class AsyncPGVectorStore(VectorStore):
             values_stmt = "VALUES (:langchain_id, :content, :embedding"
 
             if not embedding and can_inline_embed:
-                # type: ignore
-                values_stmt = f"VALUES (:langchain_id, :content, {self.embedding_service.embed_query_inline(content)}"
+                values_stmt = f"VALUES (:langchain_id, :content, {self.embedding_service.embed_query_inline(content)}"  # type: ignore
 
             if self.hybrid_search_config and self.hybrid_search_config.tsv_column:
                 lang = (
