@@ -210,7 +210,7 @@ FILTERING_TEST_CASES = [
         {"name": {"$nin": ["Smart Fitness Tracker", "Stainless Steel Water Bottle"]}},
         ["WH001", "EC002"],
     ),
-    ## with numeric fields
+    # with numeric fields
     (
         {"available_quantity": {"$nin": [50, 0, 10]}},
         ["FT004"],
@@ -224,6 +224,11 @@ FILTERING_TEST_CASES = [
     (
         {"name": {"$like": "%less%"}},  # adam and jane
         ["WH001", "WB003"],
+    ),
+    # Test combination of $like and $and
+    (
+        {"$or": [{"code": {"$like": "WH001"}}, {"code": {"$like": "EC002"}}]},
+        ["WH001", "EC002"],
     ),
     # These involve the special operator $exists
     (
