@@ -1095,46 +1095,48 @@ class AsyncPGVectorStore(VectorStore):
             operator = "$eq"
             filter_value = value
 
+        suffix_id = str(uuid.uuid4()).split("-")[0]
         if operator in COMPARISONS_TO_NATIVE:
             # Then we implement an equality filter
             # native is trusted input
             native = COMPARISONS_TO_NATIVE[operator]
-            id = str(uuid.uuid4()).split("-")[0]
-            return f"{field} {native} :{field}_{id}", {f"{field}_{id}": filter_value}
+            param_name = f"{field}_{suffix_id}"
+            return f"{field} {native} :{param_name}", {f"{param_name}": filter_value}
         elif operator == "$between":
             # Use AND with two comparisons
             low, high = filter_value
-
-            return f"({field} BETWEEN :{field}_low AND :{field}_high)", {
-                f"{field}_low": low,
-                f"{field}_high": high,
+            low_param_name = f"{field}_low_{suffix_id}"
+            high_param_name = f"{field}_high_{suffix_id}"
+            return f"({field} BETWEEN :{low_param_name} AND :{high_param_name})", {
+                f"{low_param_name}": low,
+                f"{high_param_name}": high,
             }
-        elif operator in {"$in", "$nin", "$like", "$ilike"}:
+        elif operator in {"$in", "$nin"}:
             # We'll do force coercion to text
-            if operator in {"$in", "$nin"}:
-                for val in filter_value:
-                    if not isinstance(val, (str, int, float)):
-                        raise NotImplementedError(
-                            f"Unsupported type: {type(val)} for value: {val}"
-                        )
+            for val in filter_value:
+                if not isinstance(val, (str, int, float)):
+                    raise NotImplementedError(
+                        f"Unsupported type: {type(val)} for value: {val}"
+                    )
 
-                    if isinstance(val, bool):  # b/c bool is an instance of int
-                        raise NotImplementedError(
-                            f"Unsupported type: {type(val)} for value: {val}"
-                        )
-
-            if operator in {"$in"}:
-                return f"{field} = ANY(:{field}_in)", {f"{field}_in": filter_value}
-            elif operator in {"$nin"}:
-                return f"{field} <> ALL (:{field}_nin)", {f"{field}_nin": filter_value}
-            elif operator in {"$like"}:
-                return f"({field} LIKE :{field}_like)", {f"{field}_like": filter_value}
-            elif operator in {"$ilike"}:
-                return f"({field} ILIKE :{field}_ilike)", {
-                    f"{field}_ilike": filter_value
+                if isinstance(val, bool):  # b/c bool is an instance of int
+                    raise NotImplementedError(
+                        f"Unsupported type: {type(val)} for value: {val}"
+                    )
+            param_name = f"{field}_{operator.replace('$', '')}_{suffix_id}"
+            if operator == "$in":
+                return f"{field} = ANY(:{param_name})", {f"{param_name}": filter_value}
+            else:  # i.e. $nin
+                return f"{field} <> ALL (:{param_name})", {
+                    f"{param_name}": filter_value
                 }
-            else:
-                raise NotImplementedError()
+
+        elif operator in {"$like", "$ilike"}:
+            param_name = f"{field}_{operator.replace('$', '')}_{suffix_id}"
+            if operator == "$like":
+                return f"({field} LIKE :{param_name})", {f"{param_name}": filter_value}
+            else:  # i.e. $ilike
+                return f"({field} ILIKE :{param_name})", {f"{param_name}": filter_value}
         elif operator == "$exists":
             if not isinstance(filter_value, bool):
                 raise ValueError(
