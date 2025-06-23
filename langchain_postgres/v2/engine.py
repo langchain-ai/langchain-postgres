@@ -399,7 +399,7 @@ class PGEngine:
             self._adrop_table(table_name=table_name, schema_name=schema_name)
         )
 
-    async def drop_table(
+    def drop_table(
         self,
         table_name: str,
         *,
