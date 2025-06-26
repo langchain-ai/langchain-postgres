@@ -158,7 +158,7 @@ class PGEngine:
         id_column: Union[str, Column, ColumnDict] = "langchain_id",
         overwrite_existing: bool = False,
         store_metadata: bool = True,
-        use_jsonb: bool = True,
+        use_jsonb: bool = False,
         hybrid_search_config: Optional[HybridSearchConfig] = None,
     ) -> None:
         """
@@ -183,7 +183,7 @@ class PGEngine:
             store_metadata (bool): Whether to store metadata in the table.
                 Default: True.
             use_jsonb (bool): Whether to use JSONB for metadata storage.
-                Default: True.
+                Default: False.
             hybrid_search_config (HybridSearchConfig): Hybrid search configuration.
                 Default: None.
 
@@ -282,7 +282,7 @@ class PGEngine:
         id_column: Union[str, Column, ColumnDict] = "langchain_id",
         overwrite_existing: bool = False,
         store_metadata: bool = True,
-        use_jsonb: bool = True,
+        use_jsonb: bool = False,
         hybrid_search_config: Optional[HybridSearchConfig] = None,
     ) -> None:
         """
@@ -307,7 +307,7 @@ class PGEngine:
             store_metadata (bool): Whether to store metadata in the table.
                 Default: True.
             use_jsonb (bool): Whether to use JSONB for metadata storage.
-                Default: True.
+                Default: False.
             hybrid_search_config (HybridSearchConfig): Hybrid search configuration.
                 Note that queries might be slow if the hybrid search column does not exist.
                 For best hybrid search performance, consider creating a TSV column and adding GIN index.
@@ -343,7 +343,7 @@ class PGEngine:
         id_column: Union[str, Column, ColumnDict] = "langchain_id",
         overwrite_existing: bool = False,
         store_metadata: bool = True,
-        use_jsonb: bool = True,
+        use_jsonb: bool = False,
         hybrid_search_config: Optional[HybridSearchConfig] = None,
     ) -> None:
         """
@@ -368,7 +368,7 @@ class PGEngine:
             store_metadata (bool): Whether to store metadata in the table.
                 Default: True.
             use_jsonb (bool): Whether to use JSONB for metadata storage.
-                Default: True.
+                Default: False.
             hybrid_search_config (HybridSearchConfig): Hybrid search configuration.
                 Note that queries might be slow if the hybrid search column does not exist.
                 For best hybrid search performance, consider creating a TSV column and adding GIN index.
