@@ -23,7 +23,7 @@ test_watch:
 
 # Define a variable for Python and notebook files.
 lint format: PYTHON_FILES=.
-lint_diff format_diff: PYTHON_FILES=$(shell git diff --relative=. --name-only --diff-filter=d master | grep -E '\.py$$|\.ipynb$$')
+lint_diff format_diff: PYTHON_FILES=$(shell git diff --relative=. --name-only --diff-filter=d main | grep -E '\.py$$|\.ipynb$$')
 
 lint lint_diff:
 	[ "$(PYTHON_FILES)" = "" ] || uv run ruff format $(PYTHON_FILES) --diff
@@ -47,12 +47,17 @@ spell_fix:
 help:
 	@echo '===================='
 	@echo '-- LINTING --'
-	@echo 'format                       - run code formatters'
-	@echo 'lint                         - run linters'
-	@echo 'spell_check                 	- run codespell on the project'
-	@echo 'spell_fix                		- run codespell on the project and fix the errors'
+	@echo 'format                               - run code formatters on entire project and fix errors'
+	@echo 'format_diff                          - run code formatters on changed files (compared to main) and fix errors'
+	@echo 'format PYTHON_FILES=<path>           - run code formatters on specific path and fix errors'
+	@echo 'lint                                 - run linters on entire project'
+	@echo 'lint_diff                            - run linters on changed files (compared to main)'
+	@echo 'lint PYTHON_FILES=<path>             - run linters on specific path'
+	@echo 'spell_check                          - run codespell on entire project'
+	@echo 'spell_fix                            - run codespell on entire project and fix errors'
 	@echo '-- TESTS --'
-	@echo 'coverage                     - run unit tests and generate coverage report'
-	@echo 'test                         - run unit tests'
-	@echo 'test TEST_FILE=<test_file>   - run all tests in file'
+	@echo 'test                                 - run all unit tests'
+	@echo 'test TEST_FILE=<test_file>           - run unit tests from file'
+	@echo 'test_watch                           - run all unit tests (watch mode)'
+	@echo 'test_watch TEST_FILE=<test_file>     - run unit tests from file (watch mode)'
 	@echo '-- DOCUMENTATION tasks are from the top-level Makefile --'
