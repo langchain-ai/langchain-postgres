@@ -1,6 +1,6 @@
 [project]
 name = "langchain-postgres"
-version = "0.0.14"
+version = "0.0.15"
 description = "An integration package connecting Postgres and LangChain"
 authors = []
 readme = "README.md"
