@@ -158,6 +158,7 @@ class PGEngine:
         id_column: Union[str, Column, ColumnDict] = "langchain_id",
         overwrite_existing: bool = False,
         store_metadata: bool = True,
+        use_jsonb: bool = True,
         hybrid_search_config: Optional[HybridSearchConfig] = None,
     ) -> None:
         """
@@ -180,6 +181,8 @@ class PGEngine:
                 Default: "langchain_id" column name with data type UUID. Optional.
             overwrite_existing (bool): Whether to drop existing table. Default: False.
             store_metadata (bool): Whether to store metadata in the table.
+                Default: True.
+            use_jsonb (bool): Whether to use JSONB for metadata storage.
                 Default: True.
             hybrid_search_config (HybridSearchConfig): Hybrid search configuration.
                 Default: None.
@@ -256,7 +259,10 @@ class PGEngine:
                 nullable = "NOT NULL" if not column["nullable"] else ""
                 query += f',\n"{column["name"]}" {column["data_type"]} {nullable}'
         if store_metadata:
-            query += f""",\n"{metadata_json_column}" JSON"""
+            if use_jsonb:
+                query += f""",\n"{metadata_json_column}" JSONB"""
+            else:
+                query += f""",\n"{metadata_json_column}" JSON"""
         query += "\n);"
 
         async with self._pool.connect() as conn:
@@ -276,6 +282,7 @@ class PGEngine:
         id_column: Union[str, Column, ColumnDict] = "langchain_id",
         overwrite_existing: bool = False,
         store_metadata: bool = True,
+        use_jsonb: bool = True,
         hybrid_search_config: Optional[HybridSearchConfig] = None,
     ) -> None:
         """
@@ -298,6 +305,8 @@ class PGEngine:
                 Default: "langchain_id" column name with data type UUID. Optional.
             overwrite_existing (bool): Whether to drop existing table. Default: False.
             store_metadata (bool): Whether to store metadata in the table.
+                Default: True.
+            use_jsonb (bool): Whether to use JSONB for metadata storage.
                 Default: True.
             hybrid_search_config (HybridSearchConfig): Hybrid search configuration.
                 Note that queries might be slow if the hybrid search column does not exist.
@@ -316,6 +325,7 @@ class PGEngine:
                 id_column=id_column,
                 overwrite_existing=overwrite_existing,
                 store_metadata=store_metadata,
+                use_jsonb=use_jsonb,
                 hybrid_search_config=hybrid_search_config,
             )
         )
@@ -333,6 +343,7 @@ class PGEngine:
         id_column: Union[str, Column, ColumnDict] = "langchain_id",
         overwrite_existing: bool = False,
         store_metadata: bool = True,
+        use_jsonb: bool = True,
         hybrid_search_config: Optional[HybridSearchConfig] = None,
     ) -> None:
         """
@@ -356,6 +367,8 @@ class PGEngine:
             overwrite_existing (bool): Whether to drop existing table. Default: False.
             store_metadata (bool): Whether to store metadata in the table.
                 Default: True.
+            use_jsonb (bool): Whether to use JSONB for metadata storage.
+                Default: True.
             hybrid_search_config (HybridSearchConfig): Hybrid search configuration.
                 Note that queries might be slow if the hybrid search column does not exist.
                 For best hybrid search performance, consider creating a TSV column and adding GIN index.
@@ -373,6 +386,7 @@ class PGEngine:
                 id_column=id_column,
                 overwrite_existing=overwrite_existing,
                 store_metadata=store_metadata,
+                use_jsonb=use_jsonb,
                 hybrid_search_config=hybrid_search_config,
             )
         )
