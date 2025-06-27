@@ -158,8 +158,7 @@ class IVFFlatIndex(BaseIndex):
 
         if self.vector_type is VectorType.SPARSEVEC:
             raise ValueError(
-                "IVFFlatIndex does not support sparsevec, "
-                "use VECTOR or HALFVEC instead"
+                "IVFFlatIndex does not support sparsevec, use VECTOR or HALFVEC instead"
             )
 
     def index_options(self) -> str:
