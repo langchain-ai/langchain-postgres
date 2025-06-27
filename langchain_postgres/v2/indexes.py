@@ -148,6 +148,20 @@ class IVFFlatIndex(BaseIndex):
     index_type: str = "ivfflat"
     lists: int = 100
 
+    def __post_init__(self) -> None:
+        """Check if vector_type is valid.
+
+        Raises:
+            ValueError: if vector_type is SPARSEVEC
+        """
+        super().__post_init__()
+
+        if self.vector_type is VectorType.SPARSEVEC:
+            raise ValueError(
+                "IVFFlatIndex does not support sparsevec, "
+                "use VECTOR or HALFVEC instead"
+            )
+
     def index_options(self) -> str:
         """Set index query options for vector store initialization."""
         return f"(lists = {self.lists})"
