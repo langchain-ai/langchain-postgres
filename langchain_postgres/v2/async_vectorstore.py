@@ -38,6 +38,8 @@ SPECIAL_CASED_OPERATORS = {
     "$nin",
     "$between",
     "$exists",
+    "$contains_any",
+    "$contains_none",
 }
 
 TEXT_OPERATORS = {
@@ -1148,6 +1150,26 @@ class AsyncPGVectorStore(VectorStore):
                     return f"({field} IS NOT NULL)", {}
                 else:
                     return f"({field} IS NULL)", {}
+
+        elif operator in {"$contains_any", "$contains_none"}:
+            # We expect a list of numeric or text values
+            if not isinstance(filter_value, (list, tuple)):
+                raise ValueError(
+                    f"Invalid filter value for {operator}: expected list, got {type(filter_value)}"
+                )
+            for val in filter_value:
+                if isinstance(val, bool) or not isinstance(val, (str, int, float)):
+                    raise NotImplementedError(
+                        f"Unsupported type: {type(val)} for value: {val}"
+                    )
+
+            param_name = f"{field}_{operator.replace('$', '')}_{suffix_id}"
+
+            if operator == "$contains_any":
+                sql = f"({field} && :{param_name})"
+            else:  # i.e. $contains_none
+                sql = f"(NOT ({field} && :{param_name}))"
+            return sql, {param_name: filter_value}
         else:
             raise NotImplementedError()
 
