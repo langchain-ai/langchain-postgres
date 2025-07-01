@@ -256,7 +256,7 @@ class PGEngine:
                 nullable = "NOT NULL" if not column["nullable"] else ""
                 query += f',\n"{column["name"]}" {column["data_type"]} {nullable}'
         if store_metadata:
-            query += f""",\n"{metadata_json_column}" JSON"""
+            query += f""",\n"{metadata_json_column}" JSONB"""
         query += "\n);"
 
         async with self._pool.connect() as conn:
