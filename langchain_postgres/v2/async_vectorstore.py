@@ -1152,12 +1152,21 @@ class AsyncPGVectorStore(VectorStore):
                     return f"({field} IS NULL)", {}
 
         elif operator in {"$contains_any", "$contains_none"}:
-            # We expect a list of numeric or text values
-            if not isinstance(filter_value, (list, tuple)):
+            # Accept eithar a single scalar value, or a list of scalar values
+
+            if isinstance(filter_value, (str, int, float)) and not isinstance(
+                filter_value, bool
+            ):
+                values = [filter_value]
+            elif isinstance(filter_value, (list, tuple)):
+                values = list(filter_value)
+            else:
                 raise ValueError(
-                    f"Invalid filter value for {operator}: expected list, got {type(filter_value)}"
+                    f"Invalid filter value for {operator}: "
+                    f"expected list or scalar, got {type(filter_value)}"
                 )
-            for val in filter_value:
+
+            for val in values:
                 if isinstance(val, bool) or not isinstance(val, (str, int, float)):
                     raise NotImplementedError(
                         f"Unsupported type: {type(val)} for value: {val}"
@@ -1169,7 +1178,7 @@ class AsyncPGVectorStore(VectorStore):
                 sql = f"({field} && :{param_name})"
             else:  # i.e. $contains_none
                 sql = f"(NOT ({field} && :{param_name}))"
-            return sql, {param_name: filter_value}
+            return sql, {param_name: values}
         else:
             raise NotImplementedError()
 
