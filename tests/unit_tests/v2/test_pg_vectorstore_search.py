@@ -429,6 +429,20 @@ class TestVectorStoreSearchSync:
         docs = vs_custom_filter_sync.similarity_search("meow", k=5, filter=test_filter)
         assert [doc.metadata["code"] for doc in docs] == expected_ids, test_filter
 
+    @pytest.mark.parametrize("test_filter, expected_ids", FILTERING_TEST_CASES)
+    def test_sync_vectorstore_get(
+        self,
+        vs_custom_filter_sync: PGVectorStore,
+        test_filter: dict,
+        expected_ids: list[str],
+    ) -> None:
+        """Test end to end construction and filter."""
+
+        docs = vs_custom_filter_sync.get(k=5, filter=test_filter)
+        assert set([doc.metadata["code"] for doc in docs]) == set(
+            expected_ids
+        ), test_filter
+
     @pytest.mark.parametrize("test_filter", NEGATIVE_TEST_CASES)
     def test_metadata_filter_negative_tests(
         self, vs_custom_filter_sync: PGVectorStore, test_filter: dict
