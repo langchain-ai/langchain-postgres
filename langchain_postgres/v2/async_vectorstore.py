@@ -674,6 +674,69 @@ class AsyncPGVectorStore(VectorStore):
             return combined_results
         return dense_results
 
+    async def __query_collection_with_filter(
+        self,
+        *,
+        k: Optional[int] = None,
+        filter: Optional[dict] = None,
+        **kwargs: Any,
+    ) -> Sequence[RowMapping]:
+        """
+        Perform filter query on database.
+        Queries might be slow if the hybrid search column does not exist.
+        For best hybrid search performance, consider creating a TSV column
+        and adding GIN index.
+        """
+        if not k:
+            k = (
+                max(
+                    self.k,
+                    self.hybrid_search_config.primary_top_k,
+                    self.hybrid_search_config.secondary_top_k,
+                )
+                if self.hybrid_search_config
+                else self.k
+            )
+
+        columns = [
+            self.id_column,
+            self.content_column,
+            self.embedding_column,
+        ] + self.metadata_columns
+        if self.metadata_json_column:
+            columns.append(self.metadata_json_column)
+
+        column_names = ", ".join(f'"{col}"' for col in columns)
+
+        safe_filter = None
+        filter_dict = None
+        if filter and isinstance(filter, dict):
+            safe_filter, filter_dict = self._create_filter_clause(filter)
+
+        where_filters = f"WHERE {safe_filter}" if safe_filter else ""
+        dense_query_stmt = f"""SELECT {column_names}
+        FROM "{self.schema_name}"."{self.table_name}" {where_filters} LIMIT :k;
+        """
+        param_dict = {"k": k}
+        if filter_dict:
+            param_dict.update(filter_dict)
+        if self.index_query_options:
+            async with self.engine.connect() as conn:
+                # Set each query option individually
+                for query_option in self.index_query_options.to_parameter():
+                    query_options_stmt = f"SET LOCAL {query_option};"
+                    await conn.execute(text(query_options_stmt))
+                result = await conn.execute(text(dense_query_stmt), param_dict)
+                result_map = result.mappings()
+                results = result_map.fetchall()
+        else:
+            async with self.engine.connect() as conn:
+                result = await conn.execute(text(dense_query_stmt), param_dict)
+                result_map = result.mappings()
+                results = result_map.fetchall()
+
+        return results
+
     async def asimilarity_search(
         self,
         query: str,
@@ -996,6 +1059,38 @@ class AsyncPGVectorStore(VectorStore):
             result_map = result.mappings()
             results = result_map.fetchall()
         return bool(len(results) == 1)
+
+    async def aget(
+        self,
+        filter: Optional[dict] = None,
+        k: Optional[int] = None,
+        **kwargs: Any,
+    ):
+
+        results = await self.__query_collection_with_filter(
+            k=k, filter=filter, **kwargs
+        )
+
+        documents = []
+        for row in results:
+            metadata = (
+                row[self.metadata_json_column]
+                if self.metadata_json_column and row[self.metadata_json_column]
+                else {}
+            )
+            for col in self.metadata_columns:
+                metadata[col] = row[col]
+            documents.append(
+                (
+                    Document(
+                        page_content=row[self.content_column],
+                        metadata=metadata,
+                        id=str(row[self.id_column]),
+                    ),
+                )
+            )
+
+        return documents
 
     async def aget_by_ids(self, ids: Sequence[str]) -> list[Document]:
         """Get documents by ids."""
