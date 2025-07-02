@@ -682,11 +682,22 @@ class AsyncPGVectorStore(VectorStore):
         **kwargs: Any,
     ) -> Sequence[RowMapping]:
         """
-        Perform filter query on database.
-        Queries might be slow if the hybrid search column does not exist.
-        For best hybrid search performance, consider creating a TSV column
-        and adding GIN index.
+        Asynchronously query the database collection using optional filters and return matching rows.
+
+         Args:
+             k (Optional[int]): The maximum number of rows to retrieve. If not provided, a default is
+                 computed based on the hybrid search configuration or a fallback value.
+             filter (Optional[dict]): A dictionary representing filtering conditions to apply in the SQL WHERE clause.
+             **kwargs (Any): Additional keyword arguments (currently unused but accepted for extensibility).
+
+         Returns:
+             Sequence[RowMapping]: A sequence of row mappings, representing a Document
+
+         Notes:
+             - If `k` is not specified, it defaults to the maximum of the configured top-k values.
+             - If `index_query_options` are set, they are applied using `SET LOCAL` before executing the query.
         """
+
         if not k:
             k = (
                 max(
@@ -1065,7 +1076,23 @@ class AsyncPGVectorStore(VectorStore):
         filter: Optional[dict] = None,
         k: Optional[int] = None,
         **kwargs: Any,
-    ):
+    ) -> list[Document]:
+        """
+        Asynchronously retrieves documents from a collection based on an optional filter and other parameters.
+
+        This method queries the underlying collection using the provided filter and additional keyword arguments.
+        It constructs a list of `Document` objects from the query results, combining content and metadata from
+        specified columns.
+
+        Args:
+            filter (Optional[dict]): A dictionary specifying filtering criteria for the query. Defaults to None.
+            k (Optional[int]): The maximum number of documents to retrieve. If None, retrieves all matching documents.
+            **kwargs (Any): Additional keyword arguments passed to the internal query method.
+
+        Returns:
+            list[Document]: A list of `Document` instances, each containing content, metadata, and an identifier.
+
+        """
 
         results = await self.__query_collection_with_filter(
             k=k, filter=filter, **kwargs
@@ -1081,13 +1108,11 @@ class AsyncPGVectorStore(VectorStore):
             for col in self.metadata_columns:
                 metadata[col] = row[col]
             documents.append(
-                (
-                    Document(
-                        page_content=row[self.content_column],
-                        metadata=metadata,
-                        id=str(row[self.id_column]),
-                    ),
-                )
+                Document(
+                    page_content=row[self.content_column],
+                    metadata=metadata,
+                    id=str(row[self.id_column]),
+                ),
             )
 
         return documents
