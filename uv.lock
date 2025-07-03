@@ -517,13 +517,12 @@ dependencies = [
     { name = "pgvector" },
     { name = "psycopg" },
     { name = "psycopg-pool" },
-    { name = "sqlalchemy" },
+    { name = "sqlalchemy", extra = ["asyncio"] },
 ]
 
 [package.dev-dependencies]
 test = [
     { name = "codespell" },
-    { name = "greenlet" },
     { name = "langchain-tests" },
     { name = "mypy" },
     { name = "pytest" },
@@ -544,13 +543,12 @@ requires-dist = [
     { name = "pgvector", specifier = ">=0.2.5,<0.4" },
     { name = "psycopg", specifier = ">=3,<4" },
     { name = "psycopg-pool", specifier = ">=3.2.1,<4" },
-    { name = "sqlalchemy", specifier = ">=2,<3" },
+    { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2,<3" },
 ]
 
 [package.metadata.requires-dev]
 test = [
     { name = "codespell", specifier = ">=2.4.1" },
-    { name = "greenlet", specifier = ">=3.2.2" },
     { name = "langchain-tests", specifier = "==0.3.7" },
     { name = "mypy", specifier = ">=1.15.0" },
     { name = "pytest", specifier = ">=8.3.4" },
@@ -1291,6 +1289,11 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/d7/0c/cda8631405f6417208e160070b513bb752da0885e462fce42ac200c8262f/sqlalchemy-2.0.41-cp39-cp39-win32.whl", hash = "sha256:b50eab9994d64f4a823ff99a0ed28a6903224ddbe7fef56a6dd865eec9243440", size = 2089270, upload-time = "2025-05-14T18:01:41.315Z" },
     { url = "https://files.pythonhosted.org/packages/b0/1f/f68c58970d80ea5a1868ca5dc965d154a3b711f9ab06376ad9840d1475b8/sqlalchemy-2.0.41-cp39-cp39-win_amd64.whl", hash = "sha256:5e22575d169529ac3e0a120cf050ec9daa94b6a9597993d1702884f6954a7d71", size = 2113134, upload-time = "2025-05-14T18:01:42.801Z" },
     { url = "https://files.pythonhosted.org/packages/1c/fc/9ba22f01b5cdacc8f5ed0d22304718d2c758fce3fd49a5372b886a86f37c/sqlalchemy-2.0.41-py3-none-any.whl", hash = "sha256:57df5dc6fdb5ed1a88a1ed2195fd31927e705cad62dedd86b46972752a80f576", size = 1911224, upload-time = "2025-05-14T17:39:42.154Z" },
+]
+
+[package.optional-dependencies]
+asyncio = [
+    { name = "greenlet" },
 ]
 
 [[package]]

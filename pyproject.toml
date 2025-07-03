@@ -13,7 +13,7 @@ dependencies = [
     "pgvector>=0.2.5,<0.4",
     "psycopg>=3,<4",
     "psycopg-pool>=3.2.1,<4",
-    "sqlalchemy>=2,<3",
+    "sqlalchemy[asyncio]>=2,<3",
     "numpy>=1.21,<3",
 ]
 
@@ -23,7 +23,6 @@ dependencies = [
 [dependency-groups]
 test = [
     "codespell>=2.4.1",
-    "greenlet>=3.2.2",
     "langchain-tests==0.3.7",
     "mypy>=1.15.0",
     "pytest>=8.3.4",
