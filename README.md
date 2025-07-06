@@ -78,6 +78,7 @@ print(docs)
 
 > [!TIP]
 > All synchronous functions have corresponding asynchronous functions
+> PGVectorStore also supports Hybrid Search which combines multiple search strategies to improve search results.
 
 ## ChatMessageHistory
 
