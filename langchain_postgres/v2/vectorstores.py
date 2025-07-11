@@ -853,6 +853,21 @@ class PGVectorStore(VectorStore):
         """Get documents by ids."""
         return await self._engine._run_as_async(self.__vs.aget_by_ids(ids=ids))
 
+    def get_by_ids(self, ids: Sequence[str]) -> list[Document]:
+        """Get documents by ids."""
+        return self._engine._run_as_sync(self.__vs.aget_by_ids(ids=ids))
+
+    async def aget(
+        self,
+        filter: Optional[dict] = None,
+        k: Optional[int] = None,
+        **kwargs: Any,
+    ) -> list[Document]:
+
+        return await self._engine._run_as_async(
+            self.__vs.aget(filter=filter, k=k, **kwargs)
+        )
+
     def get(
         self,
         filter: Optional[dict] = None,
@@ -875,10 +890,6 @@ class PGVectorStore(VectorStore):
         """
 
         return self._engine._run_as_sync(self.__vs.aget(filter=filter, k=k, **kwargs))
-
-    def get_by_ids(self, ids: Sequence[str]) -> list[Document]:
-        """Get documents by ids."""
-        return self._engine._run_as_sync(self.__vs.aget_by_ids(ids=ids))
 
     def get_table_name(self) -> str:
         return self.__vs.table_name
