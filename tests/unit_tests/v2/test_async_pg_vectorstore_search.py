@@ -370,6 +370,19 @@ class TestVectorStoreSearch:
         )
         assert [doc.metadata["code"] for doc in docs] == expected_ids, test_filter
 
+    @pytest.mark.parametrize("test_filter, expected_ids", FILTERING_TEST_CASES)
+    async def test_vectorstore_get(
+        self,
+        vs_custom_filter: AsyncPGVectorStore,
+        test_filter: dict,
+        expected_ids: list[str],
+    ) -> None:
+        """Test end to end construction and filter."""
+        docs = await vs_custom_filter.aget(test_filter, k=5)
+        assert set([doc.metadata["code"] for doc in docs]) == set(
+            expected_ids
+        ), test_filter
+
     async def test_asimilarity_hybrid_search(self, vs: AsyncPGVectorStore) -> None:
         results = await vs.asimilarity_search(
             "foo", k=1, hybrid_search_config=HybridSearchConfig()
