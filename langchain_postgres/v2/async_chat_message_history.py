@@ -22,6 +22,7 @@ class AsyncPGChatMessageHistory(BaseChatMessageHistory):
         pool: AsyncEngine,
         session_id: str,
         table_name: str,
+        *,
         store_message: bool,
         schema_name: str = "public",
     ):
@@ -96,8 +97,8 @@ class AsyncPGChatMessageHistory(BaseChatMessageHistory):
             engine._pool,
             session_id,
             table_name,
-            store_message,
-            schema_name,
+            store_message=store_message,
+            schema_name=schema_name,
         )
 
     def _insert_query(self, message: BaseMessage) -> tuple[str, dict]:

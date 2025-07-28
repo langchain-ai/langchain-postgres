@@ -391,6 +391,8 @@ class PGEngine:
         Returns:
             None
         """
+        table_name = self._escape_postgres_identifier(table_name)
+        schema_name = self._escape_postgres_identifier(schema_name)
         create_table_query = f"""CREATE TABLE IF NOT EXISTS "{schema_name}"."{table_name}"(
             id SERIAL PRIMARY KEY,
             session_id TEXT NOT NULL,
