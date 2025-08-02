@@ -15,9 +15,10 @@ from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 from langchain_postgres import Column, PGEngine, PGVectorStore
 from tests.utils import VECTORSTORE_CONNECTION_STRING as CONNECTION_STRING
 
-DEFAULT_TABLE = "test_table" + str(uuid.uuid4())
-DEFAULT_TABLE_SYNC = "test_table_sync" + str(uuid.uuid4())
-CUSTOM_TABLE = "test-table-custom" + str(uuid.uuid4())
+DEFAULT_SCHEMA = "public"
+DEFAULT_TABLE = DEFAULT_SCHEMA + "." + "test_table" + str(uuid.uuid4())
+DEFAULT_TABLE_SYNC = DEFAULT_SCHEMA + "." +  "test_table_sync" + str(uuid.uuid4())
+CUSTOM_TABLE = DEFAULT_SCHEMA + "." + "test-table-custom" + str(uuid.uuid4())
 VECTOR_SIZE = 768
 
 embeddings_service = DeterministicFakeEmbedding(size=VECTOR_SIZE)
