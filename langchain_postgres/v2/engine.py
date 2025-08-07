@@ -150,13 +150,10 @@ class PGEngine:
         schema_name: str,
     ) -> None:
         """
-        Create a database schema for saving of vectors to be used with PGVectorStore.
+        Create a database schema.
 
         Args:
             schema_name (str): The schema name.
-
-        Raises:
-            :class:`DuplicateSchemaError <asyncpg.exceptions.DuplicateSchemaError>`: if schema already exists.
         """
         schema_name = self._escape_postgres_identifier(schema_name)
         async with self._pool.connect() as conn:
@@ -208,7 +205,7 @@ class PGEngine:
         """
 
         schema_name = self._escape_postgres_identifier(schema_name)
-        await self._ainit_database_schema(schema_name=schema_name)
+        await self._ainit_database_schema(schema_name)
 
         table_name = self._escape_postgres_identifier(table_name)
         hybrid_search_default_column_name = content_column + "_tsv"
