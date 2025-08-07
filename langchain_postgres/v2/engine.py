@@ -155,7 +155,11 @@ class PGEngine:
         Args:
             schema_name (str): The schema name.
         """
+        if not schema_name:
+            raise ValueError("Schema name cannot be empty")
+
         schema_name = self._escape_postgres_identifier(schema_name)
+        
         async with self._pool.connect() as conn:
             await conn.execute(text(f'CREATE SCHEMA IF NOT EXISTS "{schema_name}"'))
             await conn.commit()
