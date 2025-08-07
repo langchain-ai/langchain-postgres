@@ -858,5 +858,4 @@ class PGVectorStore(VectorStore):
         return self._engine._run_as_sync(self.__vs.aget_by_ids(ids=ids))
 
     def get_table_name(self) -> str:
-        """Get the table name in the format "schema_name.table_name"."""
-        return self.__vs.schema_name + "." + self.__vs.table_name
+        return self.__vs.table_name

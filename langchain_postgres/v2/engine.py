@@ -145,6 +145,25 @@ class PGEngine:
         if not isinstance(col.get("nullable"), bool):
             raise TypeError("The 'nullable' field must be a boolean.")
 
+    async def _ainit_database_schema(
+        self,
+        schema_name: str,
+    ) -> None:
+        """
+        Create a database schema.
+
+        Args:
+            schema_name (str): The schema name.
+        """
+        if not schema_name:
+            raise ValueError("Schema name cannot be empty")
+
+        schema_name = self._escape_postgres_identifier(schema_name)
+        
+        async with self._pool.connect() as conn:
+            await conn.execute(text(f'CREATE SCHEMA IF NOT EXISTS "{schema_name}"'))
+            await conn.commit()
+
     async def _ainit_vectorstore_table(
         self,
         table_name: str,
@@ -190,6 +209,8 @@ class PGEngine:
         """
 
         schema_name = self._escape_postgres_identifier(schema_name)
+        await self._ainit_database_schema(schema_name)
+
         table_name = self._escape_postgres_identifier(table_name)
         hybrid_search_default_column_name = content_column + "_tsv"
         content_column = self._escape_postgres_identifier(content_column)
