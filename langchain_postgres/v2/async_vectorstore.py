@@ -210,7 +210,7 @@ class AsyncPGVectorStore(VectorStore):
                 hybrid_search_config.tsv_column = ""
         if embedding_column not in columns:
             raise ValueError(f"Embedding column, {embedding_column}, does not exist.")
-        if columns[embedding_column] != "vector":
+        if columns[embedding_column] not in ["USER-DEFINED", "vector"]:
             raise ValueError(
                 f"Embedding column, {embedding_column}, is not type Vector."
             )
