@@ -16,7 +16,7 @@ services:
       test:
         [
           "CMD-SHELL",
-          "psql postgresql://langchain:langchain@localhost/langchain --command 'SELECT 1;' || exit 1",
+          "psql postgresql://langchain:langchain@localhost/langchain_test --command 'SELECT 1;' || exit 1",
         ]
       interval: 5s
       retries: 60

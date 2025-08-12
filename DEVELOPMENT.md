@@ -1,9 +1,11 @@
 # Setting up a Development Environment
 
 This document details how to set up a local development environment that will
-allow you to contribute changes to the project.
+allow you to contribute changes to langchain-postgres.
 
-Acquire sources and create virtualenv.
+## Setup
+
+Clone the repository and create a virtualenv:
 ```shell
 git clone https://github.com/langchain-ai/langchain-postgres
 cd langchain-postgres
@@ -11,22 +13,46 @@ uv venv --python=3.13
 source .venv/bin/activate
 ```
 
-Install package in editable mode.
+Install dependencies, required for local development:
 ```shell
-poetry install --with dev,test,lint
+uv sync --group test
 ```
 
-Start PostgreSQL/PGVector.
+Start a PostgreSQL instance with `pgvector` extension:
 ```shell
-docker run --rm -it --name pgvector-container \
-  -e POSTGRES_USER=langchain \
-  -e POSTGRES_PASSWORD=langchain \
-  -e POSTGRES_DB=langchain \
-  -p 6024:5432 pgvector/pgvector:pg16 \
-  postgres -c log_statement=all
+docker compose up -d
 ```
 
-Invoke test cases.
+## Testing
+
+Run all unit tests:
 ```shell
-pytest -vvv
+make test
+```
+
+Run unit tests from a single file:
+```shell
+make test TEST_FILE=tests/unit_tests/v2/test_engine.py
+```
+
+Run all unit tests in watch mode:
+```shell
+make test_watch
+```
+
+## Linting and formatting
+
+Format all files using `ruff` and fix errors:
+```shell
+make format
+```
+
+Lint all files using `ruff` and `mypy`:
+```shell
+make lint
+```
+
+Spell check all files and fix errors:
+```shell
+make spell_fix
 ```
