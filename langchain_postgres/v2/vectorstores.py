@@ -857,5 +857,39 @@ class PGVectorStore(VectorStore):
         """Get documents by ids."""
         return self._engine._run_as_sync(self.__vs.aget_by_ids(ids=ids))
 
+    async def aget(
+        self,
+        filter: Optional[dict] = None,
+        k: Optional[int] = None,
+        **kwargs: Any,
+    ) -> list[Document]:
+
+        return await self._engine._run_as_async(
+            self.__vs.aget(filter=filter, k=k, **kwargs)
+        )
+
+    def get(
+        self,
+        filter: Optional[dict] = None,
+        k: Optional[int] = None,
+        **kwargs: Any,
+    ) -> list[Document]:
+        """
+        Retrieve documents from the collection using optional filters and parameters.
+
+        Args:
+            filter (Optional[dict]): A dictionary specifying filtering criteria for the query. Defaults to None.
+            k (Optional[int]): The maximum number of documents to retrieve. If None, retrieves all matching documents.
+            **kwargs (Any): Additional keyword arguments passed to the asynchronous `aget` method.
+
+        Returns:
+            list[Document]: A list of `Document` instances matching the filter criteria.
+
+        Raises:
+            Any exceptions raised by the underlying asynchronous method or the sync execution engine.
+        """
+
+        return self._engine._run_as_sync(self.__vs.aget(filter=filter, k=k, **kwargs))
+
     def get_table_name(self) -> str:
         return self.__vs.table_name
