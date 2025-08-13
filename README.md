@@ -81,7 +81,7 @@ print(docs)
 
 ### Hybrid Search with PGVectorStore
 
-With PGVectorStore you can use hybrid search to provide more comprehensive and relevant search results.
+With PGVectorStore you can use hybrid search for more comprehensive and relevant search results.
 
 ```python
 hybrid_docs = await vector_store.asimilarity_search("products", k=5, hybrid_search_config=hybrid_search_config)
