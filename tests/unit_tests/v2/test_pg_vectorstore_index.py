@@ -9,6 +9,7 @@ from langchain_core.embeddings import DeterministicFakeEmbedding
 from sqlalchemy import text
 
 from langchain_postgres import PGEngine, PGVectorStore
+from langchain_postgres.v2.hybrid_search_config import HybridSearchConfig
 from langchain_postgres.v2.indexes import (
     DistanceStrategy,
     HNSWIndex,
@@ -17,12 +18,14 @@ from langchain_postgres.v2.indexes import (
 from tests.utils import VECTORSTORE_CONNECTION_STRING as CONNECTION_STRING
 
 uuid_str = str(uuid.uuid4()).replace("-", "_")
-uuid_str_sync = str(uuid.uuid4()).replace("-", "_")
+uuid_str_async = str(uuid.uuid4()).replace("-", "_")
 DEFAULT_TABLE = "default" + uuid_str
-DEFAULT_TABLE_ASYNC = "default_sync" + uuid_str_sync
+DEFAULT_HYBRID_TABLE = "hybrid" + uuid_str
+DEFAULT_TABLE_ASYNC = "default_async" + uuid_str_async
+DEFAULT_HYBRID_TABLE_ASYNC = "hybrid_async" + uuid_str_async
 CUSTOM_TABLE = "custom" + str(uuid.uuid4()).replace("-", "_")
 DEFAULT_INDEX_NAME = "index" + uuid_str
-DEFAULT_INDEX_NAME_ASYNC = "index" + uuid_str_sync
+DEFAULT_INDEX_NAME_ASYNC = "index" + uuid_str_async
 VECTOR_SIZE = 768
 
 embeddings_service = DeterministicFakeEmbedding(size=VECTOR_SIZE)
@@ -64,6 +67,7 @@ class TestIndex:
         engine = PGEngine.from_connection_string(url=CONNECTION_STRING)
         yield engine
         await aexecute(engine, f"DROP TABLE IF EXISTS {DEFAULT_TABLE}")
+        await aexecute(engine, f"DROP TABLE IF EXISTS {DEFAULT_HYBRID_TABLE}")
         await engine.close()
 
     @pytest_asyncio.fixture(scope="class")
@@ -118,6 +122,60 @@ class TestIndex:
         is_valid = vs.is_valid_index("invalid_index")
         assert not is_valid
 
+    async def test_apply_hybrid_search_index_non_hybrid_search_vs(
+        self, vs: PGVectorStore
+    ) -> None:
+        with pytest.raises(ValueError):
+            vs.apply_hybrid_search_index()
+
+    async def test_apply_hybrid_search_index_table_without_tsv_column(
+        self, engine: PGEngine, vs: PGVectorStore
+    ) -> None:
+        tsv_index_name = "tsv_index_on_table_without_tsv_column_" + uuid_str
+        vs_hybrid = PGVectorStore.create_sync(
+            engine,
+            embedding_service=embeddings_service,
+            table_name=DEFAULT_TABLE,
+            hybrid_search_config=HybridSearchConfig(index_name=tsv_index_name),
+        )
+        is_valid_index = vs_hybrid.is_valid_index(tsv_index_name)
+        assert is_valid_index == False
+        vs_hybrid.apply_hybrid_search_index()
+        assert vs_hybrid.is_valid_index(tsv_index_name)
+        vs_hybrid.drop_vector_index(tsv_index_name)
+        is_valid_index = vs_hybrid.is_valid_index(tsv_index_name)
+        assert is_valid_index == False
+
+    async def test_apply_hybrid_search_index_table_with_tsv_column(
+        self, engine: PGEngine
+    ) -> None:
+        tsv_index_name = "tsv_index_on_table_with_tsv_column_" + uuid_str
+        config = HybridSearchConfig(
+            tsv_column="tsv_column",
+            tsv_lang="pg_catalog.english",
+            index_name=tsv_index_name,
+        )
+        engine.init_vectorstore_table(
+            DEFAULT_HYBRID_TABLE,
+            VECTOR_SIZE,
+            hybrid_search_config=config,
+        )
+        vs_hybrid = PGVectorStore.create_sync(
+            engine,
+            embedding_service=embeddings_service,
+            table_name=DEFAULT_HYBRID_TABLE,
+            hybrid_search_config=config,
+        )
+        is_valid_index = vs_hybrid.is_valid_index(tsv_index_name)
+        assert is_valid_index == False
+        vs_hybrid.apply_hybrid_search_index()
+        assert vs_hybrid.is_valid_index(tsv_index_name)
+        vs_hybrid.reindex(tsv_index_name)
+        assert vs_hybrid.is_valid_index(tsv_index_name)
+        vs_hybrid.drop_vector_index(tsv_index_name)
+        is_valid_index = vs_hybrid.is_valid_index(tsv_index_name)
+        assert is_valid_index == False
+
 
 @pytest.mark.enable_socket
 @pytest.mark.asyncio(scope="class")
@@ -127,6 +185,7 @@ class TestAsyncIndex:
         engine = PGEngine.from_connection_string(url=CONNECTION_STRING)
         yield engine
         await aexecute(engine, f"DROP TABLE IF EXISTS {DEFAULT_TABLE_ASYNC}")
+        await aexecute(engine, f"DROP TABLE IF EXISTS {DEFAULT_HYBRID_TABLE_ASYNC}")
         await engine.close()
 
     @pytest_asyncio.fixture(scope="class")
@@ -179,3 +238,57 @@ class TestAsyncIndex:
     async def test_is_valid_index(self, vs: PGVectorStore) -> None:
         is_valid = await vs.ais_valid_index("invalid_index")
         assert not is_valid
+
+    async def test_aapply_hybrid_search_index_non_hybrid_search_vs(
+        self, vs: PGVectorStore
+    ) -> None:
+        with pytest.raises(ValueError):
+            await vs.aapply_hybrid_search_index()
+
+    async def test_aapply_hybrid_search_index_table_without_tsv_column(
+        self, engine: PGEngine, vs: PGVectorStore
+    ) -> None:
+        tsv_index_name = "tsv_index_on_table_without_tsv_column_" + uuid_str_async
+        vs_hybrid = await PGVectorStore.create(
+            engine,
+            embedding_service=embeddings_service,
+            table_name=DEFAULT_TABLE_ASYNC,
+            hybrid_search_config=HybridSearchConfig(index_name=tsv_index_name),
+        )
+        is_valid_index = await vs_hybrid.ais_valid_index(tsv_index_name)
+        assert is_valid_index == False
+        await vs_hybrid.aapply_hybrid_search_index()
+        assert await vs_hybrid.ais_valid_index(tsv_index_name)
+        await vs_hybrid.adrop_vector_index(tsv_index_name)
+        is_valid_index = await vs_hybrid.ais_valid_index(tsv_index_name)
+        assert is_valid_index == False
+
+    async def test_aapply_hybrid_search_index_table_with_tsv_column(
+        self, engine: PGEngine
+    ) -> None:
+        tsv_index_name = "tsv_index_on_table_with_tsv_column_" + uuid_str_async
+        config = HybridSearchConfig(
+            tsv_column="tsv_column",
+            tsv_lang="pg_catalog.english",
+            index_name=tsv_index_name,
+        )
+        await engine.ainit_vectorstore_table(
+            DEFAULT_HYBRID_TABLE_ASYNC,
+            VECTOR_SIZE,
+            hybrid_search_config=config,
+        )
+        vs_hybrid = await PGVectorStore.create(
+            engine,
+            embedding_service=embeddings_service,
+            table_name=DEFAULT_HYBRID_TABLE_ASYNC,
+            hybrid_search_config=config,
+        )
+        is_valid_index = await vs_hybrid.ais_valid_index(tsv_index_name)
+        assert is_valid_index == False
+        await vs_hybrid.aapply_hybrid_search_index()
+        assert await vs_hybrid.ais_valid_index(tsv_index_name)
+        await vs_hybrid.areindex(tsv_index_name)
+        assert await vs_hybrid.ais_valid_index(tsv_index_name)
+        await vs_hybrid.adrop_vector_index(tsv_index_name)
+        is_valid_index = await vs_hybrid.ais_valid_index(tsv_index_name)
+        assert is_valid_index == False
