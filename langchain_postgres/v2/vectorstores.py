@@ -794,14 +794,18 @@ class PGVectorStore(VectorStore):
         concurrently: bool = False,
     ) -> None:
         """Creates a TSV index in the vector store table if possible."""
-        return await self._engine._run_as_async(self.__vs.aapply_hybrid_search_index(concurrently=concurrently))
+        return await self._engine._run_as_async(
+            self.__vs.aapply_hybrid_search_index(concurrently=concurrently)
+        )
 
     def apply_hybrid_search_index(
-        self, 
+        self,
         concurrently: bool = False,
     ) -> None:
         """Creates a TSV index in the vector store table if possible."""
-        return self._engine._run_as_sync(self.__vs.aapply_hybrid_search_index(concurrently=concurrently))
+        return self._engine._run_as_sync(
+            self.__vs.aapply_hybrid_search_index(concurrently=concurrently)
+        )
 
     async def aapply_vector_index(
         self,
