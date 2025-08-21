@@ -959,7 +959,7 @@ class AsyncPGVectorStore(VectorStore):
     async def areindex(self, index_name: Optional[str] = None) -> None:
         """Re-index the vector store table."""
         index_name = index_name or self.table_name + DEFAULT_INDEX_NAME_SUFFIX
-        query = f'REINDEX INDEX "{index_name}";'
+        query = f'REINDEX INDEX "{self.schema_name}"."{index_name}";'
         async with self.engine.connect() as conn:
             await conn.execute(text(query))
             await conn.commit()
@@ -970,7 +970,7 @@ class AsyncPGVectorStore(VectorStore):
     ) -> None:
         """Drop the vector index."""
         index_name = index_name or self.table_name + DEFAULT_INDEX_NAME_SUFFIX
-        query = f'DROP INDEX IF EXISTS "{index_name}";'
+        query = f'DROP INDEX IF EXISTS "{self.schema_name}"."{index_name}";'
         async with self.engine.connect() as conn:
             await conn.execute(text(query))
             await conn.commit()
@@ -1065,8 +1065,7 @@ class AsyncPGVectorStore(VectorStore):
 
         if field.startswith("$"):
             raise ValueError(
-                f"Invalid filter condition. Expected a field but got an operator: "
-                f"{field}"
+                f"Invalid filter condition. Expected a field but got an operator: {field}"
             )
 
         # Allow [a-zA-Z0-9_], disallow $ for now until we support escape characters
@@ -1088,8 +1087,7 @@ class AsyncPGVectorStore(VectorStore):
             # Verify that that operator is an operator
             if operator not in SUPPORTED_OPERATORS:
                 raise ValueError(
-                    f"Invalid operator: {operator}. "
-                    f"Expected one of {SUPPORTED_OPERATORS}"
+                    f"Invalid operator: {operator}. Expected one of {SUPPORTED_OPERATORS}"
                 )
         else:  # Then we assume an equality operator
             operator = "$eq"
@@ -1140,8 +1138,7 @@ class AsyncPGVectorStore(VectorStore):
         elif operator == "$exists":
             if not isinstance(filter_value, bool):
                 raise ValueError(
-                    "Expected a boolean value for $exists "
-                    f"operator, but got: {filter_value}"
+                    f"Expected a boolean value for $exists operator, but got: {filter_value}"
                 )
             else:
                 if filter_value:
@@ -1173,8 +1170,7 @@ class AsyncPGVectorStore(VectorStore):
                 # Then it's an operator
                 if key.lower() not in ["$and", "$or", "$not"]:
                     raise ValueError(
-                        f"Invalid filter condition. Expected $and, $or or $not "
-                        f"but got: {key}"
+                        f"Invalid filter condition. Expected $and, $or or $not but got: {key}"
                     )
             else:
                 # Then it's a field
@@ -1197,8 +1193,7 @@ class AsyncPGVectorStore(VectorStore):
                     return filter_clause[0]
                 else:
                     raise ValueError(
-                        "Invalid filter condition. Expected a dictionary "
-                        "but got an empty dictionary"
+                        "Invalid filter condition. Expected a dictionary but got an empty dictionary"
                     )
             elif key.lower() == "$not":
                 if isinstance(value, list):
@@ -1216,13 +1211,11 @@ class AsyncPGVectorStore(VectorStore):
                     return f"(NOT {not_})", params
                 else:
                     raise ValueError(
-                        f"Invalid filter condition. Expected a dictionary "
-                        f"or a list but got: {type(value)}"
+                        f"Invalid filter condition. Expected a dictionary or a list but got: {type(value)}"
                     )
             else:
                 raise ValueError(
-                    f"Invalid filter condition. Expected $and, $or or $not "
-                    f"but got: {key}"
+                    f"Invalid filter condition. Expected $and, $or or $not but got: {key}"
                 )
         elif len(filters) > 1:
             # Then all keys have to be fields (they cannot be operators)
@@ -1245,8 +1238,7 @@ class AsyncPGVectorStore(VectorStore):
                 return and_[0]
             else:
                 raise ValueError(
-                    "Invalid filter condition. Expected a dictionary "
-                    "but got an empty dictionary"
+                    "Invalid filter condition. Expected a dictionary but got an empty dictionary"
                 )
         else:
             return "", {}
