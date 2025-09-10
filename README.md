@@ -79,6 +79,24 @@ print(docs)
 > [!TIP]
 > All synchronous functions have corresponding asynchronous functions
 
+### Hybrid Search with PGVectorStore
+
+With PGVectorStore you can use hybrid search for more comprehensive and relevant search results.
+
+```python
+vs = PGVectorStore.create_sync(
+    engine=engine,
+    table_name=TABLE_NAME,
+    embedding_service=embedding,
+    hybrid_search_config=HybridSearchConfig(
+      fusion_function=reciprocal_rank_fusion
+    ),
+)
+hybrid_docs = vector_store.similarity_search("products", k=5)
+```
+
+For a detailed guide on how to use hybrid search, see the [documentation](/examples/pg_vectorstore_how_to.ipynb#hybrid-search-with-pgvectorstore ).
+
 ## ChatMessageHistory
 
 The chat message history abstraction helps to persist chat message history
