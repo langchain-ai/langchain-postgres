@@ -4,6 +4,7 @@ from langchain_postgres.v2.hybrid_search_config import (
     reciprocal_rank_fusion,
     weighted_sum_ranking,
 )
+from langchain_postgres.v2.indexes import DistanceStrategy
 
 
 # Helper to create mock input items that mimic RowMapping for the fusion functions
@@ -22,82 +23,110 @@ def get_row(doc_id: str, score: float, content: str = "content") -> dict:
 
 class TestWeightedSumRanking:
     def test_empty_inputs(self) -> None:
+        """Tests that the function handles empty inputs gracefully."""
         results = weighted_sum_ranking([], [])
         assert results == []
 
-    def test_primary_only(self) -> None:
+    def test_primary_only_cosine_default(self) -> None:
+        """Tests ranking with only primary results using default cosine distance."""
         primary = [get_row("p1", 0.8), get_row("p2", 0.6)]
-        # Expected scores: p1 = 0.8 * 0.5 = 0.4, p2 = 0.6 * 0.5 = 0.3
-        results = weighted_sum_ranking(  # type: ignore
-            primary,  # type: ignore
-            [],
-            primary_results_weight=0.5,
-            secondary_results_weight=0.5,
-        )
+        # --- Calculation (Cosine = lower is better) ---
+        # Scores: [0.8, 0.6]. Range: 0.2. Min: 0.6.
+        # p1 norm: 1.0 - ((0.8 - 0.6) / 0.2) = 0.0
+        # p2 norm: 1.0 - ((0.6 - 0.6) / 0.2) = 1.0
+        # Weighted (0.5): p1 = 0.0, p2 = 0.5
+        # Order: p2, p1
+        results = weighted_sum_ranking(primary, [])
         assert len(results) == 2
-        assert results[0]["id_val"] == "p1"
-        assert results[0]["distance"] == pytest.approx(0.4)
-        assert results[1]["id_val"] == "p2"
-        assert results[1]["distance"] == pytest.approx(0.3)
-
-    def test_secondary_only(self) -> None:
-        secondary = [get_row("s1", 0.9), get_row("s2", 0.7)]
-        # Expected scores: s1 = 0.9 * 0.5 = 0.45, s2 = 0.7 * 0.5 = 0.35
-        results = weighted_sum_ranking(
-            [],
-            secondary,  # type: ignore
-            primary_results_weight=0.5,
-            secondary_results_weight=0.5,
-        )
-        assert len(results) == 2
-        assert results[0]["id_val"] == "s1"
-        assert results[0]["distance"] == pytest.approx(0.45)
-        assert results[1]["id_val"] == "s2"
-        assert results[1]["distance"] == pytest.approx(0.35)
-
-    def test_mixed_results_default_weights(self) -> None:
-        primary = [get_row("common", 0.8), get_row("p_only", 0.7)]
-        secondary = [get_row("common", 0.9), get_row("s_only", 0.6)]
-        # Weights are 0.5, 0.5
-        # common_score = (0.8 * 0.5) + (0.9 * 0.5) = 0.4 + 0.45 = 0.85
-        # p_only_score = (0.7 * 0.5) = 0.35
-        # s_only_score = (0.6 * 0.5) = 0.30
-        # Order: common (0.85), p_only (0.35), s_only (0.30)
-
-        results = weighted_sum_ranking(primary, secondary)  # type: ignore
-        assert len(results) == 3
-        assert results[0]["id_val"] == "common"
-        assert results[0]["distance"] == pytest.approx(0.85)
-        assert results[1]["id_val"] == "p_only"
-        assert results[1]["distance"] == pytest.approx(0.35)
-        assert results[2]["id_val"] == "s_only"
-        assert results[2]["distance"] == pytest.approx(0.30)
-
-    def test_mixed_results_custom_weights(self) -> None:
-        primary = [get_row("d1", 1.0)]  # p_w=0.2 -> 0.2
-        secondary = [get_row("d1", 0.5)]  # s_w=0.8 -> 0.4
-        # Expected: d1_score = (1.0 * 0.2) + (0.5 * 0.8) = 0.2 + 0.4 = 0.6
-
-        results = weighted_sum_ranking(
-            primary,  # type: ignore
-            secondary,  # type: ignore
-            primary_results_weight=0.2,
-            secondary_results_weight=0.8,
-        )
-        assert len(results) == 1
-        assert results[0]["id_val"] == "d1"
-        assert results[0]["distance"] == pytest.approx(0.6)
-
-    def test_fetch_top_k(self) -> None:
-        primary = [get_row(f"p{i}", (10 - i) / 10.0) for i in range(5)]
-        # Scores: 1.0, 0.9, 0.8, 0.7, 0.6
-        # Weighted (0.5): 0.5, 0.45, 0.4, 0.35, 0.3
-        results = weighted_sum_ranking(primary, [], fetch_top_k=2)  # type: ignore
-        assert len(results) == 2
-        assert results[0]["id_val"] == "p0"
+        assert results[0]["id_val"] == "p2"
         assert results[0]["distance"] == pytest.approx(0.5)
         assert results[1]["id_val"] == "p1"
-        assert results[1]["distance"] == pytest.approx(0.45)
+        assert results[1]["distance"] == pytest.approx(0.0)
+
+    def test_secondary_only(self) -> None:
+        """Tests ranking with only secondary (keyword) results."""
+        secondary = [get_row("s1", 15.0), get_row("s2", 5.0)]
+        # --- Calculation (Keyword = higher is better) ---
+        # Scores: [15.0, 5.0]. Range: 10.0. Min: 5.0.
+        # s1 norm: (15.0 - 5.0) / 10.0 = 1.0
+        # s2 norm: (5.0 - 5.0) / 10.0 = 0.0
+        # Weighted (0.5): s1 = 0.5, s2 = 0.0
+        # Order: s1, s2
+        results = weighted_sum_ranking([], secondary)
+        assert len(results) == 2
+        assert results[0]["id_val"] == "s1"
+        assert results[0]["distance"] == pytest.approx(0.5)
+        assert results[1]["id_val"] == "s2"
+        assert results[1]["distance"] == pytest.approx(0.0)
+
+    def test_mixed_results_cosine(self) -> None:
+        """Tests combining cosine (lower is better) and keyword (higher is better) scores."""
+        primary = [get_row("common", 0.8), get_row("p_only", 0.7)]
+        secondary = [get_row("common", 9.0), get_row("s_only", 6.0)]
+        # --- Calculation ---
+        # Primary norm (inverted): common=0.0, p_only=1.0
+        # Secondary norm: common=1.0, s_only=0.0
+        # Weighted (0.5):
+        # common = (0.0 * 0.5) + (1.0 * 0.5) = 0.5
+        # p_only = (1.0 * 0.5) + 0 = 0.5
+        # s_only = 0 + (0.0 * 0.5) = 0.0
+        results = weighted_sum_ranking(primary, secondary)
+        assert len(results) == 3
+        # Check that the top two results have the correct score and IDs (order may vary)
+        top_ids = {res["id_val"] for res in results[:2]}
+        assert top_ids == {"common", "p_only"}
+        assert results[0]["distance"] == pytest.approx(0.5)
+        assert results[1]["distance"] == pytest.approx(0.5)
+        assert results[2]["id_val"] == "s_only"
+        assert results[2]["distance"] == pytest.approx(0.0)
+
+    def test_primary_max_inner_product(self) -> None:
+        """Tests using MAX_INNER_PRODUCT (higher is better) for primary search."""
+        primary = [get_row("best", 0.9), get_row("worst", 0.1)]
+        secondary = [get_row("best", 20.0), get_row("worst", 5.0)]
+        # --- Calculation ---
+        # Primary norm (NOT inverted): best=1.0, worst=0.0
+        # Secondary norm: best=1.0, worst=0.0
+        # Weighted (0.5):
+        # best = (1.0 * 0.5) + (1.0 * 0.5) = 1.0
+        # worst = (0.0 * 0.5) + (0.0 * 0.5) = 0.0
+        results = weighted_sum_ranking(
+            primary, secondary, distance_strategy=DistanceStrategy.INNER_PRODUCT
+        )
+        assert len(results) == 2
+        assert results[0]["id_val"] == "best"
+        assert results[0]["distance"] == pytest.approx(1.0)
+        assert results[1]["id_val"] == "worst"
+        assert results[1]["distance"] == pytest.approx(0.0)
+
+    def test_primary_euclidean(self) -> None:
+        """Tests using EUCLIDEAN (lower is better) for primary search."""
+        primary = [get_row("closer", 10.5), get_row("farther", 25.5)]
+        secondary = [get_row("closer", 100.0), get_row("farther", 10.0)]
+        # --- Calculation ---
+        # Primary norm (inverted): closer=1.0, farther=0.0
+        # Secondary norm: closer=1.0, farther=0.0
+        # Weighted (0.5):
+        # closer = (1.0 * 0.5) + (1.0 * 0.5) = 1.0
+        # farther = (0.0 * 0.5) + (0.0 * 0.5) = 0.0
+        results = weighted_sum_ranking(
+            primary, secondary, distance_strategy=DistanceStrategy.EUCLIDEAN
+        )
+        assert len(results) == 2
+        assert results[0]["id_val"] == "closer"
+        assert results[0]["distance"] == pytest.approx(1.0)
+        assert results[1]["id_val"] == "farther"
+        assert results[1]["distance"] == pytest.approx(0.0)
+
+    def test_fetch_top_k(self) -> None:
+        """Tests that fetch_top_k correctly limits the number of results."""
+        primary = [get_row(f"p{i}", (10 - i) / 10.0) for i in range(5)]
+        # p0=1.0, p1=0.9, p2=0.8, p3=0.7, p4=0.6
+        # The best scores (lowest distance) are p4 and p3
+        results = weighted_sum_ranking(primary, [], fetch_top_k=2)
+        assert len(results) == 2
+        assert results[0]["id_val"] == "p4"  # Has the best normalized score
+        assert results[1]["id_val"] == "p3"
 
 
 class TestReciprocalRankFusion:
@@ -224,6 +253,6 @@ class TestReciprocalRankFusion:
         results = weighted_sum_ranking(primary, secondary)  # type: ignore
         assert len(results) == 2
         assert results[0]["id_val"] == "docB"
-        assert results[0]["distance"] == pytest.approx(0.75)
+        assert results[0]["distance"] == pytest.approx(1.0)
         assert results[1]["id_val"] == "docA"
-        assert results[1]["distance"] == pytest.approx(0.55)
+        assert results[1]["distance"] == pytest.approx(0.0)
