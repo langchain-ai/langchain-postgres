@@ -115,7 +115,7 @@ class TestReciprocalRankFusion:
         # Sorted order: p2 (0.6) -> rank 0; p1 (0.8) -> rank 1
         # p2_score = 1 / (0 + 60)
         # p1_score = 1 / (1 + 60)
-        results = reciprocal_rank_fusion(primary, [], rrf_k=rrf_k)
+        results = reciprocal_rank_fusion(primary, [], rrf_k=rrf_k)  # type: ignore
         assert len(results) == 2
         assert results[0]["id_val"] == "p2"
         assert results[0]["distance"] == pytest.approx(1.0 / (0 + rrf_k))
@@ -128,7 +128,7 @@ class TestReciprocalRankFusion:
         rrf_k = 60
         # --- Calculation (Keyword: higher is better) ---
         # Sorted order: s1 (0.9) -> rank 0; s2 (0.7) -> rank 1
-        results = reciprocal_rank_fusion([], secondary, rrf_k=rrf_k)
+        results = reciprocal_rank_fusion([], secondary, rrf_k=rrf_k)  # type: ignore
         assert len(results) == 2
         assert results[0]["id_val"] == "s1"
         assert results[0]["distance"] == pytest.approx(1.0 / (0 + rrf_k))
@@ -150,7 +150,7 @@ class TestReciprocalRankFusion:
         # common: rank 1 in P (1/61) + rank 0 in S (1/60) -> highest score
         # p_only: rank 0 in P (1/60)
         # s_only: rank 1 in S (1/61)
-        results = reciprocal_rank_fusion(primary, secondary, rrf_k=rrf_k)
+        results = reciprocal_rank_fusion(primary, secondary, rrf_k=rrf_k)  # type: ignore
         assert len(results) == 3
         assert results[0]["id_val"] == "common"
         assert results[0]["distance"] == pytest.approx(1 / 61 + 1 / 60)
@@ -165,7 +165,7 @@ class TestReciprocalRankFusion:
         primary = [get_row(f"p{i}", (10 - i) / 10.0) for i in range(5)]
         # Scores: [1.0, 0.9, 0.8, 0.7, 0.6]
         # Sorted order: p4 (0.6), p3 (0.7), p2 (0.8), ...
-        results = reciprocal_rank_fusion(primary, [], fetch_top_k=2)
+        results = reciprocal_rank_fusion(primary, [], fetch_top_k=2)  # type: ignore
         assert len(results) == 2
         assert results[0]["id_val"] == "p4"
         assert results[1]["id_val"] == "p3"
@@ -196,7 +196,7 @@ class TestReciprocalRankFusion:
         # docC_score = 1/(0+1) [P] + 1/(0+1) [S] = 2.0
         # docB_score = 1/(1+1) [P] + 1/(1+1) [S] = 1.0
         # docA_score = 1/(2+1) [P] + 1/(2+1) [S] = 2/3
-        results = reciprocal_rank_fusion(primary, secondary, rrf_k=rrf_k)
+        results = reciprocal_rank_fusion(primary, secondary, rrf_k=rrf_k)  # type: ignore
         assert len(results) == 3
         assert results[0]["id_val"] == "docC"
         assert results[0]["distance"] == pytest.approx(2.0)
@@ -216,8 +216,8 @@ class TestReciprocalRankFusion:
         # best: rank 0 in P + rank 0 in S -> 1/10 + 1/10 = 0.2
         # worst: rank 1 in P + rank 1 in S -> 1/11 + 1/11
         results = reciprocal_rank_fusion(
-            primary,
-            secondary,
+            primary,  # type: ignore
+            secondary,  # type: ignore
             rrf_k=rrf_k,
             distance_strategy=DistanceStrategy.INNER_PRODUCT,
         )
@@ -241,8 +241,8 @@ class TestReciprocalRankFusion:
         # closer: rank 0 in P + rank 0 in S -> 1/10 + 1/10 = 0.2
         # farther: rank 1 in P + rank 1 in S -> 1/11 + 1/11
         results = reciprocal_rank_fusion(
-            primary,
-            secondary,
+            primary,  # type: ignore
+            secondary,  # type: ignore
             rrf_k=rrf_k,
             distance_strategy=DistanceStrategy.EUCLIDEAN,
         )
@@ -258,7 +258,7 @@ class TestReciprocalRankFusion:
         primary = [get_row("p1", 0.5), get_row("p2", 0.5)]
         rrf_k = 60
         # Expected order (stable sort): p1 (rank 0), p2 (rank 1)
-        results = reciprocal_rank_fusion(primary, [])
+        results = reciprocal_rank_fusion(primary, [])  # type: ignore
         assert results[0]["id_val"] == "p1"
         assert results[0]["distance"] == pytest.approx(1 / 60)
         assert results[1]["id_val"] == "p2"
