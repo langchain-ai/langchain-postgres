@@ -71,7 +71,7 @@ def weighted_sum_ranking(
     distance_strategy = kwargs.get("distance_strategy", DistanceStrategy.COSINE_DISTANCE)
     is_primary_distance = distance_strategy != DistanceStrategy.INNER_PRODUCT
 
-    # 1. Normalize both sets of results onto a 0-1 scale
+    # Normalize both sets of results onto a 0-1 scale
     normalized_primary = _normalize_scores(
         [dict(row) for row in primary_search_results],
         is_distance_metric=is_primary_distance
@@ -89,7 +89,7 @@ def weighted_sum_ranking(
     # Process primary results
     for item in normalized_primary:
         doc_id = str(list(item.values())[0])
-        # Overwrite the 'distance' key with the weighted primary score
+        # Set the 'distance' key with the weighted primary score
         item["distance"] = item["normalized_score"] * primary_results_weight
         weighted_scores[doc_id] = item
 
