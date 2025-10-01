@@ -4,6 +4,41 @@ from typing import Any, Callable, Optional, Sequence
 
 from sqlalchemy import RowMapping
 
+from .indexes import DistanceStrategy
+
+from typing import Any, Sequence
+
+def _normalize_scores(
+    results: Sequence[RowMapping], is_distance_metric: bool
+) -> list[dict[str, Any]]:
+    """Normalizes scores to a 0-1 scale, where 1 is best."""
+    if not results:
+        return []
+
+    # Get scores from the last column of each result
+    scores = [list(item.values())[-1] for item in results]
+    min_score, max_score = min(scores), max(scores)
+    score_range = max_score - min_score
+
+    if score_range == 0:
+        # All documents are of the highest quality (1.0)
+        for item in results:
+            item["normalized_score"] = 1.0
+        return list(results)
+
+    for item in results:
+        # Access the score again from the last column for calculation
+        score = list(item.values())[-1]
+        normalized = (score - min_score) / score_range
+        if is_distance_metric:
+            # For distance, a lower score is better, so we invert the result.
+            item["normalized_score"] = 1.0 - normalized
+        else:
+            # For similarity (like keyword search), a higher score is better.
+            item["normalized_score"] = normalized
+
+    return list(results)
+
 
 def weighted_sum_ranking(
     primary_search_results: Sequence[RowMapping],
@@ -11,6 +46,7 @@ def weighted_sum_ranking(
     primary_results_weight: float = 0.5,
     secondary_results_weight: float = 0.5,
     fetch_top_k: int = 4,
+    **kwargs: Any,
 ) -> Sequence[dict[str, Any]]:
     """
     Ranks documents using a weighted sum of scores from two sources.
@@ -32,35 +68,51 @@ def weighted_sum_ranking(
         descending order.
     """
 
+    distance_strategy = kwargs.get("distance_strategy", DistanceStrategy.COSINE_DISTANCE)
+    is_primary_distance = distance_strategy != DistanceStrategy.INNER_PRODUCT
+
+    # 1. Normalize both sets of results onto a 0-1 scale
+    normalized_primary = _normalize_scores(
+        [dict(row) for row in primary_search_results],
+        is_distance_metric=is_primary_distance
+    )
+
+    # Keyword search relevance is a similarity score (higher is better)
+    normalized_secondary = _normalize_scores(
+        [dict(row) for row in secondary_search_results],
+        is_distance_metric=False
+    )
+
     # stores computed metric with provided distance metric and weights
     weighted_scores: dict[str, dict[str, Any]] = {}
 
-    # Process results from primary source
-    for row in primary_search_results:
-        values = list(row.values())
-        doc_id = str(values[0])  # first value is doc_id
-        distance = float(values[-1])  # type: ignore # last value is distance
-        row_values = dict(row)
-        row_values["distance"] = primary_results_weight * distance
-        weighted_scores[doc_id] = row_values
+    # Process primary results
+    for item in normalized_primary:
+        doc_id = str(list(item.values())[0])
+        # Overwrite the 'distance' key with the weighted primary score
+        item["distance"] = item["normalized_score"] * primary_results_weight
+        weighted_scores[doc_id] = item
 
-    # Process results from secondary source,
-    # adding to existing scores or creating new ones
-    for row in secondary_search_results:
-        values = list(row.values())
-        doc_id = str(values[0])  # first value is doc_id
-        distance = float(values[-1])  # type: ignore # last value is distance
-        primary_score = (
-            weighted_scores[doc_id]["distance"] if doc_id in weighted_scores else 0.0
-        )
-        row_values = dict(row)
-        row_values["distance"] = distance * secondary_results_weight + primary_score
-        weighted_scores[doc_id] = row_values
+    # Process secondary results
+    for item in normalized_secondary:
+        doc_id = str(list(item.values())[0])
+        secondary_weighted_score = item["normalized_score"] * secondary_results_weight
 
-    # Sort the results by weighted score in descending order
+        if doc_id in weighted_scores:
+            # Add to the existing 'distance' score
+            weighted_scores[doc_id]["distance"] += secondary_weighted_score
+        else:
+            # Set the 'distance' key for the new item
+            item["distance"] = secondary_weighted_score
+            weighted_scores[doc_id] = item
+
     ranked_results = sorted(
         weighted_scores.values(), key=lambda item: item["distance"], reverse=True
     )
+
+    for result in ranked_results:
+        result.pop("normalized_score", None)
+
     return ranked_results[:fetch_top_k]
 
 
