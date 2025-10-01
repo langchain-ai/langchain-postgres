@@ -6,7 +6,6 @@ from sqlalchemy import RowMapping
 
 from .indexes import DistanceStrategy
 
-from typing import Any, Sequence
 
 def _normalize_scores(
     results: Sequence[RowMapping], is_distance_metric: bool
@@ -68,19 +67,20 @@ def weighted_sum_ranking(
         descending order.
     """
 
-    distance_strategy = kwargs.get("distance_strategy", DistanceStrategy.COSINE_DISTANCE)
+    distance_strategy = kwargs.get(
+        "distance_strategy", DistanceStrategy.COSINE_DISTANCE
+    )
     is_primary_distance = distance_strategy != DistanceStrategy.INNER_PRODUCT
 
     # Normalize both sets of results onto a 0-1 scale
     normalized_primary = _normalize_scores(
         [dict(row) for row in primary_search_results],
-        is_distance_metric=is_primary_distance
+        is_distance_metric=is_primary_distance,
     )
 
     # Keyword search relevance is a similarity score (higher is better)
     normalized_secondary = _normalize_scores(
-        [dict(row) for row in secondary_search_results],
-        is_distance_metric=False
+        [dict(row) for row in secondary_search_results], is_distance_metric=False
     )
 
     # stores computed metric with provided distance metric and weights

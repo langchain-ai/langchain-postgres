@@ -670,7 +670,7 @@ class AsyncPGVectorStore(VectorStore):
                 dense_results,
                 sparse_results,
                 **hybrid_search_config.fusion_function_parameters,
-                distance_strategy=self.distance_strategy
+                distance_strategy=self.distance_strategy,
             )
             return combined_results
         return dense_results
