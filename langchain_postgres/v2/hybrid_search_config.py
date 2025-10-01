@@ -9,7 +9,7 @@ from .indexes import DistanceStrategy
 
 def _normalize_scores(
     results: Sequence[RowMapping], is_distance_metric: bool
-) -> list[dict[str, Any]]:
+) -> Sequence[RowMapping]:
     """Normalizes scores to a 0-1 scale, where 1 is best."""
     if not results:
         return []

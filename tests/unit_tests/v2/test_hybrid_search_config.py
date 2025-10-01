@@ -36,7 +36,10 @@ class TestWeightedSumRanking:
         # p2 norm: 1.0 - ((0.6 - 0.6) / 0.2) = 1.0
         # Weighted (0.5): p1 = 0.0, p2 = 0.5
         # Order: p2, p1
-        results = weighted_sum_ranking(primary, [])
+        results = weighted_sum_ranking(
+            primary,  # type: ignore
+            [],
+        )
         assert len(results) == 2
         assert results[0]["id_val"] == "p2"
         assert results[0]["distance"] == pytest.approx(0.5)
@@ -52,7 +55,10 @@ class TestWeightedSumRanking:
         # s2 norm: (5.0 - 5.0) / 10.0 = 0.0
         # Weighted (0.5): s1 = 0.5, s2 = 0.0
         # Order: s1, s2
-        results = weighted_sum_ranking([], secondary)
+        results = weighted_sum_ranking(
+            [],
+            secondary,  # type: ignore
+        )
         assert len(results) == 2
         assert results[0]["id_val"] == "s1"
         assert results[0]["distance"] == pytest.approx(0.5)
@@ -70,7 +76,10 @@ class TestWeightedSumRanking:
         # common = (0.0 * 0.5) + (1.0 * 0.5) = 0.5
         # p_only = (1.0 * 0.5) + 0 = 0.5
         # s_only = 0 + (0.0 * 0.5) = 0.0
-        results = weighted_sum_ranking(primary, secondary)
+        results = weighted_sum_ranking(
+            primary,  # type: ignore
+            secondary,  # type: ignore
+        )
         assert len(results) == 3
         # Check that the top two results have the correct score and IDs (order may vary)
         top_ids = {res["id_val"] for res in results[:2]}
@@ -91,7 +100,9 @@ class TestWeightedSumRanking:
         # best = (1.0 * 0.5) + (1.0 * 0.5) = 1.0
         # worst = (0.0 * 0.5) + (0.0 * 0.5) = 0.0
         results = weighted_sum_ranking(
-            primary, secondary, distance_strategy=DistanceStrategy.INNER_PRODUCT
+            primary,  # type: ignore
+            secondary,  # type: ignore
+            distance_strategy=DistanceStrategy.INNER_PRODUCT,
         )
         assert len(results) == 2
         assert results[0]["id_val"] == "best"
@@ -110,7 +121,9 @@ class TestWeightedSumRanking:
         # closer = (1.0 * 0.5) + (1.0 * 0.5) = 1.0
         # farther = (0.0 * 0.5) + (0.0 * 0.5) = 0.0
         results = weighted_sum_ranking(
-            primary, secondary, distance_strategy=DistanceStrategy.EUCLIDEAN
+            primary,  # type: ignore
+            secondary,  # type: ignore
+            distance_strategy=DistanceStrategy.EUCLIDEAN,
         )
         assert len(results) == 2
         assert results[0]["id_val"] == "closer"
@@ -123,7 +136,11 @@ class TestWeightedSumRanking:
         primary = [get_row(f"p{i}", (10 - i) / 10.0) for i in range(5)]
         # p0=1.0, p1=0.9, p2=0.8, p3=0.7, p4=0.6
         # The best scores (lowest distance) are p4 and p3
-        results = weighted_sum_ranking(primary, [], fetch_top_k=2)
+        results = weighted_sum_ranking(
+            primary,  # type: ignore
+            [],
+            fetch_top_k=2,
+        )
         assert len(results) == 2
         assert results[0]["id_val"] == "p4"  # Has the best normalized score
         assert results[1]["id_val"] == "p3"
