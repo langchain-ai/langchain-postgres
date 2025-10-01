@@ -1,4 +1,7 @@
+from typing import cast
+
 import pytest
+from sqlalchemy import RowMapping
 
 from langchain_postgres.v2.hybrid_search_config import (
     reciprocal_rank_fusion,
@@ -8,7 +11,7 @@ from langchain_postgres.v2.indexes import DistanceStrategy
 
 
 # Helper to create mock input items that mimic RowMapping for the fusion functions
-def get_row(doc_id: str, score: float, content: str = "content") -> dict:
+def get_row(doc_id: str, score: float, content: str = "content") -> RowMapping:
     """
     Simulates a RowMapping-like dictionary.
     The fusion functions expect to extract doc_id as the first value and
@@ -18,7 +21,8 @@ def get_row(doc_id: str, score: float, content: str = "content") -> dict:
     # Python dicts maintain insertion order (Python 3.7+).
     # This structure ensures list(row.values())[0] is doc_id and
     # list(row.values())[-1] is score.
-    return {"id_val": doc_id, "content_field": content, "distance": score}
+    row_dict = {"id_val": doc_id, "content_field": content, "distance": score}
+    return cast(RowMapping, row_dict)
 
 
 class TestWeightedSumRanking:
@@ -263,3 +267,20 @@ class TestReciprocalRankFusion:
         assert results[0]["distance"] == pytest.approx(1 / 60)
         assert results[1]["id_val"] == "p2"
         assert results[1]["distance"] == pytest.approx(1 / 61)
+
+    def test_reordering_from_inputs_weighted_sum(self) -> None:
+        """Tests that the fused ranking can be different from the inputs."""
+        primary = [get_row("docA", 0.9), get_row("docB", 0.7)]
+        secondary = [get_row("docB", 0.8), get_row("docA", 0.2)]
+        # --- Calculation with normalization ---
+        # Primary norm (inverted): docA=0.0, docB=1.0
+        # Secondary norm: docB=1.0, docA=0.0
+        # Weighted (0.5/0.5):
+        # docA_score = (0.0 * 0.5) + (0.0 * 0.5) = 0.0
+        # docB_score = (1.0 * 0.5) + (1.0 * 0.5) = 1.0
+        results = weighted_sum_ranking(primary, secondary)
+        assert len(results) == 2
+        assert results[0]["id_val"] == "docB"
+        assert results[0]["distance"] == pytest.approx(1.0)
+        assert results[1]["id_val"] == "docA"
+        assert results[1]["distance"] == pytest.approx(0.0)
