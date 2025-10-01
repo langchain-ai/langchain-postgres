@@ -121,6 +121,7 @@ def reciprocal_rank_fusion(
     secondary_search_results: Sequence[RowMapping],
     rrf_k: float = 60,
     fetch_top_k: int = 4,
+    **kwargs: Any,
 ) -> Sequence[dict[str, Any]]:
     """
     Ranks documents using Reciprocal Rank Fusion (RRF) of scores from two sources.
