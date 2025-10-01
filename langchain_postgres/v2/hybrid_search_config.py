@@ -8,14 +8,14 @@ from .indexes import DistanceStrategy
 
 
 def _normalize_scores(
-    results: Sequence[RowMapping], is_distance_metric: bool
-) -> Sequence[RowMapping]:
+    results: Sequence[dict[str, Any]], is_distance_metric: bool
+) -> Sequence[dict[str, Any]]:
     """Normalizes scores to a 0-1 scale, where 1 is best."""
     if not results:
         return []
 
     # Get scores from the last column of each result
-    scores = [list(item.values())[-1] for item in results]
+    scores = [float(list(item.values())[-1]) for item in results]
     min_score, max_score = min(scores), max(scores)
     score_range = max_score - min_score
 
