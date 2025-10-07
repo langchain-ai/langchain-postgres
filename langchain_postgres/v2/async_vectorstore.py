@@ -592,7 +592,7 @@ class AsyncPGVectorStore(VectorStore):
     
         operator = self.distance_strategy.operator
         search_function = self.distance_strategy.search_function
-    
+
         columns = [
             self.id_column,
             self.content_column,
@@ -600,14 +600,14 @@ class AsyncPGVectorStore(VectorStore):
         ] + self.metadata_columns
         if self.metadata_json_column:
             columns.append(self.metadata_json_column)
-    
+
         column_names = ", ".join(f'"{col}"' for col in columns)
-    
+
         safe_filter = None
         filter_dict = None
         if filter and isinstance(filter, dict):
             safe_filter, filter_dict = self._create_filter_clause(filter)
-    
+
         inline_embed_func = getattr(self.embedding_service, "embed_query_inline", None)
         if not embedding and callable(inline_embed_func) and "query" in kwargs:
             query_embedding = self.embedding_service.embed_query_inline(kwargs["query"])  # type: ignore
@@ -662,7 +662,7 @@ class AsyncPGVectorStore(VectorStore):
                 result = await conn.execute(text(sparse_query_stmt), param_dict)
                 result_map = result.mappings()
                 sparse_results = result_map.fetchall()
-    
+
             combined_results = hybrid_search_config.fusion_function(
                 dense_results,
                 sparse_results,
