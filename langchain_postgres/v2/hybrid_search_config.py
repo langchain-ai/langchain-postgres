@@ -140,35 +140,45 @@ def reciprocal_rank_fusion(
         A list of (document_id, rrf_score) tuples, sorted by rrf_score
         in descending order.
     """
+    distance_strategy = kwargs.get(
+        "distance_strategy", DistanceStrategy.COSINE_DISTANCE
+    )
     rrf_scores: dict[str, dict[str, Any]] = {}
 
     # Process results from primary source
-    for rank, row in enumerate(
-        sorted(primary_search_results, key=lambda item: item["distance"], reverse=True)
-    ):
-        values = list(row.values())
-        doc_id = str(values[0])
-        row_values = dict(row)
-        primary_score = rrf_scores[doc_id]["distance"] if doc_id in rrf_scores else 0.0
-        primary_score += 1.0 / (rank + rrf_k)
-        row_values["distance"] = primary_score
-        rrf_scores[doc_id] = row_values
+    # Determine sorting order based on the vector distance strategy.
+    # For COSINE & EUCLIDEAN(distance), we sort ascending (reverse=False).
+    # For INNER_PRODUCT (similarity), we sort descending (reverse=True).
+    is_similarity_metric = distance_strategy == DistanceStrategy.INNER_PRODUCT
+    sorted_primary = sorted(
+        primary_search_results,
+        key=lambda item: item["distance"],
+        reverse=is_similarity_metric,
+    )
+
+    for rank, row in enumerate(sorted_primary):
+        doc_id = str(list(row.values())[0])
+        if doc_id not in rrf_scores:
+            rrf_scores[doc_id] = dict(row)
+            rrf_scores[doc_id]["distance"] = 0.0
+        # Add the "normalized" rank score
+        rrf_scores[doc_id]["distance"] += 1.0 / (rank + rrf_k)
 
     # Process results from secondary source
-    for rank, row in enumerate(
-        sorted(
-            secondary_search_results, key=lambda item: item["distance"], reverse=True
-        )
-    ):
-        values = list(row.values())
-        doc_id = str(values[0])
-        row_values = dict(row)
-        secondary_score = (
-            rrf_scores[doc_id]["distance"] if doc_id in rrf_scores else 0.0
-        )
-        secondary_score += 1.0 / (rank + rrf_k)
-        row_values["distance"] = secondary_score
-        rrf_scores[doc_id] = row_values
+    # Keyword search relevance is always "higher is better" -> sort descending
+    sorted_secondary = sorted(
+        secondary_search_results,
+        key=lambda item: item["distance"],
+        reverse=True,
+    )
+
+    for rank, row in enumerate(sorted_secondary):
+        doc_id = str(list(row.values())[0])
+        if doc_id not in rrf_scores:
+            rrf_scores[doc_id] = dict(row)
+            rrf_scores[doc_id]["distance"] = 0.0
+        # Add the rank score from this list to the existing score
+        rrf_scores[doc_id]["distance"] += 1.0 / (rank + rrf_k)
 
     # Sort the results by rrf score in descending order
     # Sort the results by weighted score in descending order
