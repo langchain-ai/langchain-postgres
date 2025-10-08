@@ -296,11 +296,10 @@ class TestReciprocalRankFusion:
             distance_strategy=DistanceStrategy.EUCLIDEAN,
         )
         assert len(results) == 2
-        assert results[0]["id_val"] == "docB"
-        assert results[0]["distance"] == pytest.approx(1.0)
-        assert results[1]["id_val"] == "docA"
-        assert results[1]["distance"] == pytest.approx(0.0)
-
+        assert results[0]["id_val"] == "closer"
+        assert results[0]["distance"] == pytest.approx(0.2)
+        assert results[1]["id_val"] == "farther"
+        assert results[1]["distance"] == pytest.approx(2.0 / 11.0)
 
     def test_rrf_with_identical_scores(self) -> None:
         """Tests that stable sort is preserved for identical scores."""
