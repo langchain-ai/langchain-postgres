@@ -583,13 +583,13 @@ class AsyncPGVectorStore(VectorStore):
         hybrid_search_config = kwargs.get(
             "hybrid_search_config", self.hybrid_search_config
         )
-    
+
         final_k = k if k is not None else self.k
-    
+
         dense_limit = final_k
         if hybrid_search_config:
             dense_limit = hybrid_search_config.primary_top_k
-    
+
         operator = self.distance_strategy.operator
         search_function = self.distance_strategy.search_function
 
@@ -636,7 +636,7 @@ class AsyncPGVectorStore(VectorStore):
                 result = await conn.execute(text(dense_query_stmt), param_dict)
                 result_map = result.mappings()
                 dense_results = result_map.fetchall()
-    
+
         fts_query = (
             hybrid_search_config.fts_query
             if hybrid_search_config and hybrid_search_config.fts_query
