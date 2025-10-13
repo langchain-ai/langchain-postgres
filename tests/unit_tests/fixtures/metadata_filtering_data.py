@@ -239,6 +239,179 @@ FILTERING_TEST_CASES = [
         {"inventory_location": {"$exists": False}},
         ["WB003"],
     ),
+    # JSON metadata filter
+    (
+        {"code_json": "FT004"},
+        ["FT004"],
+    ),
+    (
+        {"name_json": "Smart Fitness Tracker"},
+        ["FT004"],
+    ),
+    (
+        {"is_available_json": True},
+        ["WH001", "FT004", "EC002"],
+    ),
+    (
+        {"code_json": "WH001", "is_available_json": True},
+        ["WH001"],
+    ),
+    (
+        {"available_quantity_json": {"$eq": 10}},
+        ["EC002"],
+    ),
+    (
+        {"available_quantity_json": {"$ne": 0}},
+        ["WH001", "FT004", "EC002"],
+    ),
+    (
+        {"available_quantity_json": {"$gt": 60}},
+        ["FT004"],
+    ),
+    (
+        {"available_quantity_json": {"$gte": 50}},
+        ["WH001", "FT004"],
+    ),
+    (
+        {"available_quantity_json": {"$lt": 5}},
+        ["WB003"],
+    ),
+    (
+        {"available_quantity_json": {"$lte": 10}},
+        ["WB003", "EC002"],
+    ),
+    (
+        {"code_json": {"$eq": "WH001"}},
+        ["WH001"],
+    ),
+    (
+        {"code_json": {"$ne": "WB003"}},
+        ["WH001", "FT004", "EC002"],
+    ),
+    (
+        {"name_json": {"$gt": "Wireless Headphones"}},
+        [],
+    ),
+    (
+        {"name_json": {"$gte": "Wireless Headphones"}},
+        ["WH001"],
+    ),
+    (
+        {"name_json": {"$lt": "Smart Fitness Tracker"}},
+        ["EC002"],
+    ),
+    (
+        {"name_json": {"$lte": "Smart Fitness Tracker"}},
+        ["FT004", "EC002"],
+    ),
+    (
+        {"is_available_json": {"$eq": True}},
+        ["WH001", "FT004", "EC002"],
+    ),
+    (
+        {"is_available_json": {"$ne": True}},
+        ["WB003"],
+    ),
+    (
+        {"price_json": {"$gt": 200.0}},
+        ["EC002"],
+    ),
+    (
+        {"price_json": {"$gte": 149.99}},
+        ["WH001", "EC002"],
+    ),
+    (
+        {"price_json": {"$lt": 50.0}},
+        ["WB003"],
+    ),
+    (
+        {"price_json": {"$lte": 79.95}},
+        ["FT004", "WB003"],
+    ),
+    (
+        {"$or": [{"code_json": "WH001"}, {"code_json": "EC002"}]},
+        ["WH001", "EC002"],
+    ),
+    (
+        {"$or": [{"code_json": "WH001"}, {"available_quantity_json": 10}]},
+        ["WH001", "EC002"],
+    ),
+    (
+        {"$and": [{"code_json": "WH001"}, {"code_json": "EC002"}]},
+        [],
+    ),
+    (
+        {"$not": {"code_json": "WB003"}},
+        ["WH001", "FT004", "EC002"],
+    ),
+    (
+        {"$not": [{"code_json": "WB003"}]},
+        ["WH001", "FT004", "EC002"],
+    ),
+    (
+        {"$not": {"available_quantity_json": 0}},
+        ["WH001", "FT004", "EC002"],
+    ),
+    (
+        {"$not": [{"available_quantity_json": 0}]},
+        ["WH001", "FT004", "EC002"],
+    ),
+    (
+        {"$not": {"is_available_json": True}},
+        ["WB003"],
+    ),
+    (
+        {"$not": [{"is_available_json": True}]},
+        ["WB003"],
+    ),
+    (
+        {"$not": {"price_json": {"$gt": 150.0}}},
+        ["WH001", "FT004", "WB003"],
+    ),
+    (
+        {"$not": [{"price_json": {"$gt": 150.0}}]},
+        ["WH001", "FT004", "WB003"],
+    ),
+    (
+        {"available_quantity_json": {"$between": (40, 60)}},
+        ["WH001"],
+    ),
+    (
+        {"name_json": {"$in": ["Smart Fitness Tracker", "Stainless Steel Water Bottle"]}},
+        ["FT004", "WB003"],
+    ),
+    (
+        {"available_quantity_json": {"$in": [0, 10]}},
+        ["WB003", "EC002"],
+    ),
+    (
+        {"name_json": {"$nin": ["Smart Fitness Tracker", "Stainless Steel Water Bottle"]}},
+        ["WH001", "EC002"],
+    ),
+    (
+        {"available_quantity_json": {"$nin": [50, 0, 10]}},
+        ["FT004"],
+    ),
+    (
+        {"name_json": {"$like": "Wireless%"}},
+        ["WH001"],
+    ),
+    (
+        {"name_json": {"$like": "%less%"}},  
+        ["WH001", "WB003"],
+    ),
+    (
+        {"$or": [{"code_json": {"$like": "WH00%"}}, {"code_json": {"$like": "EC00%"}}]},
+        ["WH001", "EC002"],
+    ),
+    (
+        {"tags_json": {"$exists": False}},
+        [],
+    ),
+    (
+        {"inventory_location_json": {"$exists": False}},
+        ["WB003"],
+    )
 ]
 
 NEGATIVE_TEST_CASES = [
