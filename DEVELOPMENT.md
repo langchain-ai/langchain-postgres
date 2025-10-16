@@ -22,11 +22,12 @@ docker run --rm -it --name pgvector-container \
   -e POSTGRES_USER=langchain \
   -e POSTGRES_PASSWORD=langchain \
   -e POSTGRES_DB=langchain_test \
-  -p 5432:5432 pgvector/pgvector:pg16 \
+  -p 6024:5432 pgvector/pgvector:pg16 \
   postgres -c log_statement=all
 ```
 
 Invoke test cases.
 ```shell
+export POSTGRES_PORT=6024
 pytest -vvv
 ```
