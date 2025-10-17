@@ -46,7 +46,12 @@ docs = [
 embeddings = [embeddings_service.embed_query("foo") for i in range(len(texts))]
 
 filter_docs = [
-    Document(page_content=texts[i], metadata=METADATAS[i]) for i in range(len(texts))
+    Document(
+        page_content=texts[i], 
+        metadata=(
+            METADATAS[i] | {f"{key}_json": value for key, value in METADATAS[i].items()}
+        )
+    ) for i in range(len(texts))
 ]
 # Documents designed for hybrid search testing
 hybrid_docs_content = {
@@ -194,7 +199,7 @@ class TestVectorStoreSearch:
                 Column("available_quantity", "INTEGER", nullable=True),
             ],
             id_column="langchain_id",
-            store_metadata=False,
+            store_metadata=True,
         )
 
         vs_custom_filter = await AsyncPGVectorStore.create(
