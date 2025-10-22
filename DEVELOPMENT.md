@@ -13,7 +13,7 @@ source .venv/bin/activate
 
 Install package in editable mode.
 ```shell
-poetry install --with dev,test,lint
+uv sync --group test
 ```
 
 Start PostgreSQL/PGVector.
@@ -28,5 +28,6 @@ docker run --rm -it --name pgvector-container \
 
 Invoke test cases.
 ```shell
+export POSTGRES_PORT=6024
 pytest -vvv
 ```
