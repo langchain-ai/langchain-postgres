@@ -491,7 +491,7 @@ class TestVectorStoreSearch:
         result_ids = [doc.metadata["doc_id_key"] for doc in results]
 
         assert len(result_ids) > 0
-        assert result_ids[0] == "hs_doc_orange_fruit"
+        assert result_ids[0] == "hs_doc_generic_tech"
 
     async def test_hybrid_search_weighted_sum_fts_bias(
         self,
@@ -624,7 +624,7 @@ class TestVectorStoreSearch:
         assert len(result_ids) > 0
         assert "hs_doc_apple_fruit" in result_ids or "hs_doc_apple_tech" in result_ids
         # The top result should be one of the apple documents based on vector search
-        assert results[0].metadata["doc_id_key"].startswith("hs_doc_unrelated_cat")
+        assert results[0].metadata["doc_id_key"].startswith("hs_doc_apple_fruit")
 
     async def test_hybrid_search_vector_empty_results_effectively(
         self,
@@ -652,7 +652,7 @@ class TestVectorStoreSearch:
 
         # Expect results based purely on FTS search for "orange fruit"
         assert len(result_ids) == 1
-        assert result_ids[0] == "hs_doc_generic_tech"
+        assert result_ids[0] == "hs_doc_orange_fruit"
 
     async def test_hybrid_search_without_tsv_column(
         self,
