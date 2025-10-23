@@ -379,9 +379,9 @@ class TestVectorStoreSearch:
     ) -> None:
         """Test end to end construction and filter."""
         docs = await vs_custom_filter.aget(test_filter)
-        assert set([doc.metadata["code"] for doc in docs]) == set(
-            expected_ids
-        ), test_filter
+        assert set([doc.metadata["code"] for doc in docs]) == set(expected_ids), (
+            test_filter
+        )
 
     async def test_vectorstore_get_limit_offset(
         self,
@@ -390,7 +390,11 @@ class TestVectorStoreSearch:
         """Test limit and offset parameters of get method"""
 
         all_docs = await vs_custom_filter.aget()
-        docs_from_combining = (await vs_custom_filter.aget(limit=1)) + (await vs_custom_filter.aget(limit=1, offset=1)) + (await vs_custom_filter.aget(offset=2))
+        docs_from_combining = (
+            (await vs_custom_filter.aget(limit=1))
+            + (await vs_custom_filter.aget(limit=1, offset=1))
+            + (await vs_custom_filter.aget(offset=2))
+        )
 
         assert all_docs == docs_from_combining
 

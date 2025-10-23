@@ -895,7 +895,9 @@ class PGVectorStore(VectorStore):
         **kwargs: Any,
     ) -> list[Document]:
         """Retrieve documents from the collection using filters and parameters."""
-        return self._engine._run_as_sync(self.__vs.aget(filter=filter, limit=limit, offset=offset, **kwargs))
+        return self._engine._run_as_sync(
+            self.__vs.aget(filter=filter, limit=limit, offset=offset, **kwargs)
+        )
 
     def get_table_name(self) -> str:
         return self.__vs.table_name
