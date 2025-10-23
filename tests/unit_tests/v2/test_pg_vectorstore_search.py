@@ -438,10 +438,21 @@ class TestVectorStoreSearchSync:
     ) -> None:
         """Test end to end construction and filter."""
 
-        docs = vs_custom_filter_sync.get(k=5, filter=test_filter)
+        docs = vs_custom_filter_sync.get(filter=test_filter)
         assert set([doc.metadata["code"] for doc in docs]) == set(
             expected_ids
         ), test_filter
+    
+    def test_sync_vectorstore_get_limit_offset(
+        self,
+        vs_custom_filter_sync: PGVectorStore,
+    ) -> None:
+        """Test limit and offset parameters of get method"""
+
+        all_docs = vs_custom_filter_sync.get()
+        docs_from_combining = vs_custom_filter_sync.get(limit=1) + vs_custom_filter_sync.get(limit=1, offset=1) + vs_custom_filter_sync.get(offset=2)
+
+        assert all_docs == docs_from_combining
 
     @pytest.mark.parametrize("test_filter", NEGATIVE_TEST_CASES)
     def test_metadata_filter_negative_tests(

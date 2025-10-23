@@ -675,37 +675,16 @@ class AsyncPGVectorStore(VectorStore):
     async def __query_collection_with_filter(
         self,
         *,
-        k: Optional[int] = None,
+        limit: Optional[int] = None,
+        offset: Optional[int] = None,
         filter: Optional[dict] = None,
         **kwargs: Any,
     ) -> Sequence[RowMapping]:
         """
-        Asynchronously query the database collection using optional filters and return matching rows.
+        Asynchronously query the database collection using filters and parameters and return matching rows."""
 
-         Args:
-             k (Optional[int]): The maximum number of rows to retrieve. If not provided, a default is
-                 computed based on the hybrid search configuration or a fallback value.
-             filter (Optional[dict]): A dictionary representing filtering conditions to apply in the SQL WHERE clause.
-             **kwargs (Any): Additional keyword arguments (currently unused but accepted for extensibility).
-
-         Returns:
-             Sequence[RowMapping]: A sequence of row mappings, representing a Document
-
-         Notes:
-             - If `k` is not specified, it defaults to the maximum of the configured top-k values.
-             - If `index_query_options` are set, they are applied using `SET LOCAL` before executing the query.
-        """
-
-        if not k:
-            k = (
-                max(
-                    self.k,
-                    self.hybrid_search_config.primary_top_k,
-                    self.hybrid_search_config.secondary_top_k,
-                )
-                if self.hybrid_search_config
-                else self.k
-            )
+        limit = limit if limit is not None else self.k
+        offset = offset if offset is not None else 0
 
         columns = [
             self.id_column,
@@ -722,11 +701,12 @@ class AsyncPGVectorStore(VectorStore):
         if filter and isinstance(filter, dict):
             safe_filter, filter_dict = self._create_filter_clause(filter)
 
+        suffix_id = str(uuid.uuid4()).split("-")[0]
         where_filters = f"WHERE {safe_filter}" if safe_filter else ""
         dense_query_stmt = f"""SELECT {column_names}
-        FROM "{self.schema_name}"."{self.table_name}" {where_filters} LIMIT :k;
+        FROM "{self.schema_name}"."{self.table_name}" {where_filters} LIMIT :limit_{suffix_id} OFFSET :offset_{suffix_id};
         """
-        param_dict = {"k": k}
+        param_dict = {f"limit_{suffix_id}": limit, f"offset_{suffix_id}": offset}
         if filter_dict:
             param_dict.update(filter_dict)
         if self.index_query_options:
@@ -1072,28 +1052,14 @@ class AsyncPGVectorStore(VectorStore):
     async def aget(
         self,
         filter: Optional[dict] = None,
-        k: Optional[int] = None,
+        limit: Optional[int] = None,
+        offset: Optional[int] = None,
         **kwargs: Any,
     ) -> list[Document]:
-        """
-        Asynchronously retrieves documents from a collection based on an optional filter and other parameters.
-
-        This method queries the underlying collection using the provided filter and additional keyword arguments.
-        It constructs a list of `Document` objects from the query results, combining content and metadata from
-        specified columns.
-
-        Args:
-            filter (Optional[dict]): A dictionary specifying filtering criteria for the query. Defaults to None.
-            k (Optional[int]): The maximum number of documents to retrieve. If None, retrieves all matching documents.
-            **kwargs (Any): Additional keyword arguments passed to the internal query method.
-
-        Returns:
-            list[Document]: A list of `Document` instances, each containing content, metadata, and an identifier.
-
-        """
+        """Retrieve documents from the collection using filters and parameters."""
 
         results = await self.__query_collection_with_filter(
-            k=k, filter=filter, **kwargs
+            limit=limit, offset=offset, filter=filter, **kwargs
         )
 
         documents = []
@@ -1369,6 +1335,17 @@ class AsyncPGVectorStore(VectorStore):
         else:
             return "", {}
 
+    def get(
+        self,
+        filter: Optional[dict] = None,
+        limit: Optional[int] = None,
+        offset: Optional[int] = None,
+        **kwargs: Any,
+    ) -> list[Document]:
+        raise NotImplementedError(
+            "Sync methods are not implemented for AsyncPGVectorStore. Use PGVectorStore interface instead."
+        )
+    
     def get_by_ids(self, ids: Sequence[str]) -> list[Document]:
         raise NotImplementedError(
             "Sync methods are not implemented for AsyncPGVectorStore. Use PGVectorStore interface instead."
