@@ -672,6 +672,60 @@ class AsyncPGVectorStore(VectorStore):
             return combined_results
         return dense_results
 
+    async def __query_collection_with_filter(
+        self,
+        *,
+        limit: Optional[int] = None,
+        offset: Optional[int] = None,
+        filter: Optional[dict] = None,
+        **kwargs: Any,
+    ) -> Sequence[RowMapping]:
+        """
+        Asynchronously query the database collection using filters and parameters and return matching rows."""
+
+        limit = limit if limit is not None else self.k
+        offset = offset if offset is not None else 0
+
+        columns = [
+            self.id_column,
+            self.content_column,
+            self.embedding_column,
+        ] + self.metadata_columns
+        if self.metadata_json_column:
+            columns.append(self.metadata_json_column)
+
+        column_names = ", ".join(f'"{col}"' for col in columns)
+
+        safe_filter = None
+        filter_dict = None
+        if filter and isinstance(filter, dict):
+            safe_filter, filter_dict = self._create_filter_clause(filter)
+
+        suffix_id = str(uuid.uuid4()).split("-")[0]
+        where_filters = f"WHERE {safe_filter}" if safe_filter else ""
+        dense_query_stmt = f"""SELECT {column_names}
+        FROM "{self.schema_name}"."{self.table_name}" {where_filters} LIMIT :limit_{suffix_id} OFFSET :offset_{suffix_id};
+        """
+        param_dict = {f"limit_{suffix_id}": limit, f"offset_{suffix_id}": offset}
+        if filter_dict:
+            param_dict.update(filter_dict)
+        if self.index_query_options:
+            async with self.engine.connect() as conn:
+                # Set each query option individually
+                for query_option in self.index_query_options.to_parameter():
+                    query_options_stmt = f"SET LOCAL {query_option};"
+                    await conn.execute(text(query_options_stmt))
+                result = await conn.execute(text(dense_query_stmt), param_dict)
+                result_map = result.mappings()
+                results = result_map.fetchall()
+        else:
+            async with self.engine.connect() as conn:
+                result = await conn.execute(text(dense_query_stmt), param_dict)
+                result_map = result.mappings()
+                results = result_map.fetchall()
+
+        return results
+
     async def asimilarity_search(
         self,
         query: str,
@@ -995,6 +1049,38 @@ class AsyncPGVectorStore(VectorStore):
             results = result_map.fetchall()
         return bool(len(results) == 1)
 
+    async def aget(
+        self,
+        filter: Optional[dict] = None,
+        limit: Optional[int] = None,
+        offset: Optional[int] = None,
+        **kwargs: Any,
+    ) -> list[Document]:
+        """Retrieve documents from the collection using filters and parameters."""
+
+        results = await self.__query_collection_with_filter(
+            limit=limit, offset=offset, filter=filter, **kwargs
+        )
+
+        documents = []
+        for row in results:
+            metadata = (
+                row[self.metadata_json_column]
+                if self.metadata_json_column and row[self.metadata_json_column]
+                else {}
+            )
+            for col in self.metadata_columns:
+                metadata[col] = row[col]
+            documents.append(
+                Document(
+                    page_content=row[self.content_column],
+                    metadata=metadata,
+                    id=str(row[self.id_column]),
+                ),
+            )
+
+        return documents
+
     async def aget_by_ids(self, ids: Sequence[str]) -> list[Document]:
         """Get documents by ids."""
 
@@ -1248,6 +1334,17 @@ class AsyncPGVectorStore(VectorStore):
                 )
         else:
             return "", {}
+
+    def get(
+        self,
+        filter: Optional[dict] = None,
+        limit: Optional[int] = None,
+        offset: Optional[int] = None,
+        **kwargs: Any,
+    ) -> list[Document]:
+        raise NotImplementedError(
+            "Sync methods are not implemented for AsyncPGVectorStore. Use PGVectorStore interface instead."
+        )
 
     def get_by_ids(self, ids: Sequence[str]) -> list[Document]:
         raise NotImplementedError(
