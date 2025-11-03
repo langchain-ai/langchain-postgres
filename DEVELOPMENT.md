@@ -28,5 +28,6 @@ docker run --rm -it --name pgvector-container \
 
 Invoke test cases.
 ```shell
+export POSTGRES_PORT=6024
 pytest -vvv
 ```
