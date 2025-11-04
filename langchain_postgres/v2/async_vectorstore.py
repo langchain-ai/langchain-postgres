@@ -680,11 +680,7 @@ class AsyncPGVectorStore(VectorStore):
         filter: Optional[dict] = None,
         **kwargs: Any,
     ) -> Sequence[RowMapping]:
-        """
-        Asynchronously query the database collection using filters and parameters and return matching rows."""
-
-        limit = limit if limit is not None else self.k
-        offset = offset if offset is not None else 0
+        """Asynchronously query the database collection using filters and parameters and return matching rows."""
 
         columns = [
             self.id_column,
@@ -709,20 +705,10 @@ class AsyncPGVectorStore(VectorStore):
         param_dict = {f"limit_{suffix_id}": limit, f"offset_{suffix_id}": offset}
         if filter_dict:
             param_dict.update(filter_dict)
-        if self.index_query_options:
-            async with self.engine.connect() as conn:
-                # Set each query option individually
-                for query_option in self.index_query_options.to_parameter():
-                    query_options_stmt = f"SET LOCAL {query_option};"
-                    await conn.execute(text(query_options_stmt))
-                result = await conn.execute(text(dense_query_stmt), param_dict)
-                result_map = result.mappings()
-                results = result_map.fetchall()
-        else:
-            async with self.engine.connect() as conn:
-                result = await conn.execute(text(dense_query_stmt), param_dict)
-                result_map = result.mappings()
-                results = result_map.fetchall()
+        async with self.engine.connect() as conn:
+            result = await conn.execute(text(dense_query_stmt), param_dict)
+            result_map = result.mappings()
+            results = result_map.fetchall()
 
         return results
 
