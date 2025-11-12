@@ -678,17 +678,10 @@ class AsyncPGVectorStore(VectorStore):
         limit: Optional[int] = None,
         offset: Optional[int] = None,
         filter: Optional[dict] = None,
+        columns: Optional[list[str]] = None,
         **kwargs: Any,
     ) -> Sequence[RowMapping]:
         """Asynchronously query the database collection using filters and parameters and return matching rows."""
-
-        columns = [
-            self.id_column,
-            self.content_column,
-            self.embedding_column,
-        ] + self.metadata_columns
-        if self.metadata_json_column:
-            columns.append(self.metadata_json_column)
 
         column_names = ", ".join(f'"{col}"' for col in columns)
 
@@ -1037,35 +1030,68 @@ class AsyncPGVectorStore(VectorStore):
 
     async def aget(
         self,
-        filter: Optional[dict] = None,
+        ids: Optional[Sequence[str]] = None,
+        where: Optional[dict] = None,
         limit: Optional[int] = None,
         offset: Optional[int] = None,
+        where_document: Optional[dict] = None,
+        include: Optional[list[str]] = None,
         **kwargs: Any,
-    ) -> list[Document]:
+    ) -> dict[str, Any]:
         """Retrieve documents from the collection using filters and parameters."""
+        filter = {}
+        if ids:
+            filter.update({self.id_column: {"$in": ids}})
+        if where:
+            filter.update(where)
+        if where_document:
+            filter.update({self.content_column: where_document})
+
+        if include is None:
+            include = ["metadatas", "documents"]
+
+        fields_mapping = {
+            "embeddings": [self.embedding_column],
+            "metadatas": self.metadata_columns + [self.metadata_json_column]
+            if self.metadata_json_column
+            else self.metadata_columns,
+            "documents": [self.content_column],
+        }
+
+        included_fields = ["ids"]
+        columns = [self.id_column]
+
+        for field, cols in fields_mapping.items():
+            if field in include:
+                included_fields.append(field)
+                columns.extend(cols)
 
         results = await self.__query_collection_with_filter(
-            limit=limit, offset=offset, filter=filter, **kwargs
+            limit=limit, offset=offset, filter=filter, columns=columns, **kwargs
         )
 
-        documents = []
-        for row in results:
-            metadata = (
-                row[self.metadata_json_column]
-                if self.metadata_json_column and row[self.metadata_json_column]
-                else {}
-            )
-            for col in self.metadata_columns:
-                metadata[col] = row[col]
-            documents.append(
-                Document(
-                    page_content=row[self.content_column],
-                    metadata=metadata,
-                    id=str(row[self.id_column]),
-                ),
-            )
+        final_results = {field: [] for field in included_fields}
 
-        return documents
+        for row in results:
+            final_results["ids"].append(str(row[self.id_column]))
+
+            if "metadatas" in final_results:
+                metadata = (
+                    row.get(self.metadata_json_column) or {}
+                    if self.metadata_json_column
+                    else {}
+                )
+                for col in self.metadata_columns:
+                    metadata[col] = row[col]
+                final_results["metadatas"].append(metadata)
+
+            if "documents" in final_results:
+                final_results["documents"].append(row[self.content_column])
+
+            if "embeddings" in final_results:
+                final_results["embeddings"].append(row[self.embedding_column])
+
+        return final_results
 
     async def aget_by_ids(self, ids: Sequence[str]) -> list[Document]:
         """Get documents by ids."""
@@ -1323,11 +1349,14 @@ class AsyncPGVectorStore(VectorStore):
 
     def get(
         self,
-        filter: Optional[dict] = None,
+        ids: Optional[Sequence[str]] = None,
+        where: Optional[dict] = None,
         limit: Optional[int] = None,
         offset: Optional[int] = None,
+        where_document: Optional[dict] = None,
+        include: Optional[list[str]] = None,
         **kwargs: Any,
-    ) -> list[Document]:
+    ) -> dict[str, Any]:
         raise NotImplementedError(
             "Sync methods are not implemented for AsyncPGVectorStore. Use PGVectorStore interface instead."
         )

@@ -370,6 +370,24 @@ class TestVectorStoreSearch:
         )
         assert [doc.metadata["code"] for doc in docs] == expected_ids, test_filter
 
+    async def test_async_vectorstore_get_ids(
+        self,
+        vs_custom_filter: AsyncPGVectorStore
+    ) -> None:
+        """Test end to end construction and filter."""
+
+        res = await vs_custom_filter.aget(ids=ids[:2])
+        assert set(res["ids"]) == set(ids[:2])
+
+    async def test_async_vectorstore_get_docs(
+        self,
+        vs_custom_filter: AsyncPGVectorStore
+    ) -> None:
+        """Test end to end construction and filter."""
+
+        res = await vs_custom_filter.aget(where_document={"$in": texts[:2]})
+        assert set(res["documents"]) == set(texts[:2])
+
     @pytest.mark.parametrize("test_filter, expected_ids", FILTERING_TEST_CASES)
     async def test_vectorstore_get(
         self,
@@ -378,8 +396,8 @@ class TestVectorStoreSearch:
         expected_ids: list[str],
     ) -> None:
         """Test end to end construction and filter."""
-        docs = await vs_custom_filter.aget(test_filter)
-        assert set([doc.metadata["code"] for doc in docs]) == set(expected_ids), (
+        res = await vs_custom_filter.aget(where=test_filter)
+        assert set([r["code"] for r in res["metadatas"]]) == set(expected_ids), (
             test_filter
         )
 
@@ -389,14 +407,14 @@ class TestVectorStoreSearch:
     ) -> None:
         """Test limit and offset parameters of get method"""
 
-        all_docs = await vs_custom_filter.aget()
-        docs_from_combining = (
-            (await vs_custom_filter.aget(limit=1))
-            + (await vs_custom_filter.aget(limit=1, offset=1))
-            + (await vs_custom_filter.aget(offset=2))
+        all_ids = (await vs_custom_filter.aget())["ids"]
+        ids_from_combining = (
+            (await vs_custom_filter.aget(limit=1))["ids"]
+            + (await vs_custom_filter.aget(limit=1, offset=1))["ids"]
+            + (await vs_custom_filter.aget(offset=2))["ids"]
         )
 
-        assert all_docs == docs_from_combining
+        assert all_ids == ids_from_combining
 
     async def test_asimilarity_hybrid_search(self, vs: AsyncPGVectorStore) -> None:
         results = await vs.asimilarity_search(
