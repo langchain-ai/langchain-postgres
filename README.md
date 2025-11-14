@@ -43,7 +43,7 @@ from langchain_core.embeddings import DeterministicFakeEmbedding
 from langchain_postgres import PGEngine, PGVectorStore
 
 # Replace the connection string with your own Postgres connection string
-CONNECTION_STRING = "postgresql+psycopg3://langchain:langchain@localhost:6024/langchain"
+CONNECTION_STRING = "postgresql+psycopg://langchain:langchain@localhost:6024/langchain"
 engine = PGEngine.from_connection_string(url=CONNECTION_STRING)
 
 # Replace the vector size with your own vector size
