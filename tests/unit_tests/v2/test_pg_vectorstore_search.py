@@ -27,6 +27,8 @@ DEFAULT_TABLE_SYNC = "default_sync" + str(uuid.uuid4()).replace("-", "_")
 CUSTOM_TABLE = "custom" + str(uuid.uuid4()).replace("-", "_")
 CUSTOM_FILTER_TABLE = "custom_filter" + str(uuid.uuid4()).replace("-", "_")
 CUSTOM_FILTER_TABLE_SYNC = "custom_filter_sync" + str(uuid.uuid4()).replace("-", "_")
+CUSTOM_METADATA_JSON_TABLE = "custom_metadata_json" + str(uuid.uuid4()).replace("-", "_")
+CUSTOM_METADATA_JSON_TABLE_SYNC = "custom_metadata_json_sync" + str(uuid.uuid4()).replace("-", "_")
 VECTOR_SIZE = 768
 
 embeddings_service = DeterministicFakeEmbedding(size=VECTOR_SIZE)
@@ -163,6 +165,24 @@ class TestVectorStoreSearch:
         await vs_custom_filter.aadd_documents(filter_docs, ids=ids)
         yield vs_custom_filter
 
+    @pytest_asyncio.fixture(scope="class")
+    async def vs_metadata_json(
+        self, engine: PGEngine
+    ) -> AsyncIterator[PGVectorStore]:
+        await engine.ainit_vectorstore_table(
+            CUSTOM_METADATA_JSON_TABLE,
+            VECTOR_SIZE,
+            store_metadata=True,
+        )
+
+        vs_metadata_json = await PGVectorStore.create(
+            engine,
+            embedding_service=embeddings_service,
+            table_name=CUSTOM_METADATA_JSON_TABLE,
+        )
+        await vs_metadata_json.aadd_documents(filter_docs, ids=ids)
+        yield vs_metadata_json
+
     async def test_asimilarity_search_score(self, vs: PGVectorStore) -> None:
         results = await vs.asimilarity_search_with_score("foo")
         assert len(results) == 4
@@ -262,6 +282,19 @@ class TestVectorStoreSearch:
     ) -> None:
         """Test end to end construction and search."""
         docs = await vs_custom_filter.asimilarity_search(
+            "meow", k=5, filter=test_filter
+        )
+        assert [doc.metadata["code"] for doc in docs] == expected_ids, test_filter
+    
+    @pytest.mark.parametrize("test_filter, expected_ids", FILTERING_TEST_CASES)
+    async def test_vectorstore_with_json_metadata_filters(
+        self,
+        vs_metadata_json: PGVectorStore,
+        test_filter: dict,
+        expected_ids: list[str],
+    ) -> None:
+        """Test end to end construction and search on json metadata."""
+        docs = await vs_metadata_json.asimilarity_search(
             "meow", k=5, filter=test_filter
         )
         assert [doc.metadata["code"] for doc in docs] == expected_ids, test_filter
@@ -375,6 +408,24 @@ class TestVectorStoreSearchSync:
         vs_custom_filter_sync.add_documents(filter_docs, ids=ids)
         yield vs_custom_filter_sync
 
+    @pytest_asyncio.fixture(scope="class")
+    async def vs_metadata_json_sync(
+        self, engine_sync: PGEngine
+    ) -> AsyncIterator[PGVectorStore]:
+        engine_sync.init_vectorstore_table(
+            CUSTOM_METADATA_JSON_TABLE_SYNC,
+            VECTOR_SIZE,
+            store_metadata=True,
+        )
+
+        vs_metadata_json_sync = await PGVectorStore.create(
+            engine_sync,
+            embedding_service=embeddings_service,
+            table_name=CUSTOM_METADATA_JSON_TABLE_SYNC,
+        )
+        vs_metadata_json_sync.add_documents(filter_docs, ids=ids)
+        yield vs_metadata_json_sync
+
     def test_similarity_search_score(self, vs_custom: PGVectorStore) -> None:
         results = vs_custom.similarity_search_with_score("foo")
         assert len(results) == 4
@@ -427,6 +478,19 @@ class TestVectorStoreSearchSync:
         """Test end to end construction and search."""
 
         docs = vs_custom_filter_sync.similarity_search("meow", k=5, filter=test_filter)
+        assert [doc.metadata["code"] for doc in docs] == expected_ids, test_filter
+
+    @pytest.mark.parametrize("test_filter, expected_ids", FILTERING_TEST_CASES)
+    def test_sync_vectorstore_with_json_metadata_filters(
+        self,
+        vs_metadata_json_sync: PGVectorStore,
+        test_filter: dict,
+        expected_ids: list[str],
+    ) -> None:
+        """Test end to end construction and search on json metadata."""
+        docs = vs_metadata_json_sync.similarity_search(
+            "meow", k=5, filter=test_filter
+        )
         assert [doc.metadata["code"] for doc in docs] == expected_ids, test_filter
 
     @pytest.mark.parametrize("test_filter", NEGATIVE_TEST_CASES)
