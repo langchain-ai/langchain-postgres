@@ -371,8 +371,7 @@ class TestVectorStoreSearch:
         assert [doc.metadata["code"] for doc in docs] == expected_ids, test_filter
 
     async def test_async_vectorstore_get_ids(
-        self,
-        vs_custom_filter: AsyncPGVectorStore
+        self, vs_custom_filter: AsyncPGVectorStore
     ) -> None:
         """Test end to end construction and filter."""
 
@@ -380,8 +379,7 @@ class TestVectorStoreSearch:
         assert set(res["ids"]) == set(ids[:2])
 
     async def test_async_vectorstore_get_docs(
-        self,
-        vs_custom_filter: AsyncPGVectorStore
+        self, vs_custom_filter: AsyncPGVectorStore
     ) -> None:
         """Test end to end construction and filter."""
 

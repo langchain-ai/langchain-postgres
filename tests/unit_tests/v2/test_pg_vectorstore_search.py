@@ -430,8 +430,7 @@ class TestVectorStoreSearchSync:
         assert [doc.metadata["code"] for doc in docs] == expected_ids, test_filter
 
     def test_sync_vectorstore_get_ids(
-        self,
-        vs_custom_filter_sync: PGVectorStore
+        self, vs_custom_filter_sync: PGVectorStore
     ) -> None:
         """Test end to end construction and filter."""
 
@@ -439,8 +438,7 @@ class TestVectorStoreSearchSync:
         assert set(res["ids"]) == set(ids[:2])
 
     def test_sync_vectorstore_get_docs(
-        self,
-        vs_custom_filter_sync: PGVectorStore
+        self, vs_custom_filter_sync: PGVectorStore
     ) -> None:
         """Test end to end construction and filter."""
 
