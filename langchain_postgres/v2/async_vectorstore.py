@@ -1105,12 +1105,17 @@ class AsyncPGVectorStore(VectorStore):
             filter_value = value
 
         field_selector = field
-        if self.metadata_json_column is not None and field not in self.metadata_columns and field not in (
-            self.id_column,
-            self.content_column,
-            self.embedding_column
+        if (
+            self.metadata_json_column is not None
+            and field not in self.metadata_columns
+            and field
+            not in (self.id_column, self.content_column, self.embedding_column)
         ):
-            filter_value_type = type(filter_value[0]) if (isinstance(filter_value, list) or isinstance(filter_value, tuple)) else type(filter_value)
+            filter_value_type = (
+                type(filter_value[0])
+                if (isinstance(filter_value, list) or isinstance(filter_value, tuple))
+                else type(filter_value)
+            )
             postgres_type = PYTHON_TO_POSTGRES_TYPE_MAP.get(filter_value_type)
             if postgres_type is None:
                 raise ValueError(f"Unsupported type: {filter_value_type}")
@@ -1124,16 +1129,21 @@ class AsyncPGVectorStore(VectorStore):
             # native is trusted input
             native = COMPARISONS_TO_NATIVE[operator]
             param_name = f"{field}_{suffix_id}"
-            return f"{field_selector} {native} :{param_name}", {f"{param_name}": filter_value}
+            return f"{field_selector} {native} :{param_name}", {
+                f"{param_name}": filter_value
+            }
         elif operator == "$between":
             # Use AND with two comparisons
             low, high = filter_value
             low_param_name = f"{field}_low_{suffix_id}"
             high_param_name = f"{field}_high_{suffix_id}"
-            return f"({field_selector} BETWEEN :{low_param_name} AND :{high_param_name})", {
-                f"{low_param_name}": low,
-                f"{high_param_name}": high,
-            }
+            return (
+                f"({field_selector} BETWEEN :{low_param_name} AND :{high_param_name})",
+                {
+                    f"{low_param_name}": low,
+                    f"{high_param_name}": high,
+                },
+            )
         elif operator in {"$in", "$nin"}:
             # We'll do force coercion to text
             for val in filter_value:
@@ -1148,7 +1158,9 @@ class AsyncPGVectorStore(VectorStore):
                     )
             param_name = f"{field}_{operator.replace('$', '')}_{suffix_id}"
             if operator == "$in":
-                return f"{field_selector} = ANY(:{param_name})", {f"{param_name}": filter_value}
+                return f"{field_selector} = ANY(:{param_name})", {
+                    f"{param_name}": filter_value
+                }
             else:  # i.e. $nin
                 return f"{field_selector} <> ALL (:{param_name})", {
                     f"{param_name}": filter_value
@@ -1157,9 +1169,13 @@ class AsyncPGVectorStore(VectorStore):
         elif operator in {"$like", "$ilike"}:
             param_name = f"{field}_{operator.replace('$', '')}_{suffix_id}"
             if operator == "$like":
-                return f"({field_selector} LIKE :{param_name})", {f"{param_name}": filter_value}
+                return f"({field_selector} LIKE :{param_name})", {
+                    f"{param_name}": filter_value
+                }
             else:  # i.e. $ilike
-                return f"({field_selector} ILIKE :{param_name})", {f"{param_name}": filter_value}
+                return f"({field_selector} ILIKE :{param_name})", {
+                    f"{param_name}": filter_value
+                }
         elif operator == "$exists":
             if not isinstance(filter_value, bool):
                 raise ValueError(

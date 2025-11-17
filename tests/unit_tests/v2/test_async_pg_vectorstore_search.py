@@ -27,7 +27,9 @@ CUSTOM_TABLE = "custom" + str(uuid.uuid4()).replace("-", "_")
 HYBRID_SEARCH_TABLE1 = "test_table_hybrid1" + str(uuid.uuid4()).replace("-", "_")
 HYBRID_SEARCH_TABLE2 = "test_table_hybrid2" + str(uuid.uuid4()).replace("-", "_")
 CUSTOM_FILTER_TABLE = "custom_filter" + str(uuid.uuid4()).replace("-", "_")
-CUSTOM_METADATA_JSON_TABLE = "custom_metadata_json" + str(uuid.uuid4()).replace("-", "_")
+CUSTOM_METADATA_JSON_TABLE = "custom_metadata_json" + str(uuid.uuid4()).replace(
+    "-", "_"
+)
 VECTOR_SIZE = 768
 sync_method_exception_str = "Sync methods are not implemented for AsyncPGVectorStore. Use PGVectorStore interface instead."
 

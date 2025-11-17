@@ -27,8 +27,12 @@ DEFAULT_TABLE_SYNC = "default_sync" + str(uuid.uuid4()).replace("-", "_")
 CUSTOM_TABLE = "custom" + str(uuid.uuid4()).replace("-", "_")
 CUSTOM_FILTER_TABLE = "custom_filter" + str(uuid.uuid4()).replace("-", "_")
 CUSTOM_FILTER_TABLE_SYNC = "custom_filter_sync" + str(uuid.uuid4()).replace("-", "_")
-CUSTOM_METADATA_JSON_TABLE = "custom_metadata_json" + str(uuid.uuid4()).replace("-", "_")
-CUSTOM_METADATA_JSON_TABLE_SYNC = "custom_metadata_json_sync" + str(uuid.uuid4()).replace("-", "_")
+CUSTOM_METADATA_JSON_TABLE = "custom_metadata_json" + str(uuid.uuid4()).replace(
+    "-", "_"
+)
+CUSTOM_METADATA_JSON_TABLE_SYNC = "custom_metadata_json_sync" + str(
+    uuid.uuid4()
+).replace("-", "_")
 VECTOR_SIZE = 768
 
 embeddings_service = DeterministicFakeEmbedding(size=VECTOR_SIZE)
@@ -166,9 +170,7 @@ class TestVectorStoreSearch:
         yield vs_custom_filter
 
     @pytest_asyncio.fixture(scope="class")
-    async def vs_metadata_json(
-        self, engine: PGEngine
-    ) -> AsyncIterator[PGVectorStore]:
+    async def vs_metadata_json(self, engine: PGEngine) -> AsyncIterator[PGVectorStore]:
         await engine.ainit_vectorstore_table(
             CUSTOM_METADATA_JSON_TABLE,
             VECTOR_SIZE,
@@ -285,7 +287,7 @@ class TestVectorStoreSearch:
             "meow", k=5, filter=test_filter
         )
         assert [doc.metadata["code"] for doc in docs] == expected_ids, test_filter
-    
+
     @pytest.mark.parametrize("test_filter, expected_ids", FILTERING_TEST_CASES)
     async def test_vectorstore_with_json_metadata_filters(
         self,
@@ -488,9 +490,7 @@ class TestVectorStoreSearchSync:
         expected_ids: list[str],
     ) -> None:
         """Test end to end construction and search on json metadata."""
-        docs = vs_metadata_json_sync.similarity_search(
-            "meow", k=5, filter=test_filter
-        )
+        docs = vs_metadata_json_sync.similarity_search("meow", k=5, filter=test_filter)
         assert [doc.metadata["code"] for doc in docs] == expected_ids, test_filter
 
     @pytest.mark.parametrize("test_filter", NEGATIVE_TEST_CASES)
