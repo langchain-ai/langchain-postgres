@@ -239,6 +239,16 @@ FILTERING_TEST_CASES = [
         {"inventory_location": {"$exists": False}},
         ["WB003"],
     ),
+    # Tests for $contains_any and $contains_none
+    ({"dimensions": {"$contains_any": [25.0]}}, ["FT004", "WB003"]),
+    ({"dimensions": {"$contains_any": 25.0}}, ["FT004", "WB003"]),
+    ({"dimensions": {"$contains_none": 99.99}}, ["WH001", "FT004", "WB003", "EC002"]),
+    ({"tags": {"$contains_any": ["audio", "hydration"]}}, ["WH001", "WB003"]),
+    ({"tags": {"$contains_none": ["audio", "hydration"]}}, ["FT004", "EC002"]),
+    ({"tags": {"$contains_any": "audio"}}, ["WH001"]),
+    ({"tags": {"$contains_any": ["dummy"]}}, []),
+    ({"tags": {"$contains_any": []}}, []),
+    ({"tags": {"$contains_none": []}}, ["WH001", "FT004", "WB003", "EC002"]),
 ]
 
 NEGATIVE_TEST_CASES = [
@@ -251,4 +261,6 @@ NEGATIVE_TEST_CASES = [
     {"$and": {}},
     {"$and": []},
     {"$not": True},
+    {"tags": {"$contains_any": {"tag": "wireless"}}},
+    {"tags": {"$contains_none": [False]}},
 ]
