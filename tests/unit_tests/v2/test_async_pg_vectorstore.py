@@ -165,6 +165,134 @@ class TestVectorStore:
         assert not result
         await aexecute(engine, f'TRUNCATE TABLE "{DEFAULT_TABLE}"')
 
+    async def test_adelete_with_filter(
+        self, engine: PGEngine, vs: AsyncPGVectorStore
+    ) -> None:
+        """Test deletion by metadata filter."""
+        # Add texts with different metadata
+        test_metadatas = [
+            {"page": "0", "source": "postgres", "category": "docs"},
+            {"page": "1", "source": "web", "category": "docs"},
+            {"page": "2", "source": "postgres", "category": "blog"},
+        ]
+        ids = [str(uuid.uuid4()) for i in range(len(texts))]
+        await vs.aadd_texts(texts, metadatas=test_metadatas, ids=ids)
+        results = await afetch(engine, f'SELECT * FROM "{DEFAULT_TABLE}"')
+        assert len(results) == 3
+
+        # Delete all documents with source="postgres"
+        await vs.adelete(filter={"source": "postgres"})
+        results = await afetch(engine, f'SELECT * FROM "{DEFAULT_TABLE}"')
+        assert len(results) == 1
+        # The remaining document should have source="web"
+        assert results[0]["langchain_metadata"]["source"] == "web"
+        await aexecute(engine, f'TRUNCATE TABLE "{DEFAULT_TABLE}"')
+
+    async def test_adelete_with_filter_and_operator(
+        self, engine: PGEngine, vs: AsyncPGVectorStore
+    ) -> None:
+        """Test deletion with filter using operators."""
+        # Add texts with different metadata including numeric values
+        test_metadatas = [
+            {"page": "0", "source": "postgres", "year": 2020},
+            {"page": "1", "source": "web", "year": 2021},
+            {"page": "2", "source": "postgres", "year": 2022},
+        ]
+        ids = [str(uuid.uuid4()) for i in range(len(texts))]
+        await vs.aadd_texts(texts, metadatas=test_metadatas, ids=ids)
+        results = await afetch(engine, f'SELECT * FROM "{DEFAULT_TABLE}"')
+        assert len(results) == 3
+
+        # Delete all documents with year < 2022
+        await vs.adelete(filter={"year": {"$lt": 2022}})
+        results = await afetch(engine, f'SELECT * FROM "{DEFAULT_TABLE}"')
+        assert len(results) == 1
+        # The remaining document should have year=2022
+        assert results[0]["langchain_metadata"]["year"] == 2022
+        await aexecute(engine, f'TRUNCATE TABLE "{DEFAULT_TABLE}"')
+
+    async def test_adelete_with_complex_filter(
+        self, engine: PGEngine, vs: AsyncPGVectorStore
+    ) -> None:
+        """Test deletion with complex filter using $and."""
+        # Add texts with different metadata
+        test_metadatas = [
+            {"page": "0", "source": "postgres", "category": "obsolete"},
+            {"page": "1", "source": "web", "category": "obsolete"},
+            {"page": "2", "source": "postgres", "category": "current"},
+        ]
+        ids = [str(uuid.uuid4()) for i in range(len(texts))]
+        await vs.aadd_texts(texts, metadatas=test_metadatas, ids=ids)
+        results = await afetch(engine, f'SELECT * FROM "{DEFAULT_TABLE}"')
+        assert len(results) == 3
+
+        # Delete documents with source="postgres" AND category="obsolete"
+        await vs.adelete(
+            filter={"$and": [{"source": "postgres"}, {"category": "obsolete"}]}
+        )
+        results = await afetch(engine, f'SELECT * FROM "{DEFAULT_TABLE}"')
+        assert len(results) == 2
+        # Should have removed only the first document
+        remaining_categories = [
+            result["langchain_metadata"]["category"] for result in results
+        ]
+        assert "obsolete" in remaining_categories  # web/obsolete still exists
+        assert "current" in remaining_categories  # postgres/current still exists
+        await aexecute(engine, f'TRUNCATE TABLE "{DEFAULT_TABLE}"')
+
+    async def test_adelete_with_filter_and_ids(
+        self, engine: PGEngine, vs: AsyncPGVectorStore
+    ) -> None:
+        """Test deletion with both IDs and filter (must match both)."""
+        # Add texts with different metadata
+        test_metadatas = [
+            {"page": "0", "source": "postgres"},
+            {"page": "1", "source": "web"},
+            {"page": "2", "source": "postgres"},
+        ]
+        ids = [str(uuid.uuid4()) for i in range(len(texts))]
+        await vs.aadd_texts(texts, metadatas=test_metadatas, ids=ids)
+        results = await afetch(engine, f'SELECT * FROM "{DEFAULT_TABLE}"')
+        assert len(results) == 3
+
+        # Try to delete ids[0] and ids[2] but only where source="web"
+        # This should delete nothing since ids[0] and ids[2] have source="postgres"
+        # (well, actually it should delete if ANY match since we're using AND logic)
+        # Let me reconsider: with AND logic, it means id IN (ids) AND source="web"
+        # So this should only delete if the id is in the list AND source is web
+        # Since ids[0] and ids[2] are postgres, and ids[1] is web but not in the list,
+        # nothing should be deleted
+        await vs.adelete(ids=[ids[0], ids[2]], filter={"source": "web"})
+        results = await afetch(engine, f'SELECT * FROM "{DEFAULT_TABLE}"')
+        assert len(results) == 3  # Nothing deleted
+
+        # Now delete ids[0] and ids[1] where source="web"
+        # This should delete only ids[1] (which has source="web")
+        await vs.adelete(ids=[ids[0], ids[1]], filter={"source": "web"})
+        results = await afetch(engine, f'SELECT * FROM "{DEFAULT_TABLE}"')
+        assert len(results) == 2
+        remaining_ids = [result["langchain_id"] for result in results]
+        assert ids[1] not in remaining_ids  # ids[1] was deleted
+        assert ids[0] in remaining_ids  # ids[0] not deleted (wrong source)
+        assert ids[2] in remaining_ids  # ids[2] not deleted (not in id list)
+        await aexecute(engine, f'TRUNCATE TABLE "{DEFAULT_TABLE}"')
+
+    async def test_adelete_with_filter_no_matches(
+        self, engine: PGEngine, vs: AsyncPGVectorStore
+    ) -> None:
+        """Test deletion with filter that matches no documents."""
+        # Add texts
+        ids = [str(uuid.uuid4()) for i in range(len(texts))]
+        await vs.aadd_texts(texts, metadatas=metadatas, ids=ids)
+        results = await afetch(engine, f'SELECT * FROM "{DEFAULT_TABLE}"')
+        assert len(results) == 3
+
+        # Try to delete with a filter that matches nothing
+        await vs.adelete(filter={"source": "nonexistent"})
+        results = await afetch(engine, f'SELECT * FROM "{DEFAULT_TABLE}"')
+        assert len(results) == 3  # Nothing deleted
+        await aexecute(engine, f'TRUNCATE TABLE "{DEFAULT_TABLE}"')
+
     ##### Custom Vector Store  #####
     async def test_aadd_embeddings(
         self, engine: PGEngine, vs_custom: AsyncPGVectorStore

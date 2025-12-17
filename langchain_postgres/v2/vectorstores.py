@@ -266,26 +266,66 @@ class PGVectorStore(VectorStore):
     async def adelete(
         self,
         ids: Optional[list] = None,
+        filter: Optional[dict] = None,
         **kwargs: Any,
     ) -> Optional[bool]:
         """Delete records from the table.
 
+        Args:
+            ids: List of document IDs to delete.
+            filter: Metadata filter dictionary for bulk deletion.
+                   Supports the same filter syntax as similarity_search.
+
+        Returns:
+            True if deletion was successful, False if no criteria provided.
+
         Raises:
             :class:`InvalidTextRepresentationError <asyncpg.exceptions.InvalidTextRepresentationError>`: if the `ids` data type does not match that of the `id_column`.
+
+        Examples:
+            Delete by IDs:
+                await vectorstore.adelete(ids=["id1", "id2"])
+
+            Delete by metadata filter:
+                await vectorstore.adelete(filter={"source": "documentation"})
+                await vectorstore.adelete(filter={"$and": [{"category": "obsolete"}, {"year": {"$lt": 2020}}]})
+
+            Delete by both IDs and filter (must match both criteria):
+                await vectorstore.adelete(ids=["id1", "id2"], filter={"status": "archived"})
         """
-        return await self._engine._run_as_async(self.__vs.adelete(ids, **kwargs))
+        return await self._engine._run_as_async(self.__vs.adelete(ids, filter=filter, **kwargs))
 
     def delete(
         self,
         ids: Optional[list] = None,
+        filter: Optional[dict] = None,
         **kwargs: Any,
     ) -> Optional[bool]:
         """Delete records from the table.
 
+        Args:
+            ids: List of document IDs to delete.
+            filter: Metadata filter dictionary for bulk deletion.
+                   Supports the same filter syntax as similarity_search.
+
+        Returns:
+            True if deletion was successful, False if no criteria provided.
+
         Raises:
             :class:`InvalidTextRepresentationError <asyncpg.exceptions.InvalidTextRepresentationError>`: if the `ids` data type does not match that of the `id_column`.
+
+        Examples:
+            Delete by IDs:
+                vectorstore.delete(ids=["id1", "id2"])
+
+            Delete by metadata filter:
+                vectorstore.delete(filter={"source": "documentation"})
+                vectorstore.delete(filter={"$and": [{"category": "obsolete"}, {"year": {"$lt": 2020}}]})
+
+            Delete by both IDs and filter (must match both criteria):
+                vectorstore.delete(ids=["id1", "id2"], filter={"status": "archived"})
         """
-        return self._engine._run_as_sync(self.__vs.adelete(ids, **kwargs))
+        return self._engine._run_as_sync(self.__vs.adelete(ids, filter=filter, **kwargs))
 
     @classmethod
     async def afrom_texts(  # type: ignore[override]

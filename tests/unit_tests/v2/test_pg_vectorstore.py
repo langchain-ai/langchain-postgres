@@ -215,6 +215,29 @@ class TestVectorStore:
         assert len(results) == 2
         await aexecute(engine, f'TRUNCATE TABLE "{DEFAULT_TABLE}"')
 
+    async def test_adelete_with_filter(
+        self, engine: PGEngine, vs: PGVectorStore
+    ) -> None:
+        """Test async deletion by metadata filter in sync wrapper."""
+        # Add texts with different metadata
+        test_metadatas = [
+            {"page": "0", "source": "postgres", "category": "docs"},
+            {"page": "1", "source": "web", "category": "docs"},
+            {"page": "2", "source": "postgres", "category": "blog"},
+        ]
+        ids = [str(uuid.uuid4()) for i in range(len(texts))]
+        await vs.aadd_texts(texts, metadatas=test_metadatas, ids=ids)
+        results = await afetch(engine, f'SELECT * FROM "{DEFAULT_TABLE}"')
+        assert len(results) == 3
+
+        # Delete all documents with source="postgres"
+        await vs.adelete(filter={"source": "postgres"})
+        results = await afetch(engine, f'SELECT * FROM "{DEFAULT_TABLE}"')
+        assert len(results) == 1
+        # The remaining document should have source="web"
+        assert results[0]["langchain_metadata"]["source"] == "web"
+        await aexecute(engine, f'TRUNCATE TABLE "{DEFAULT_TABLE}"')
+
     async def test_aadd_texts_custom(
         self, engine: PGEngine, vs_custom: PGVectorStore
     ) -> None:
@@ -289,6 +312,29 @@ class TestVectorStore:
         results = await afetch(engine_sync, f'SELECT * FROM "{DEFAULT_TABLE_SYNC}"')
         assert len(results) == 3
         await vs_sync.adelete(ids)
+        await aexecute(engine_sync, f'TRUNCATE TABLE "{DEFAULT_TABLE_SYNC}"')
+
+    async def test_delete_with_filter(
+        self, engine_sync: PGEngine, vs_sync: PGVectorStore
+    ) -> None:
+        """Test sync deletion by metadata filter."""
+        # Add texts with different metadata
+        test_metadatas = [
+            {"page": "0", "source": "postgres", "category": "docs"},
+            {"page": "1", "source": "web", "category": "docs"},
+            {"page": "2", "source": "postgres", "category": "blog"},
+        ]
+        ids = [str(uuid.uuid4()) for i in range(len(texts))]
+        vs_sync.add_texts(texts, metadatas=test_metadatas, ids=ids)
+        results = await afetch(engine_sync, f'SELECT * FROM "{DEFAULT_TABLE_SYNC}"')
+        assert len(results) == 3
+
+        # Delete all documents with source="postgres" using sync method
+        vs_sync.delete(filter={"source": "postgres"})
+        results = await afetch(engine_sync, f'SELECT * FROM "{DEFAULT_TABLE_SYNC}"')
+        assert len(results) == 1
+        # The remaining document should have source="web"
+        assert results[0]["langchain_metadata"]["source"] == "web"
         await aexecute(engine_sync, f'TRUNCATE TABLE "{DEFAULT_TABLE_SYNC}"')
 
     async def test_cross_env(
