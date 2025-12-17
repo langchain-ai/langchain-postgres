@@ -450,7 +450,9 @@ class AsyncPGVectorStore(VectorStore):
 
         # Combine WHERE clauses with AND if both are present
         where_clause = " AND ".join(where_clauses)
-        query = f'DELETE FROM "{self.schema_name}"."{self.table_name}" WHERE {where_clause}'
+        query = (
+            f'DELETE FROM "{self.schema_name}"."{self.table_name}" WHERE {where_clause}'
+        )
 
         async with self.engine.connect() as conn:
             await conn.execute(text(query), param_dict)

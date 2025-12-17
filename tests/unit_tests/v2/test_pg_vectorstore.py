@@ -330,9 +330,7 @@ class TestVectorStore:
         await vs_sync.adelete(ids)
         await aexecute(engine_sync, f'TRUNCATE TABLE "{DEFAULT_TABLE_SYNC}"')
 
-    async def test_delete_with_filter(
-        self, engine_sync: PGEngine
-    ) -> None:
+    async def test_delete_with_filter(self, engine_sync: PGEngine) -> None:
         """Test sync deletion by metadata filter."""
         # Create a vectorstore with metadata columns for filtering
         test_table = "test_delete_filter_sync2" + str(uuid.uuid4())

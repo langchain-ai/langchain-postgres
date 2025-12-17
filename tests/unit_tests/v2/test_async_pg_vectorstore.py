@@ -204,9 +204,7 @@ class TestVectorStore:
         assert results[0]["source"] == "web"
         await aexecute(engine, f'DROP TABLE "{test_table}"')
 
-    async def test_adelete_with_filter_and_operator(
-        self, engine: PGEngine
-    ) -> None:
+    async def test_adelete_with_filter_and_operator(self, engine: PGEngine) -> None:
         """Test deletion with filter using operators."""
         # Create a vectorstore with metadata columns for filtering
         test_table = "test_delete_operator" + str(uuid.uuid4())
@@ -245,9 +243,7 @@ class TestVectorStore:
         assert results[0]["year"] == 2022
         await aexecute(engine, f'DROP TABLE "{test_table}"')
 
-    async def test_adelete_with_complex_filter(
-        self, engine: PGEngine
-    ) -> None:
+    async def test_adelete_with_complex_filter(self, engine: PGEngine) -> None:
         """Test deletion with complex filter using $and."""
         # Create a vectorstore with metadata columns for filtering
         test_table = "test_delete_complex" + str(uuid.uuid4())
@@ -290,9 +286,7 @@ class TestVectorStore:
         assert "current" in remaining_categories  # postgres/current still exists
         await aexecute(engine, f'DROP TABLE "{test_table}"')
 
-    async def test_adelete_with_filter_and_ids(
-        self, engine: PGEngine
-    ) -> None:
+    async def test_adelete_with_filter_and_ids(self, engine: PGEngine) -> None:
         """Test deletion with both IDs and filter (must match both)."""
         # Create a vectorstore with metadata columns for filtering
         test_table = "test_delete_ids_filter" + str(uuid.uuid4())
@@ -343,9 +337,7 @@ class TestVectorStore:
         assert ids[2] in remaining_ids  # ids[2] not deleted (not in id list)
         await aexecute(engine, f'DROP TABLE "{test_table}"')
 
-    async def test_adelete_with_filter_no_matches(
-        self, engine: PGEngine
-    ) -> None:
+    async def test_adelete_with_filter_no_matches(self, engine: PGEngine) -> None:
         """Test deletion with filter that matches no documents."""
         # Create a vectorstore with metadata columns for filtering
         test_table = "test_delete_nomatch" + str(uuid.uuid4())

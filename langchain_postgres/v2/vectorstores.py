@@ -295,7 +295,9 @@ class PGVectorStore(VectorStore):
             Delete by both IDs and filter (must match both criteria):
                 await vectorstore.adelete(ids=["id1", "id2"], filter={"status": "archived"})
         """
-        return await self._engine._run_as_async(self.__vs.adelete(ids, filter=filter, **kwargs))
+        return await self._engine._run_as_async(
+            self.__vs.adelete(ids, filter=filter, **kwargs)
+        )
 
     def delete(
         self,
@@ -329,7 +331,9 @@ class PGVectorStore(VectorStore):
             Delete by both IDs and filter (must match both criteria):
                 vectorstore.delete(ids=["id1", "id2"], filter={"status": "archived"})
         """
-        return self._engine._run_as_sync(self.__vs.adelete(ids, filter=filter, **kwargs))
+        return self._engine._run_as_sync(
+            self.__vs.adelete(ids, filter=filter, **kwargs)
+        )
 
     @classmethod
     async def afrom_texts(  # type: ignore[override]
