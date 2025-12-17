@@ -409,6 +409,8 @@ class AsyncPGVectorStore(VectorStore):
             ids: List of document IDs to delete.
             filter: Metadata filter dictionary for bulk deletion.
                    Supports the same filter syntax as similarity_search.
+                   Note: Filters only work on fields defined in metadata_columns,
+                   not on fields stored in the metadata_json_column.
 
         Returns:
             True if deletion was successful, False if no criteria provided.
@@ -420,7 +422,7 @@ class AsyncPGVectorStore(VectorStore):
             Delete by IDs:
                 await vectorstore.adelete(ids=["id1", "id2"])
 
-            Delete by metadata filter:
+            Delete by metadata filter (requires metadata_columns):
                 await vectorstore.adelete(filter={"source": "documentation"})
                 await vectorstore.adelete(filter={"$and": [{"category": "obsolete"}, {"year": {"$lt": 2020}}]})
 
