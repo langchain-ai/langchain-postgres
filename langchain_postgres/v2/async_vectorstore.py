@@ -1317,8 +1317,35 @@ class AsyncPGVectorStore(VectorStore):
     def delete(
         self,
         ids: Optional[list] = None,
+        filter: Optional[dict] = None,
         **kwargs: Any,
     ) -> Optional[bool]:
+        """Delete records from the table.
+
+        Args:
+            ids: List of document IDs to delete.
+            filter: Metadata filter dictionary for bulk deletion.
+                   Supports the same filter syntax as similarity_search.
+                   Note: Filters only work on fields defined in metadata_columns,
+                   not on fields stored in the metadata_json_column.
+
+        Returns:
+            True if deletion was successful, False if no criteria provided.
+
+        Raises:
+            :class:`InvalidTextRepresentationError <asyncpg.exceptions.InvalidTextRepresentationError>`: if the `ids` data type does not match that of the `id_column`.
+
+        Examples:
+            Delete by IDs:
+                vectorstore.delete(ids=["id1", "id2"])
+
+            Delete by metadata filter (requires metadata_columns):
+                vectorstore.delete(filter={"source": "documentation"})
+                vectorstore.delete(filter={"$and": [{"category": "obsolete"}, {"year": {"$lt": 2020}}]})
+
+            Delete by both IDs and filter (must match both criteria):
+                vectorstore.delete(ids=["id1", "id2"], filter={"status": "archived"})
+        """
         raise NotImplementedError(
             "Sync methods are not implemented for AsyncPGVectorStore. Use PGVectorStore interface instead."
         )
