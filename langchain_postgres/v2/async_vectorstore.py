@@ -1039,13 +1039,15 @@ class AsyncPGVectorStore(VectorStore):
         **kwargs: Any,
     ) -> dict[str, Any]:
         """Retrieve documents from the collection using filters and parameters."""
-        filter = {}
+        filters: list[dict] = []
         if ids:
-            filter.update({self.id_column: {"$in": ids}})
+            filters.append({self.id_column: {"$in": list(ids)}})
         if where:
-            filter.update(where)
+            filters.append(where)
         if where_document:
-            filter.update({self.content_column: where_document})
+            filters.append({self.content_column: where_document})
+
+        final_filter = {"$and": filters} if filters else None
 
         if include is None:
             include = ["metadatas", "documents"]
@@ -1067,7 +1069,7 @@ class AsyncPGVectorStore(VectorStore):
                 columns.extend(cols)
 
         results = await self.__query_collection_with_filter(
-            limit=limit, offset=offset, filter=filter, columns=columns, **kwargs
+            limit=limit, offset=offset, filter=final_filter, columns=columns, **kwargs
         )
 
         final_results = {field: [] for field in included_fields}
