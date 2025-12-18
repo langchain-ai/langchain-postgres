@@ -990,7 +990,7 @@ class AsyncPGVectorStore(VectorStore):
     async def areindex(self, index_name: Optional[str] = None) -> None:
         """Re-index the vector store table."""
         index_name = index_name or self.table_name + DEFAULT_INDEX_NAME_SUFFIX
-        query = f'REINDEX INDEX "{index_name}";'
+        query = f'REINDEX INDEX "{self.schema_name}"."{index_name}";'
         async with self.engine.connect() as conn:
             await conn.execute(text(query))
             await conn.commit()
@@ -1001,7 +1001,7 @@ class AsyncPGVectorStore(VectorStore):
     ) -> None:
         """Drop the vector index."""
         index_name = index_name or self.table_name + DEFAULT_INDEX_NAME_SUFFIX
-        query = f'DROP INDEX IF EXISTS "{index_name}";'
+        query = f'DROP INDEX IF EXISTS "{self.schema_name}"."{index_name}";'
         async with self.engine.connect() as conn:
             await conn.execute(text(query))
             await conn.commit()
