@@ -621,7 +621,7 @@ wheels = [
 
 [[package]]
 name = "langchain-postgres"
-version = "0.0.16"
+version = "0.0.15"
 source = { editable = "." }
 dependencies = [
     { name = "asyncpg" },
