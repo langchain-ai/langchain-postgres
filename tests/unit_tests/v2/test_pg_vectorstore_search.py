@@ -145,6 +145,7 @@ class TestVectorStoreSearch:
                 Column("tags", "TEXT[]"),
                 Column("inventory_location", "INTEGER[]"),
                 Column("available_quantity", "INTEGER", nullable=True),
+                Column("specs", "JSON", nullable=True),
             ],
             id_column="langchain_id",
             store_metadata=False,
@@ -163,6 +164,7 @@ class TestVectorStoreSearch:
                 "tags",
                 "inventory_location",
                 "available_quantity",
+                "specs",
             ],
             id_column="langchain_id",
         )
@@ -385,6 +387,7 @@ class TestVectorStoreSearchSync:
                 Column("tags", "TEXT[]"),
                 Column("inventory_location", "INTEGER[]"),
                 Column("available_quantity", "INTEGER", nullable=True),
+                Column("specs", "JSON", nullable=True),
             ],
             id_column="langchain_id",
             store_metadata=False,
@@ -403,6 +406,7 @@ class TestVectorStoreSearchSync:
                 "tags",
                 "inventory_location",
                 "available_quantity",
+                "specs",
             ],
             id_column="langchain_id",
         )

@@ -329,7 +329,11 @@ class AsyncPGVectorStore(VectorStore):
             for metadata_column in self.metadata_columns:
                 if metadata_column in metadata:
                     values_stmt += f", :{metadata_column}"
-                    values[metadata_column] = metadata[metadata_column]
+                    values[metadata_column] = (
+                        json.dumps(metadata[metadata_column])
+                        if isinstance(metadata[metadata_column], dict)
+                        else metadata[metadata_column]
+                    )
                     del extra[metadata_column]
                 else:
                     values_stmt += ",null"
@@ -1079,7 +1083,10 @@ class AsyncPGVectorStore(VectorStore):
             )
 
         # Allow [a-zA-Z0-9_], disallow $ for now until we support escape characters
-        if not field.isidentifier():
+        if not (
+            field.isidentifier()
+            or all(field_split.isidentifier() for field_split in field.split("."))
+        ):
             raise ValueError(
                 f"Invalid field name: {field}. Expected a valid identifier."
             )
@@ -1105,12 +1112,24 @@ class AsyncPGVectorStore(VectorStore):
             filter_value = value
 
         field_selector = field
+        field_column = field.split(".")[0]
+        field_param_prefix = field.replace(".", "_")
+
         if (
             self.metadata_json_column is not None
-            and field not in self.metadata_columns
-            and field
+            and field_column not in self.metadata_columns
+            and field_column
             not in (self.id_column, self.content_column, self.embedding_column)
         ):
+            field_selector = f"{self.metadata_json_column}.{field_selector}"
+
+        if "." in field_selector:
+            field_selector = "->".join(
+                field_split
+                if ind == 0
+                else f"{'>' if ind == field_selector.count('.') else ''}'{field_split}'"
+                for ind, field_split in enumerate(field_selector.split("."))
+            )
             filter_value_type = (
                 type(filter_value[0])
                 if (isinstance(filter_value, list) or isinstance(filter_value, tuple))
@@ -1119,7 +1138,6 @@ class AsyncPGVectorStore(VectorStore):
             postgres_type = PYTHON_TO_POSTGRES_TYPE_MAP.get(filter_value_type)
             if postgres_type is None:
                 raise ValueError(f"Unsupported type: {filter_value_type}")
-            field_selector = f"{self.metadata_json_column}->>'{field}'"
             if postgres_type != "TEXT" and operator != "$exists":
                 field_selector = f"({field_selector})::{postgres_type}"
 
@@ -1128,15 +1146,15 @@ class AsyncPGVectorStore(VectorStore):
             # Then we implement an equality filter
             # native is trusted input
             native = COMPARISONS_TO_NATIVE[operator]
-            param_name = f"{field}_{suffix_id}"
+            param_name = f"{field_param_prefix}_{suffix_id}"
             return f"{field_selector} {native} :{param_name}", {
                 f"{param_name}": filter_value
             }
         elif operator == "$between":
             # Use AND with two comparisons
             low, high = filter_value
-            low_param_name = f"{field}_low_{suffix_id}"
-            high_param_name = f"{field}_high_{suffix_id}"
+            low_param_name = f"{field_param_prefix}_low_{suffix_id}"
+            high_param_name = f"{field_param_prefix}_high_{suffix_id}"
             return (
                 f"({field_selector} BETWEEN :{low_param_name} AND :{high_param_name})",
                 {
@@ -1156,7 +1174,7 @@ class AsyncPGVectorStore(VectorStore):
                     raise NotImplementedError(
                         f"Unsupported type: {type(val)} for value: {val}"
                     )
-            param_name = f"{field}_{operator.replace('$', '')}_{suffix_id}"
+            param_name = f"{field_param_prefix}_{operator.replace('$', '')}_{suffix_id}"
             if operator == "$in":
                 return f"{field_selector} = ANY(:{param_name})", {
                     f"{param_name}": filter_value
@@ -1167,7 +1185,7 @@ class AsyncPGVectorStore(VectorStore):
                 }
 
         elif operator in {"$like", "$ilike"}:
-            param_name = f"{field}_{operator.replace('$', '')}_{suffix_id}"
+            param_name = f"{field_param_prefix}_{operator.replace('$', '')}_{suffix_id}"
             if operator == "$like":
                 return f"({field_selector} LIKE :{param_name})", {
                     f"{param_name}": filter_value
