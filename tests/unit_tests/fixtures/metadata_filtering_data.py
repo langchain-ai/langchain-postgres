@@ -41,6 +41,10 @@ METADATAS = [
         "dimensions": [2.0, 1.0, 25.0],
         "inventory_location": [401],
         "available_quantity": 100,
+        "specs": {
+            "screen": "OLED",
+            "battery_life_days": 7,
+        },
     },
 ]
 
@@ -238,6 +242,10 @@ FILTERING_TEST_CASES = [
     (
         {"inventory_location": {"$exists": False}},
         ["WB003"],
+    ),
+    (
+        {"specs.screen": "OLED"},
+        ["FT004"],
     ),
 ]
 
