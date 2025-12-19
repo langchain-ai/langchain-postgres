@@ -678,7 +678,7 @@ class AsyncPGVectorStore(VectorStore):
         limit: Optional[int] = None,
         offset: Optional[int] = None,
         filter: Optional[dict] = None,
-        columns: Optional[list[str]] = None,
+        columns: list[str],
         **kwargs: Any,
     ) -> Sequence[RowMapping]:
         """Asynchronously query the database collection using filters and parameters and return matching rows."""
@@ -1072,7 +1072,7 @@ class AsyncPGVectorStore(VectorStore):
             limit=limit, offset=offset, filter=final_filter, columns=columns, **kwargs
         )
 
-        final_results = {field: [] for field in included_fields}
+        final_results: dict[str, list] = {field: [] for field in included_fields}
 
         for row in results:
             final_results["ids"].append(str(row[self.id_column]))
