@@ -27,6 +27,9 @@ CUSTOM_TABLE = "custom" + str(uuid.uuid4()).replace("-", "_")
 HYBRID_SEARCH_TABLE1 = "test_table_hybrid1" + str(uuid.uuid4()).replace("-", "_")
 HYBRID_SEARCH_TABLE2 = "test_table_hybrid2" + str(uuid.uuid4()).replace("-", "_")
 CUSTOM_FILTER_TABLE = "custom_filter" + str(uuid.uuid4()).replace("-", "_")
+CUSTOM_METADATA_JSON_TABLE = "custom_metadata_json" + str(uuid.uuid4()).replace(
+    "-", "_"
+)
 VECTOR_SIZE = 768
 sync_method_exception_str = "Sync methods are not implemented for AsyncPGVectorStore. Use PGVectorStore interface instead."
 
@@ -192,6 +195,7 @@ class TestVectorStoreSearch:
                 Column("tags", "TEXT[]"),
                 Column("inventory_location", "INTEGER[]"),
                 Column("available_quantity", "INTEGER", nullable=True),
+                Column("specs", "JSON", nullable=True),
             ],
             id_column="langchain_id",
             store_metadata=False,
@@ -209,11 +213,30 @@ class TestVectorStoreSearch:
                 "tags",
                 "inventory_location",
                 "available_quantity",
+                "specs",
             ],
             id_column="langchain_id",
         )
         await vs_custom_filter.aadd_documents(filter_docs, ids=ids)
         yield vs_custom_filter
+
+    @pytest_asyncio.fixture(scope="class")
+    async def vs_metadata_json(
+        self, engine: PGEngine
+    ) -> AsyncIterator[AsyncPGVectorStore]:
+        await engine._ainit_vectorstore_table(
+            CUSTOM_METADATA_JSON_TABLE,
+            VECTOR_SIZE,
+            store_metadata=True,
+        )
+
+        vs_metadata_json = await AsyncPGVectorStore.create(
+            engine,
+            embedding_service=embeddings_service,
+            table_name=CUSTOM_METADATA_JSON_TABLE,
+        )
+        await vs_metadata_json.aadd_documents(filter_docs, ids=ids)
+        yield vs_metadata_json
 
     async def test_asimilarity_search_score(self, vs: AsyncPGVectorStore) -> None:
         results = await vs.asimilarity_search_with_score("foo")
@@ -413,6 +436,19 @@ class TestVectorStoreSearch:
         )
 
         assert all_ids == ids_from_combining
+
+    @pytest.mark.parametrize("test_filter, expected_ids", FILTERING_TEST_CASES)
+    async def test_vectorstore_with_json_metadata_filters(
+        self,
+        vs_metadata_json: AsyncPGVectorStore,
+        test_filter: dict,
+        expected_ids: list[str],
+    ) -> None:
+        """Test end to end construction and search on json metadata."""
+        docs = await vs_metadata_json.asimilarity_search(
+            "meow", k=5, filter=test_filter
+        )
+        assert [doc.metadata["code"] for doc in docs] == expected_ids, test_filter
 
     async def test_asimilarity_hybrid_search(self, vs: AsyncPGVectorStore) -> None:
         results = await vs.asimilarity_search(
