@@ -9,7 +9,7 @@ requires-python = ">=3.9"
 license = "MIT"
 dependencies = [
     "asyncpg>=0.30.0",
-    "langchain-core>=0.2.13,<2.0",
+    "langchain-core>=0.3.81, <1.0.0 || >=1.2.5, <2.0",
     "pgvector>=0.2.5,<0.4",
     "psycopg[binary]>=3,<4",
     "psycopg-pool>=3.2.1,<4",
