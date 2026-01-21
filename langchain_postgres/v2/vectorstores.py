@@ -923,5 +923,51 @@ class PGVectorStore(VectorStore):
         """Get documents by ids."""
         return self._engine._run_as_sync(self.__vs.aget_by_ids(ids=ids))
 
+    async def aget(
+        self,
+        ids: Optional[Sequence[str]] = None,
+        where: Optional[dict] = None,
+        limit: Optional[int] = None,
+        offset: Optional[int] = None,
+        where_document: Optional[dict] = None,
+        include: Optional[list[str]] = None,
+        **kwargs: Any,
+    ) -> dict[str, Any]:
+        """Retrieve documents from the collection using filters and parameters."""
+        return await self._engine._run_as_async(
+            self.__vs.aget(
+                ids=ids,
+                where=where,
+                limit=limit,
+                offset=offset,
+                where_document=where_document,
+                include=include,
+                **kwargs,
+            )
+        )
+
+    def get(
+        self,
+        ids: Optional[Sequence[str]] = None,
+        where: Optional[dict] = None,
+        limit: Optional[int] = None,
+        offset: Optional[int] = None,
+        where_document: Optional[dict] = None,
+        include: Optional[list[str]] = None,
+        **kwargs: Any,
+    ) -> dict[str, Any]:
+        """Retrieve documents from the collection using filters and parameters."""
+        return self._engine._run_as_sync(
+            self.__vs.aget(
+                ids=ids,
+                where=where,
+                limit=limit,
+                offset=offset,
+                where_document=where_document,
+                include=include,
+                **kwargs,
+            )
+        )
+
     def get_table_name(self) -> str:
         return self.__vs.table_name

@@ -393,6 +393,50 @@ class TestVectorStoreSearch:
         )
         assert [doc.metadata["code"] for doc in docs] == expected_ids, test_filter
 
+    async def test_async_vectorstore_get_ids(
+        self, vs_custom_filter: AsyncPGVectorStore
+    ) -> None:
+        """Test end to end construction and filter."""
+
+        res = await vs_custom_filter.aget(ids=ids[:2])
+        assert set(res["ids"]) == set(ids[:2])
+
+    async def test_async_vectorstore_get_docs(
+        self, vs_custom_filter: AsyncPGVectorStore
+    ) -> None:
+        """Test end to end construction and filter."""
+
+        res = await vs_custom_filter.aget(where_document={"$in": texts[:2]})
+        assert set(res["documents"]) == set(texts[:2])
+
+    @pytest.mark.parametrize("test_filter, expected_ids", FILTERING_TEST_CASES)
+    async def test_vectorstore_get(
+        self,
+        vs_custom_filter: AsyncPGVectorStore,
+        test_filter: dict,
+        expected_ids: list[str],
+    ) -> None:
+        """Test end to end construction and filter."""
+        res = await vs_custom_filter.aget(where=test_filter)
+        assert set([r["code"] for r in res["metadatas"]]) == set(expected_ids), (
+            test_filter
+        )
+
+    async def test_vectorstore_get_limit_offset(
+        self,
+        vs_custom_filter: AsyncPGVectorStore,
+    ) -> None:
+        """Test limit and offset parameters of get method"""
+
+        all_ids = (await vs_custom_filter.aget())["ids"]
+        ids_from_combining = (
+            (await vs_custom_filter.aget(limit=1))["ids"]
+            + (await vs_custom_filter.aget(limit=1, offset=1))["ids"]
+            + (await vs_custom_filter.aget(offset=2))["ids"]
+        )
+
+        assert all_ids == ids_from_combining
+
     @pytest.mark.parametrize("test_filter, expected_ids", FILTERING_TEST_CASES)
     async def test_vectorstore_with_json_metadata_filters(
         self,
