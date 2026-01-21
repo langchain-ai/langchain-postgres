@@ -415,19 +415,60 @@ class AsyncPGVectorStore(VectorStore):
     async def adelete(
         self,
         ids: Optional[list] = None,
+        filter: Optional[dict] = None,
         **kwargs: Any,
     ) -> Optional[bool]:
         """Delete records from the table.
 
+        Args:
+            ids: List of document IDs to delete.
+            filter: Metadata filter dictionary for bulk deletion.
+                   Supports the same filter syntax as similarity_search.
+                   Note: Filters only work on fields defined in metadata_columns,
+                   not on fields stored in the metadata_json_column.
+
+        Returns:
+            True if deletion was successful, False if no criteria provided.
+
         Raises:
             :class:`InvalidTextRepresentationError <asyncpg.exceptions.InvalidTextRepresentationError>`: if the `ids` data type does not match that of the `id_column`.
+
+        Examples:
+            Delete by IDs:
+                await vectorstore.adelete(ids=["id1", "id2"])
+
+            Delete by metadata filter (requires metadata_columns):
+                await vectorstore.adelete(filter={"source": "documentation"})
+                await vectorstore.adelete(filter={"$and": [{"category": "obsolete"}, {"year": {"$lt": 2020}}]})
+
+            Delete by both IDs and filter (must match both criteria):
+                await vectorstore.adelete(ids=["id1", "id2"], filter={"status": "archived"})
         """
-        if not ids:
+        if not ids and not filter:
             return False
 
-        placeholders = ", ".join(f":id_{i}" for i in range(len(ids)))
-        param_dict = {f"id_{i}": id for i, id in enumerate(ids)}
-        query = f'DELETE FROM "{self.schema_name}"."{self.table_name}" WHERE {self.id_column} in ({placeholders})'
+        where_clauses = []
+        param_dict = {}
+
+        # Handle ID-based deletion
+        if ids:
+            placeholders = ", ".join(f":id_{i}" for i in range(len(ids)))
+            id_params = {f"id_{i}": id for i, id in enumerate(ids)}
+            param_dict.update(id_params)
+            where_clauses.append(f"{self.id_column} in ({placeholders})")
+
+        # Handle filter-based deletion
+        if filter:
+            filter_clause, filter_params = self._create_filter_clause(filter)
+            param_dict.update(filter_params)
+            where_clauses.append(filter_clause)
+
+        # Combine WHERE clauses with AND if both are present
+        where_clause = " AND ".join(where_clauses)
+        query = (
+            f'DELETE FROM "{self.schema_name}"."{self.table_name}" WHERE {where_clause}'
+        )
+
         async with self.engine.connect() as conn:
             await conn.execute(text(query), param_dict)
             await conn.commit()
@@ -1451,8 +1492,35 @@ class AsyncPGVectorStore(VectorStore):
     def delete(
         self,
         ids: Optional[list] = None,
+        filter: Optional[dict] = None,
         **kwargs: Any,
     ) -> Optional[bool]:
+        """Delete records from the table.
+
+        Args:
+            ids: List of document IDs to delete.
+            filter: Metadata filter dictionary for bulk deletion.
+                   Supports the same filter syntax as similarity_search.
+                   Note: Filters only work on fields defined in metadata_columns,
+                   not on fields stored in the metadata_json_column.
+
+        Returns:
+            True if deletion was successful, False if no criteria provided.
+
+        Raises:
+            :class:`InvalidTextRepresentationError <asyncpg.exceptions.InvalidTextRepresentationError>`: if the `ids` data type does not match that of the `id_column`.
+
+        Examples:
+            Delete by IDs:
+                vectorstore.delete(ids=["id1", "id2"])
+
+            Delete by metadata filter (requires metadata_columns):
+                vectorstore.delete(filter={"source": "documentation"})
+                vectorstore.delete(filter={"$and": [{"category": "obsolete"}, {"year": {"$lt": 2020}}]})
+
+            Delete by both IDs and filter (must match both criteria):
+                vectorstore.delete(ids=["id1", "id2"], filter={"status": "archived"})
+        """
         raise NotImplementedError(
             "Sync methods are not implemented for AsyncPGVectorStore. Use PGVectorStore interface instead."
         )
