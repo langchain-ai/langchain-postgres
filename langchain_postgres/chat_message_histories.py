@@ -9,6 +9,7 @@ import json
 import logging
 import re
 import uuid
+from datetime import datetime, timezone
 from typing import List, Optional, Sequence
 
 import psycopg
@@ -73,6 +74,31 @@ def _insert_message_query(table_name: str) -> sql.Composed:
     return sql.SQL(
         "INSERT INTO {table_name} (session_id, message) VALUES (%s, %s)"
     ).format(table_name=sql.Identifier(table_name))
+
+
+def _insert_message_query_timestamped(table_name: str) -> sql.Composed:
+    """Make a SQL query to insert a message with explicit timestamp."""
+    return sql.SQL(
+        "INSERT INTO {table_name} (session_id, message, created_at) VALUES (%s, %s, %s)"
+    ).format(table_name=sql.Identifier(table_name))
+
+
+def _get_message_timestamp(message: BaseMessage) -> str:
+    """Extract timestamp from message or return current UTC time as ISO string."""
+    created_at = None
+    # Check for created_at attribute
+    if hasattr(message, 'created_at'):
+        created_at = getattr(message, 'created_at', None)
+    # Check additional_kwargs for timestamp
+    if created_at is None and hasattr(message, 'additional_kwargs'):
+        created_at = message.additional_kwargs.get('created_at')
+    # Default to current time
+    if created_at is None:
+        created_at = datetime.now(timezone.utc)
+    # Convert to ISO string
+    if isinstance(created_at, datetime):
+        return created_at.isoformat()
+    return str(created_at)
 
 
 class PostgresChatMessageHistory(BaseChatMessageHistory):
@@ -271,39 +297,78 @@ class PostgresChatMessageHistory(BaseChatMessageHistory):
             await acur.execute(query)
         await connection.commit()
 
-    def add_messages(self, messages: Sequence[BaseMessage]) -> None:
-        """Add messages to the chat message history."""
+    def add_messages(
+        self, messages: Sequence[BaseMessage], *, use_timestamp: bool = False
+    ) -> None:
+        """Add messages to the chat message history.
+
+        Args:
+            messages: Sequence of messages to add.
+            use_timestamp: If True, extract timestamp from message's created_at
+                attribute and store it explicitly. If False (default), let the
+                database use its default NOW() timestamp.
+        """
         if self._connection is None:
             raise ValueError(
                 "Please initialize the PostgresChatMessageHistory "
                 "with a sync connection or use the aadd_messages method instead."
             )
 
-        values = [
-            (self._session_id, json.dumps(message_to_dict(message)))
-            for message in messages
-        ]
-
-        query = _insert_message_query(self._table_name)
+        if use_timestamp:
+            values = [
+                (
+                    self._session_id,
+                    json.dumps(message_to_dict(message)),
+                    _get_message_timestamp(message),
+                )
+                for message in messages
+            ]
+            query = _insert_message_query_timestamped(self._table_name)
+        else:
+            values = [
+                (self._session_id, json.dumps(message_to_dict(message)))
+                for message in messages
+            ]
+            query = _insert_message_query(self._table_name)
 
         with self._connection.cursor() as cursor:
             cursor.executemany(query, values)
         self._connection.commit()
 
-    async def aadd_messages(self, messages: Sequence[BaseMessage]) -> None:
-        """Add messages to the chat message history."""
+    async def aadd_messages(
+        self, messages: Sequence[BaseMessage], *, use_timestamp: bool = False
+    ) -> None:
+        """Add messages to the chat message history.
+
+        Args:
+            messages: Sequence of messages to add.
+            use_timestamp: If True, extract timestamp from message's created_at
+                attribute and store it explicitly. If False (default), let the
+                database use its default NOW() timestamp.
+        """
         if self._aconnection is None:
             raise ValueError(
                 "Please initialize the PostgresChatMessageHistory "
                 "with an async connection or use the sync add_messages method instead."
             )
 
-        values = [
-            (self._session_id, json.dumps(message_to_dict(message)))
-            for message in messages
-        ]
+        if use_timestamp:
+            values = [
+                (
+                    self._session_id,
+                    json.dumps(message_to_dict(message)),
+                    _get_message_timestamp(message),
+                )
+                for message in messages
+            ]
+            query = _insert_message_query_timestamped(self._table_name)
+        else:
+            values = [
+                (self._session_id, json.dumps(message_to_dict(message)))
+                for message in messages
+            ]
+            query = _insert_message_query(self._table_name)
 
-        query = _insert_message_query(self._table_name)
         async with self._aconnection.cursor() as cursor:
             await cursor.executemany(query, values)
         await self._aconnection.commit()
