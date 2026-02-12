@@ -52,7 +52,9 @@ def _create_session_table(table_name: str) -> sql.Composed:
         """
         CREATE TABLE IF NOT EXISTS {session_table_name} (
             session_id UUID PRIMARY KEY,
-            last_message_time TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            last_message_time TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            message_count INTEGER NOT NULL DEFAULT 0
         );
         """
     ).format(session_table_name=sql.Identifier(session_table_name))
@@ -97,22 +99,31 @@ def _insert_message_query_timestamped(table_name: str) -> sql.Composed:
 
 
 def _upsert_session_query(table_name: str) -> sql.Composed:
-    """Make a SQL query to upsert session last_message_time."""
+    """Make a SQL query to upsert session metadata.
+
+    On INSERT: sets created_at, last_message_time, and message_count.
+    On UPDATE: advances last_message_time (via GREATEST), increments
+    message_count; created_at is left unchanged.
+    """
     session_table_name = f"{table_name}_sessions"
     return sql.SQL(
-        "INSERT INTO {session_table_name} (session_id, last_message_time) "
-        "VALUES (%(session_id)s, %(last_message_time)s) "
+        "INSERT INTO {session_table_name} "
+        "(session_id, created_at, last_message_time, message_count) "
+        "VALUES (%(session_id)s, %(last_message_time)s, "
+        "%(last_message_time)s, %(num_messages)s) "
         "ON CONFLICT (session_id) DO UPDATE SET "
         "last_message_time = GREATEST("
-        "{session_table_name}.last_message_time, EXCLUDED.last_message_time)"
+        "{session_table_name}.last_message_time, EXCLUDED.last_message_time), "
+        "message_count = {session_table_name}.message_count + EXCLUDED.message_count"
     ).format(session_table_name=sql.Identifier(session_table_name))
 
 
-def _get_last_message_time_query(table_name: str) -> sql.Composed:
-    """Make a SQL query to get the last message time for a session."""
+def _get_session_info_query(table_name: str) -> sql.Composed:
+    """Make a SQL query to get session info."""
     session_table_name = f"{table_name}_sessions"
     return sql.SQL(
-        "SELECT last_message_time FROM {session_table_name} "
+        "SELECT created_at, last_message_time, message_count "
+        "FROM {session_table_name} "
         "WHERE session_id = %(session_id)s"
     ).format(session_table_name=sql.Identifier(session_table_name))
 
@@ -385,7 +396,7 @@ class PostgresChatMessageHistory(BaseChatMessageHistory):
         with self._connection.cursor() as cursor:
             cursor.executemany(query, values)
 
-        # UPSERT session last_message_time
+        # UPSERT session metadata
         last_time = datetime.now(timezone.utc).isoformat()
         if use_timestamp and values:
             last_time = max(v[2] for v in values)
@@ -393,7 +404,11 @@ class PostgresChatMessageHistory(BaseChatMessageHistory):
         with self._connection.cursor() as cursor:
             cursor.execute(
                 upsert_query,
-                {"session_id": self._session_id, "last_message_time": last_time},
+                {
+                    "session_id": self._session_id,
+                    "last_message_time": last_time,
+                    "num_messages": len(messages),
+                },
             )
         self._connection.commit()
 
@@ -435,7 +450,7 @@ class PostgresChatMessageHistory(BaseChatMessageHistory):
         async with self._aconnection.cursor() as cursor:
             await cursor.executemany(query, values)
 
-        # UPSERT session last_message_time
+        # UPSERT session metadata
         last_time = datetime.now(timezone.utc).isoformat()
         if use_timestamp and values:
             last_time = max(v[2] for v in values)
@@ -443,7 +458,11 @@ class PostgresChatMessageHistory(BaseChatMessageHistory):
         async with self._aconnection.cursor() as cursor:
             await cursor.execute(
                 upsert_query,
-                {"session_id": self._session_id, "last_message_time": last_time},
+                {
+                    "session_id": self._session_id,
+                    "last_message_time": last_time,
+                    "num_messages": len(messages),
+                },
             )
         await self._aconnection.commit()
 
@@ -498,37 +517,69 @@ class PostgresChatMessageHistory(BaseChatMessageHistory):
                 msg.additional_kwargs["created_at"] = row[1].isoformat()
         return messages
 
-    def get_last_message_time(self) -> Optional[datetime]:
-        """Get the last message time for the current session."""
+    def get_session_info(self) -> Optional[dict]:
+        """Get session metadata for the current session.
+
+        Returns a dict with keys ``created_at`` (datetime), ``last_message_time``
+        (datetime), and ``message_count`` (int), or ``None`` if no messages
+        have been added to this session yet.
+        """
         if self._connection is None:
             raise ValueError(
                 "Please initialize the PostgresChatMessageHistory "
                 "with a sync connection or use the async "
-                "aget_last_message_time method instead."
+                "aget_session_info method instead."
             )
-        query = _get_last_message_time_query(self._table_name)
+        query = _get_session_info_query(self._table_name)
         with self._connection.cursor() as cursor:
             cursor.execute(query, {"session_id": self._session_id})
             result = cursor.fetchone()
         if result is None:
             return None
-        return result[0]
+        return {
+            "created_at": result[0],
+            "last_message_time": result[1],
+            "message_count": result[2],
+        }
 
-    async def aget_last_message_time(self) -> Optional[datetime]:
-        """Get the last message time for the current session."""
+    async def aget_session_info(self) -> Optional[dict]:
+        """Get session metadata for the current session.
+
+        Returns a dict with keys ``created_at`` (datetime), ``last_message_time``
+        (datetime), and ``message_count`` (int), or ``None`` if no messages
+        have been added to this session yet.
+        """
         if self._aconnection is None:
             raise ValueError(
                 "Please initialize the PostgresChatMessageHistory "
                 "with an async connection or use the sync "
-                "get_last_message_time method instead."
+                "get_session_info method instead."
             )
-        query = _get_last_message_time_query(self._table_name)
+        query = _get_session_info_query(self._table_name)
         async with self._aconnection.cursor() as cursor:
             await cursor.execute(query, {"session_id": self._session_id})
             result = await cursor.fetchone()
         if result is None:
             return None
-        return result[0]
+        return {
+            "created_at": result[0],
+            "last_message_time": result[1],
+            "message_count": result[2],
+        }
+
+    def get_last_message_time(self) -> Optional[datetime]:
+        """Get the last message time for the current session."""
+        info = self.get_session_info()
+        if info is None:
+            return None
+        return info["last_message_time"]
+
+    async def aget_last_message_time(self) -> Optional[datetime]:
+        """Get the last message time for the current session."""
+        info = await self.aget_session_info()
+        if info is None:
+            return None
+        return info["last_message_time"]
 
     @property
     def messages(self) -> List[BaseMessage]:

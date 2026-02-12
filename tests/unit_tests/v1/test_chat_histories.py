@@ -213,8 +213,8 @@ async def test_async_message_timestamps() -> None:
         assert timestamps[1] >= timestamps[0]
 
 
-def test_sync_session_last_message_time() -> None:
-    """Test that add_messages updates session last_message_time."""
+def test_sync_session_info() -> None:
+    """Test that add_messages updates session info."""
     table_name = "chat_history"
     session_id = str(uuid.UUID(int=202))
     with syncpg_client() as sync_connection:
@@ -225,39 +225,54 @@ def test_sync_session_last_message_time() -> None:
             table_name, session_id, sync_connection=sync_connection
         )
 
-        # Before any messages, last_message_time should be None
+        # Before any messages, session info should be None
+        assert chat_history.get_session_info() is None
         assert chat_history.get_last_message_time() is None
 
         chat_history.add_messages([HumanMessage(content="First")])
-        first_time = chat_history.get_last_message_time()
-        assert first_time is not None
-        assert isinstance(first_time, datetime)
-        # Should be recent
-        assert abs((datetime.now(timezone.utc) - first_time).total_seconds()) < 10
+        info = chat_history.get_session_info()
+        assert info is not None
+        assert isinstance(info["created_at"], datetime)
+        assert isinstance(info["last_message_time"], datetime)
+        assert info["message_count"] == 1
+        # Session created_at should be recent
+        assert (
+            abs((datetime.now(timezone.utc) - info["created_at"]).total_seconds()) < 10
+        )
+        # created_at and last_message_time should match on first insert
+        assert info["created_at"] == info["last_message_time"]
+        first_created_at = info["created_at"]
+        first_time = info["last_message_time"]
 
-        # Add more messages — last_message_time should advance
-        chat_history.add_messages([HumanMessage(content="Second")])
-        second_time = chat_history.get_last_message_time()
-        assert second_time is not None
-        assert second_time >= first_time
+        # Add more messages — last_message_time advances, created_at stays
+        chat_history.add_messages(
+            [HumanMessage(content="Second"), HumanMessage(content="Third")]
+        )
+        info2 = chat_history.get_session_info()
+        assert info2 is not None
+        assert info2["created_at"] == first_created_at  # unchanged
+        assert info2["last_message_time"] >= first_time
+        assert info2["message_count"] == 3
 
         # last_message_time should be consistent with the message timestamps
         messages = chat_history.get_messages()
         last_msg_ts = datetime.fromisoformat(
             messages[-1].additional_kwargs["created_at"]
         )
-        assert abs((second_time - last_msg_ts).total_seconds()) < 2
+        assert abs((info2["last_message_time"] - last_msg_ts).total_seconds()) < 2
 
-        # Clear messages — session row should persist
+        # Clear messages — session row should persist with original metadata
         chat_history.clear()
         assert chat_history.messages == []
-        persisted_time = chat_history.get_last_message_time()
-        assert persisted_time is not None
-        assert persisted_time == second_time
+        persisted = chat_history.get_session_info()
+        assert persisted is not None
+        assert persisted["created_at"] == first_created_at
+        assert persisted["last_message_time"] == info2["last_message_time"]
+        assert persisted["message_count"] == 3  # count persists after clear
 
 
-async def test_async_session_last_message_time() -> None:
-    """Test that aadd_messages updates session last_message_time."""
+async def test_async_session_info() -> None:
+    """Test that aadd_messages updates session info."""
     async with asyncpg_client() as async_connection:
         table_name = "chat_history"
         session_id = str(uuid.UUID(int=203))
@@ -269,18 +284,23 @@ async def test_async_session_last_message_time() -> None:
         )
 
         # Before any messages
+        assert await chat_history.aget_session_info() is None
         assert await chat_history.aget_last_message_time() is None
 
         await chat_history.aadd_messages([HumanMessage(content="First")])
-        first_time = await chat_history.aget_last_message_time()
-        assert first_time is not None
-        assert isinstance(first_time, datetime)
-        assert abs((datetime.now(timezone.utc) - first_time).total_seconds()) < 10
+        info = await chat_history.aget_session_info()
+        assert info is not None
+        assert info["message_count"] == 1
+        assert info["created_at"] == info["last_message_time"]
+        first_created_at = info["created_at"]
+        assert abs((datetime.now(timezone.utc) - first_created_at).total_seconds()) < 10
 
         await chat_history.aadd_messages([HumanMessage(content="Second")])
-        second_time = await chat_history.aget_last_message_time()
-        assert second_time is not None
-        assert second_time >= first_time
+        info2 = await chat_history.aget_session_info()
+        assert info2 is not None
+        assert info2["created_at"] == first_created_at  # unchanged
+        assert info2["last_message_time"] >= info["last_message_time"]
+        assert info2["message_count"] == 2
 
 
 def test_sync_use_timestamp_with_retrieval() -> None:
@@ -309,14 +329,16 @@ def test_sync_use_timestamp_with_retrieval() -> None:
         retrieved_dt = datetime.fromisoformat(retrieved_ts)
         assert retrieved_dt == known_time
 
-        # Session last_message_time should also match the explicit timestamp
-        session_time = chat_history.get_last_message_time()
-        assert session_time is not None
-        assert session_time == known_time
+        # Session info should reflect the explicit timestamp
+        info = chat_history.get_session_info()
+        assert info is not None
+        assert info["last_message_time"] == known_time
+        assert info["created_at"] == known_time
+        assert info["message_count"] == 1
 
 
-def test_sync_empty_session_last_message_time() -> None:
-    """Test that get_last_message_time returns None for empty session."""
+def test_sync_empty_session_info() -> None:
+    """Test that get_session_info returns None for empty session."""
     table_name = "chat_history"
     session_id = str(uuid.UUID(int=205))
     with syncpg_client() as sync_connection:
@@ -327,11 +349,12 @@ def test_sync_empty_session_last_message_time() -> None:
             table_name, session_id, sync_connection=sync_connection
         )
 
+        assert chat_history.get_session_info() is None
         assert chat_history.get_last_message_time() is None
 
 
 def test_sync_multiple_sessions_independent() -> None:
-    """Test that last_message_time is tracked independently per session."""
+    """Test that session info is tracked independently per session."""
     table_name = "chat_history"
     session_a = str(uuid.UUID(int=300))
     session_b = str(uuid.UUID(int=301))
@@ -347,16 +370,18 @@ def test_sync_multiple_sessions_independent() -> None:
         )
 
         history_a.add_messages([HumanMessage(content="Session A")])
-        time_a = history_a.get_last_message_time()
-        assert time_a is not None
+        info_a = history_a.get_session_info()
+        assert info_a is not None
+        assert info_a["message_count"] == 1
 
         # Session B has no messages yet
-        assert history_b.get_last_message_time() is None
+        assert history_b.get_session_info() is None
 
         history_b.add_messages([HumanMessage(content="Session B")])
-        time_b = history_b.get_last_message_time()
-        assert time_b is not None
-        assert time_b >= time_a
+        info_b = history_b.get_session_info()
+        assert info_b is not None
+        assert info_b["message_count"] == 1
+        assert info_b["last_message_time"] >= info_a["last_message_time"]
 
         # Session A unchanged
-        assert history_a.get_last_message_time() == time_a
+        assert history_a.get_session_info() == info_a
