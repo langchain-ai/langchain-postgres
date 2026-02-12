@@ -45,10 +45,23 @@ def _create_table_and_index(table_name: str) -> List[sql.Composed]:
     return statements
 
 
+def _create_session_table(table_name: str) -> sql.Composed:
+    """Make a SQL query to create a session tracking table."""
+    session_table_name = f"{table_name}_sessions"
+    return sql.SQL(
+        """
+        CREATE TABLE IF NOT EXISTS {session_table_name} (
+            session_id UUID PRIMARY KEY,
+            last_message_time TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+        """
+    ).format(session_table_name=sql.Identifier(session_table_name))
+
+
 def _get_messages_query(table_name: str) -> sql.Composed:
     """Make a SQL query to get messages for a given session."""
     return sql.SQL(
-        "SELECT message "
+        "SELECT message, created_at "
         "FROM {table_name} "
         "WHERE session_id = %(session_id)s "
         "ORDER BY id;"
@@ -83,15 +96,44 @@ def _insert_message_query_timestamped(table_name: str) -> sql.Composed:
     ).format(table_name=sql.Identifier(table_name))
 
 
+def _upsert_session_query(table_name: str) -> sql.Composed:
+    """Make a SQL query to upsert session last_message_time."""
+    session_table_name = f"{table_name}_sessions"
+    return sql.SQL(
+        "INSERT INTO {session_table_name} (session_id, last_message_time) "
+        "VALUES (%(session_id)s, %(last_message_time)s) "
+        "ON CONFLICT (session_id) DO UPDATE SET "
+        "last_message_time = GREATEST("
+        "{session_table_name}.last_message_time, EXCLUDED.last_message_time)"
+    ).format(session_table_name=sql.Identifier(session_table_name))
+
+
+def _get_last_message_time_query(table_name: str) -> sql.Composed:
+    """Make a SQL query to get the last message time for a session."""
+    session_table_name = f"{table_name}_sessions"
+    return sql.SQL(
+        "SELECT last_message_time FROM {session_table_name} "
+        "WHERE session_id = %(session_id)s"
+    ).format(session_table_name=sql.Identifier(session_table_name))
+
+
+def _delete_session_table_query(table_name: str) -> sql.Composed:
+    """Make a SQL query to delete the session table."""
+    session_table_name = f"{table_name}_sessions"
+    return sql.SQL("DROP TABLE IF EXISTS {session_table_name};").format(
+        session_table_name=sql.Identifier(session_table_name)
+    )
+
+
 def _get_message_timestamp(message: BaseMessage) -> str:
     """Extract timestamp from message or return current UTC time as ISO string."""
     created_at = None
     # Check for created_at attribute
-    if hasattr(message, 'created_at'):
-        created_at = getattr(message, 'created_at', None)
+    if hasattr(message, "created_at"):
+        created_at = getattr(message, "created_at", None)
     # Check additional_kwargs for timestamp
-    if created_at is None and hasattr(message, 'additional_kwargs'):
-        created_at = message.additional_kwargs.get('created_at')
+    if created_at is None and hasattr(message, "additional_kwargs"):
+        created_at = message.additional_kwargs.get("created_at")
     # Default to current time
     if created_at is None:
         created_at = datetime.now(timezone.utc)
@@ -129,8 +171,9 @@ class PostgresChatMessageHistory(BaseChatMessageHistory):
         the id (which should be increasing monotonically), and correspond
         to the order in which the messages were added to the history.
 
-        The "created_at" column is not returned by the interface, but
-        has been added for the schema so the information is available in the database.
+        The "created_at" column is returned in each message's
+        ``additional_kwargs["created_at"]`` as an ISO 8601 string when
+        messages are retrieved via ``get_messages`` or ``aget_messages``.
 
         A session_id can be used to separate different chat histories in the same table,
         the session_id should be provided when initializing the client.
@@ -239,6 +282,7 @@ class PostgresChatMessageHistory(BaseChatMessageHistory):
     ) -> None:
         """Create the table schema in the database and create relevant indexes."""
         queries = _create_table_and_index(table_name)
+        queries.append(_create_session_table(table_name))
         logger.info("Creating schema for table %s", table_name)
         with connection.cursor() as cursor:
             for query in queries:
@@ -251,6 +295,7 @@ class PostgresChatMessageHistory(BaseChatMessageHistory):
     ) -> None:
         """Create the table schema in the database and create relevant indexes."""
         queries = _create_table_and_index(table_name)
+        queries.append(_create_session_table(table_name))
         logger.info("Creating schema for table %s", table_name)
         async with connection.cursor() as cur:
             for query in queries:
@@ -264,15 +309,17 @@ class PostgresChatMessageHistory(BaseChatMessageHistory):
         WARNING:
             This will delete the given table from the database including
             all the database in the table and the schema of the table.
+            Also drops the associated session tracking table.
 
         Args:
             connection: The database connection.
             table_name: The name of the table to create.
         """
-
+        session_query = _delete_session_table_query(table_name)
         query = _delete_table_query(table_name)
         logger.info("Dropping table %s", table_name)
         with connection.cursor() as cursor:
+            cursor.execute(session_query)
             cursor.execute(query)
         connection.commit()
 
@@ -285,15 +332,18 @@ class PostgresChatMessageHistory(BaseChatMessageHistory):
         WARNING:
             This will delete the given table from the database including
             all the database in the table and the schema of the table.
+            Also drops the associated session tracking table.
 
         Args:
             connection: Async database connection.
             table_name: The name of the table to create.
         """
+        session_query = _delete_session_table_query(table_name)
         query = _delete_table_query(table_name)
         logger.info("Dropping table %s", table_name)
 
         async with connection.cursor() as acur:
+            await acur.execute(session_query)
             await acur.execute(query)
         await connection.commit()
 
@@ -314,6 +364,7 @@ class PostgresChatMessageHistory(BaseChatMessageHistory):
                 "with a sync connection or use the aadd_messages method instead."
             )
 
+        values: list[tuple[str, ...]]
         if use_timestamp:
             values = [
                 (
@@ -333,6 +384,17 @@ class PostgresChatMessageHistory(BaseChatMessageHistory):
 
         with self._connection.cursor() as cursor:
             cursor.executemany(query, values)
+
+        # UPSERT session last_message_time
+        last_time = datetime.now(timezone.utc).isoformat()
+        if use_timestamp and values:
+            last_time = max(v[2] for v in values)
+        upsert_query = _upsert_session_query(self._table_name)
+        with self._connection.cursor() as cursor:
+            cursor.execute(
+                upsert_query,
+                {"session_id": self._session_id, "last_message_time": last_time},
+            )
         self._connection.commit()
 
     async def aadd_messages(
@@ -352,6 +414,7 @@ class PostgresChatMessageHistory(BaseChatMessageHistory):
                 "with an async connection or use the sync add_messages method instead."
             )
 
+        values: list[tuple[str, ...]]
         if use_timestamp:
             values = [
                 (
@@ -371,10 +434,26 @@ class PostgresChatMessageHistory(BaseChatMessageHistory):
 
         async with self._aconnection.cursor() as cursor:
             await cursor.executemany(query, values)
+
+        # UPSERT session last_message_time
+        last_time = datetime.now(timezone.utc).isoformat()
+        if use_timestamp and values:
+            last_time = max(v[2] for v in values)
+        upsert_query = _upsert_session_query(self._table_name)
+        async with self._aconnection.cursor() as cursor:
+            await cursor.execute(
+                upsert_query,
+                {"session_id": self._session_id, "last_message_time": last_time},
+            )
         await self._aconnection.commit()
 
     def get_messages(self) -> List[BaseMessage]:
-        """Retrieve messages from the chat message history."""
+        """Retrieve messages from the chat message history.
+
+        Each returned message will have its ``created_at`` timestamp
+        injected into ``additional_kwargs["created_at"]`` as an ISO 8601
+        string.
+        """
         if self._connection is None:
             raise ValueError(
                 "Please initialize the PostgresChatMessageHistory "
@@ -385,13 +464,22 @@ class PostgresChatMessageHistory(BaseChatMessageHistory):
 
         with self._connection.cursor() as cursor:
             cursor.execute(query, {"session_id": self._session_id})
-            items = [record[0] for record in cursor.fetchall()]
+            rows = cursor.fetchall()
 
+        items = [row[0] for row in rows]
         messages = messages_from_dict(items)
+        for msg, row in zip(messages, rows):
+            if row[1] is not None:
+                msg.additional_kwargs["created_at"] = row[1].isoformat()
         return messages
 
     async def aget_messages(self) -> List[BaseMessage]:
-        """Retrieve messages from the chat message history."""
+        """Retrieve messages from the chat message history.
+
+        Each returned message will have its ``created_at`` timestamp
+        injected into ``additional_kwargs["created_at"]`` as an ISO 8601
+        string.
+        """
         if self._aconnection is None:
             raise ValueError(
                 "Please initialize the PostgresChatMessageHistory "
@@ -401,10 +489,46 @@ class PostgresChatMessageHistory(BaseChatMessageHistory):
         query = _get_messages_query(self._table_name)
         async with self._aconnection.cursor() as cursor:
             await cursor.execute(query, {"session_id": self._session_id})
-            items = [record[0] for record in await cursor.fetchall()]
+            rows = await cursor.fetchall()
 
+        items = [row[0] for row in rows]
         messages = messages_from_dict(items)
+        for msg, row in zip(messages, rows):
+            if row[1] is not None:
+                msg.additional_kwargs["created_at"] = row[1].isoformat()
         return messages
+
+    def get_last_message_time(self) -> Optional[datetime]:
+        """Get the last message time for the current session."""
+        if self._connection is None:
+            raise ValueError(
+                "Please initialize the PostgresChatMessageHistory "
+                "with a sync connection or use the async "
+                "aget_last_message_time method instead."
+            )
+        query = _get_last_message_time_query(self._table_name)
+        with self._connection.cursor() as cursor:
+            cursor.execute(query, {"session_id": self._session_id})
+            result = cursor.fetchone()
+        if result is None:
+            return None
+        return result[0]
+
+    async def aget_last_message_time(self) -> Optional[datetime]:
+        """Get the last message time for the current session."""
+        if self._aconnection is None:
+            raise ValueError(
+                "Please initialize the PostgresChatMessageHistory "
+                "with an async connection or use the sync "
+                "get_last_message_time method instead."
+            )
+        query = _get_last_message_time_query(self._table_name)
+        async with self._aconnection.cursor() as cursor:
+            await cursor.execute(query, {"session_id": self._session_id})
+            result = await cursor.fetchone()
+        if result is None:
+            return None
+        return result[0]
 
     @property
     def messages(self) -> List[BaseMessage]:
