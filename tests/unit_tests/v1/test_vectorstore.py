@@ -647,7 +647,7 @@ def test_pgvector_retriever_search_threshold() -> None:
         search_type="similarity_score_threshold",
         search_kwargs={"k": 3, "score_threshold": 0.999},
     )
-    output = retriever.get_relevant_documents("summer")
+    output = retriever.invoke("summer")
     _compare_documents(
         output,
         [
@@ -675,7 +675,7 @@ async def test_async_pgvector_retriever_search_threshold() -> None:
         search_type="similarity_score_threshold",
         search_kwargs={"k": 3, "score_threshold": 0.999},
     )
-    output = await retriever.aget_relevant_documents("summer")
+    output = await retriever.ainvoke("summer")
     _compare_documents(
         output,
         [
@@ -703,7 +703,7 @@ def test_pgvector_retriever_search_threshold_custom_normalization_fn() -> None:
         search_type="similarity_score_threshold",
         search_kwargs={"k": 3, "score_threshold": 0.5},
     )
-    output = retriever.get_relevant_documents("foo")
+    output = retriever.invoke("foo")
     assert output == []
 
 
@@ -728,7 +728,7 @@ async def test_async_pgvector_retriever_search_threshold_custom_normalization_fn
         search_type="similarity_score_threshold",
         search_kwargs={"k": 3, "score_threshold": 0.5},
     )
-    output = await retriever.aget_relevant_documents("foo")
+    output = await retriever.ainvoke("foo")
     assert output == []
 
 
