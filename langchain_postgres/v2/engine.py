@@ -10,6 +10,7 @@ from sqlalchemy.engine import URL
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 
 from .hybrid_search_config import HybridSearchConfig
+from .indexes import DEFAULT_VECTOR_TYPE, VectorType
 
 T = TypeVar("T")
 
@@ -150,6 +151,7 @@ class PGEngine:
         table_name: str,
         vector_size: int,
         *,
+        vector_type: VectorType = DEFAULT_VECTOR_TYPE,
         schema_name: str = "public",
         content_column: str = "content",
         embedding_column: str = "embedding",
@@ -166,6 +168,8 @@ class PGEngine:
         Args:
             table_name (str): The database table name.
             vector_size (int): Vector size for the embedding model to be used.
+            vector_type (VectorType): Type of the vector column to store embeddings.
+                Default: VectorType.VECTOR.
             schema_name (str): The schema name.
                 Default: "public".
             content_column (str): Name of the column to store document content.
@@ -194,6 +198,8 @@ class PGEngine:
         hybrid_search_default_column_name = content_column + "_tsv"
         content_column = self._escape_postgres_identifier(content_column)
         embedding_column = self._escape_postgres_identifier(embedding_column)
+        embedding_column_type = f"{vector_type.value}({vector_size})"
+
         if metadata_columns is None:
             metadata_columns = []
         else:
@@ -246,7 +252,7 @@ class PGEngine:
         query = f"""CREATE TABLE "{schema_name}"."{table_name}"(
             "{id_column_name}" {id_data_type} PRIMARY KEY,
             "{content_column}" TEXT NOT NULL,
-            "{embedding_column}" vector({vector_size}) NOT NULL
+            "{embedding_column}" {embedding_column_type} NOT NULL
             {hybrid_search_column}"""
         for column in metadata_columns:
             if isinstance(column, Column):
@@ -268,6 +274,7 @@ class PGEngine:
         table_name: str,
         vector_size: int,
         *,
+        vector_type: VectorType = DEFAULT_VECTOR_TYPE,
         schema_name: str = "public",
         content_column: str = "content",
         embedding_column: str = "embedding",
@@ -284,6 +291,8 @@ class PGEngine:
         Args:
             table_name (str): The database table name.
             vector_size (int): Vector size for the embedding model to be used.
+            vector_type (VectorType): Type of the vector column to store embeddings.
+                Default: VectorType.VECTOR.
             schema_name (str): The schema name.
                 Default: "public".
             content_column (str): Name of the column to store document content.
@@ -308,6 +317,7 @@ class PGEngine:
             self._ainit_vectorstore_table(
                 table_name,
                 vector_size,
+                vector_type=vector_type,
                 schema_name=schema_name,
                 content_column=content_column,
                 embedding_column=embedding_column,
@@ -325,6 +335,7 @@ class PGEngine:
         table_name: str,
         vector_size: int,
         *,
+        vector_type: VectorType = DEFAULT_VECTOR_TYPE,
         schema_name: str = "public",
         content_column: str = "content",
         embedding_column: str = "embedding",
@@ -341,6 +352,8 @@ class PGEngine:
         Args:
             table_name (str): The database table name.
             vector_size (int): Vector size for the embedding model to be used.
+            vector_type (VectorType): Type of the vector column to store embeddings.
+                Default: VectorType.VECTOR.
             schema_name (str): The schema name.
                 Default: "public".
             content_column (str): Name of the column to store document content.
@@ -365,6 +378,7 @@ class PGEngine:
             self._ainit_vectorstore_table(
                 table_name,
                 vector_size,
+                vector_type=vector_type,
                 schema_name=schema_name,
                 content_column=content_column,
                 embedding_column=embedding_column,
