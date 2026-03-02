@@ -35,6 +35,9 @@ pip install -U langchain-postgres
 * [Quickstart](https://github.com/langchain-ai/langchain-postgres/blob/main/examples/pg_vectorstore.ipynb)
 * [How-to](https://github.com/langchain-ai/langchain-postgres/blob/main/examples/pg_vectorstore_how_to.ipynb)
 
+> [!TIP]
+> For developing, debugging, and deploying AI agents and LLM applications, see [LangSmith](https://docs.langchain.com/langsmith/home).
+
 ### Example
 
 ```python
