@@ -1,6 +1,6 @@
 # Design Overview for `PGVectorStore`
 
-This document outlines the design choices behind the PGVectorStore integration for LangChain, focusing on how an async PostgreSQL driver can supports both synchronous and asynchronous usage.
+This document outlines the design choices behind the PGVectorStore integration for LangChain, focusing on how an async PostgreSQL driver can support both synchronous and asynchronous usage.
 
 ## Motivation: Performance through Asynchronicity
 
