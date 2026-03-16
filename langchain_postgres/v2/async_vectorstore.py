@@ -706,7 +706,7 @@ class AsyncPGVectorStore(VectorStore):
                 if hybrid_search_config.tsv_lang
                 else ""
             )
-            query_tsv = f"plainto_tsquery({lang} :fts_query)"
+            query_tsv = fr"websearch_to_tsquery({lang} regexp_replace(:fts_query, '\s', ' OR ', 'g'))"
             param_dict["fts_query"] = fts_query
             if hybrid_search_config.tsv_column:
                 content_tsv = f'"{hybrid_search_config.tsv_column}"'
