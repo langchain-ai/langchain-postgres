@@ -1022,15 +1022,15 @@ class AsyncPGVectorStore(VectorStore):
                     text(f"CREATE EXTENSION IF NOT EXISTS {index.extension_name}")
                 )
                 await conn.commit()
-        function = index.get_index_function()
 
+        operator_class = index.operator_class()
         filter = f"WHERE ({index.partial_indexes})" if index.partial_indexes else ""
         params = "WITH " + index.index_options()
         if name is None:
             if index.name is None:
                 index.name = self.table_name + DEFAULT_INDEX_NAME_SUFFIX
             name = index.name
-        stmt = f'CREATE INDEX {"CONCURRENTLY" if concurrently else ""} "{name}" ON "{self.schema_name}"."{self.table_name}" USING {index.index_type} ({self.embedding_column} {function}) {params} {filter};'
+        stmt = f'CREATE INDEX {"CONCURRENTLY" if concurrently else ""} "{name}" ON "{self.schema_name}"."{self.table_name}" USING {index.index_type} ({self.embedding_column} {operator_class}) {params} {filter};'
 
         if concurrently:
             async with self.engine.connect() as conn:
