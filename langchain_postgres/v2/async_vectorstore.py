@@ -1394,28 +1394,31 @@ class AsyncPGVectorStore(VectorStore):
 
             if operator == "$ancestor":
                 return (
-                    f"({effective_field_selector} @> :{param_name}::ltree)",
+                    f"({effective_field_selector} @> CAST(:{param_name} AS ltree))",
                     {param_name: filter_value},
                 )
             elif operator == "$descendant":
                 return (
-                    f"({effective_field_selector} <@ :{param_name}::ltree)",
+                    f"({effective_field_selector} <@ CAST(:{param_name} AS ltree))",
                     {param_name: filter_value},
                 )
             elif operator == "$lquery":
                 return (
-                    f"({effective_field_selector} ~ :{param_name}::lquery)",
+                    f"({effective_field_selector} ~ CAST(:{param_name} AS lquery))",
                     {param_name: filter_value},
                 )
             elif operator == "$lquery_any":
                 placeholders = ", ".join(
-                    [f":{param_name}_{i}::lquery" for i in range(len(filter_value))]
+                    [
+                        f"CAST(:{param_name}_{i} AS lquery)"
+                        for i in range(len(filter_value))
+                    ]
                 )
                 params = {f"{param_name}_{i}": v for i, v in enumerate(filter_value)}
                 return f"({effective_field_selector} ? ARRAY[{placeholders}])", params
             else:  # operator == "$ltxtquery"
                 return (
-                    f"({effective_field_selector} @ :{param_name}::ltxtquery)",
+                    f"({effective_field_selector} @ CAST(:{param_name} AS ltxtquery))",
                     {param_name: filter_value},
                 )
         else:
