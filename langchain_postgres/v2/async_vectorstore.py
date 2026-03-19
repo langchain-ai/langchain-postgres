@@ -48,11 +48,20 @@ TEXT_OPERATORS = {
 
 LOGICAL_OPERATORS = {"$and", "$or", "$not"}
 
+LTREE_OPERATORS = {
+    "$ancestor",  # field @> value::ltree  (field is ancestor-of-or-equal-to value)
+    "$descendant",  # field <@ value::ltree  (field is descendant-of-or-equal-to value)
+    "$lquery",  # field ~ value::lquery  (field matches lquery pattern)
+    "$lquery_any",  # field ? ARRAY[...]::lquery[]  (field matches any lquery)
+    "$ltxtquery",  # field @ value::ltxtquery  (field matches ltxtquery)
+}
+
 SUPPORTED_OPERATORS = (
     set(COMPARISONS_TO_NATIVE)
     .union(TEXT_OPERATORS)
     .union(LOGICAL_OPERATORS)
     .union(SPECIAL_CASED_OPERATORS)
+    .union(LTREE_OPERATORS)
 )
 
 PYTHON_TO_POSTGRES_TYPE_MAP = {
@@ -1264,7 +1273,7 @@ class AsyncPGVectorStore(VectorStore):
         ):
             field_selector = f"{self.metadata_json_column}.{field_selector}"
 
-        if "." in field_selector:
+        if "." in field_selector and operator not in LTREE_OPERATORS:
             field_selector = "->".join(
                 field_split
                 if ind == 0
@@ -1281,6 +1290,14 @@ class AsyncPGVectorStore(VectorStore):
                 raise ValueError(f"Unsupported type: {filter_value_type}")
             if postgres_type != "TEXT" and operator != "$exists":
                 field_selector = f"({field_selector})::{postgres_type}"
+        elif "." in field_selector:  # ltree operator on a JSON-stored field
+            field_selector = "->".join(
+                field_split
+                if ind == 0
+                else f"{'>' if ind == field_selector.count('.') else ''}'{field_split}'"
+                for ind, field_split in enumerate(field_selector.split("."))
+            )
+            # The ltree block below will apply the ::ltree cast
 
         suffix_id = str(uuid.uuid4()).split("-")[0]
         if operator in COMPARISONS_TO_NATIVE:
@@ -1346,6 +1363,61 @@ class AsyncPGVectorStore(VectorStore):
                     return f"({field_selector} IS NOT NULL)", {}
                 else:
                     return f"({field_selector} IS NULL)", {}
+        elif operator in LTREE_OPERATORS:
+            if operator == "$lquery_any":
+                if not isinstance(filter_value, list):
+                    raise ValueError(
+                        f"Expected a list of lquery strings for $lquery_any "
+                        f"operator, but got: {type(filter_value)}"
+                    )
+                for item in filter_value:
+                    if not isinstance(item, str):
+                        raise ValueError(
+                            f"Expected all values in $lquery_any to be strings, "
+                            f"but got: {type(item)} for value: {item}"
+                        )
+            else:
+                if not isinstance(filter_value, str):
+                    raise ValueError(
+                        f"Expected a string value for {operator} operator, "
+                        f"but got: {type(filter_value)}"
+                    )
+
+            # For JSON-stored fields (->> returns text), cast to ltree for comparison
+            effective_field_selector = (
+                f"({field_selector})::ltree"
+                if "->>" in field_selector
+                else field_selector
+            )
+
+            param_name = f"{field_param_prefix}_{operator.replace('$', '')}_{suffix_id}"
+
+            if operator == "$ancestor":
+                return (
+                    f"({effective_field_selector} @> :{param_name}::ltree)",
+                    {param_name: filter_value},
+                )
+            elif operator == "$descendant":
+                return (
+                    f"({effective_field_selector} <@ :{param_name}::ltree)",
+                    {param_name: filter_value},
+                )
+            elif operator == "$lquery":
+                return (
+                    f"({effective_field_selector} ~ :{param_name}::lquery)",
+                    {param_name: filter_value},
+                )
+            elif operator == "$lquery_any":
+                placeholders = ", ".join(
+                    [f":{param_name}_{i}::lquery" for i in range(len(filter_value))]
+                )
+                params = {f"{param_name}_{i}": v for i, v in enumerate(filter_value)}
+                return f"({effective_field_selector} ? ARRAY[{placeholders}])", params
+            else:  # operator == "$ltxtquery"
+                return (
+                    f"({effective_field_selector} @ :{param_name}::ltxtquery)",
+                    {param_name: filter_value},
+                )
         else:
             raise NotImplementedError()
 
