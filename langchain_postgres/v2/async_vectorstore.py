@@ -49,11 +49,11 @@ TEXT_OPERATORS = {
 LOGICAL_OPERATORS = {"$and", "$or", "$not"}
 
 LTREE_OPERATORS = {
-    "$ancestor",  # field @> value::ltree  (field is ancestor-of-or-equal-to value)
-    "$descendant",  # field <@ value::ltree  (field is descendant-of-or-equal-to value)
-    "$lquery",  # field ~ value::lquery  (field matches lquery pattern)
-    "$lquery_any",  # field ? ARRAY[...]::lquery[]  (field matches any lquery)
-    "$ltxtquery",  # field @ value::ltxtquery  (field matches ltxtquery)
+    "$ancestor",    # field @> CAST(value AS ltree)   (field is ancestor-of-or-equal-to value)
+    "$descendant",  # field <@ CAST(value AS ltree)   (field is descendant-of-or-equal-to value)
+    "$lquery",      # field ~ CAST(value AS lquery)   (field matches lquery pattern)
+    "$lquery_any",  # field ? ARRAY[CAST(...)]        (field matches any lquery in list)
+    "$ltxtquery",   # field @ CAST(value AS ltxtquery)(field matches ltxtquery expression)
 }
 
 SUPPORTED_OPERATORS = (
