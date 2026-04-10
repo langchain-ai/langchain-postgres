@@ -243,7 +243,7 @@ class PGEngine:
             hybrid_search_config.tsv_column = hybrid_search_column_name
             hybrid_search_column = f',"{self._escape_postgres_identifier(hybrid_search_column_name)}" TSVECTOR NOT NULL'
 
-        query = f"""CREATE TABLE "{schema_name}"."{table_name}"(
+        query = f"""CREATE TABLE IF NOT EXISTS "{schema_name}"."{table_name}"(
             "{id_column_name}" {id_data_type} PRIMARY KEY,
             "{content_column}" TEXT NOT NULL,
             "{embedding_column}" vector({vector_size}) NOT NULL
