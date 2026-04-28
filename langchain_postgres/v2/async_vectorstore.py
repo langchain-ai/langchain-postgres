@@ -455,7 +455,7 @@ class AsyncPGVectorStore(VectorStore):
             placeholders = ", ".join(f":id_{i}" for i in range(len(ids)))
             id_params = {f"id_{i}": id for i, id in enumerate(ids)}
             param_dict.update(id_params)
-            where_clauses.append(f"{self.id_column} in ({placeholders})")
+            where_clauses.append(f'"{self.id_column}" in ({placeholders})')
 
         # Handle filter-based deletion
         if filter:
@@ -1262,7 +1262,11 @@ class AsyncPGVectorStore(VectorStore):
             and field_column
             not in (self.id_column, self.content_column, self.embedding_column)
         ):
-            field_selector = f"{self.metadata_json_column}.{field_selector}"
+            field_selector = f'"{self.metadata_json_column}".{field_selector}'
+        else:
+            parts = field_selector.split(".")
+            parts[0] = f'"{parts[0]}"'
+            field_selector = ".".join(parts)
 
         if "." in field_selector:
             field_selector = "->".join(
