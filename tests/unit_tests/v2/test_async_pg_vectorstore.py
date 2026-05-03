@@ -440,7 +440,7 @@ class TestVectorStore:
         assert "foo" not in content
         await aexecute(engine, f'TRUNCATE TABLE "{CUSTOM_TABLE}"')
 
-    async def test_ignore_metadata_columns(self, engine: PGEngine) -> None:
+    async def test_ignore_metadata_columns(self, engine: PGEngine, vs_custom: AsyncPGVectorStore) -> None:
         column_to_ignore = "source"
         vs = await AsyncPGVectorStore.create(
             engine,
