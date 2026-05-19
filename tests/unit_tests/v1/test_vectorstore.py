@@ -857,7 +857,6 @@ def pgvector() -> Generator[PGVector, None, None]:
         yield vector_store
 
 
-@pytest.mark.asyncio
 @pytest.fixture
 async def async_pgvector() -> AsyncGenerator[PGVector, None]:
     """Create an async PGVector instance."""
