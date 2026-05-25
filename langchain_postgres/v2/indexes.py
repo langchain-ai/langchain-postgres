@@ -8,7 +8,7 @@ import re
 import warnings
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Optional, Literal
 
 
 @dataclass
@@ -153,3 +153,36 @@ class IVFFlatQueryOptions(QueryOptions):
             DeprecationWarning,
         )
         return f"ivfflat.probes = {self.probes}"
+
+
+@dataclass
+class DiskANNIndex(BaseIndex):
+    index_type: str = "diskann"
+    extension_name: str | None = "pg_diskann"
+    max_neighbors: int = 32
+    l_value_ib: int = 100
+
+    def index_options(self) -> str:
+        """Set index query options for vector store initialization."""
+        return f"(max_neighbors = {self.max_neighbors}, l_value_ib = {self.l_value_ib})"
+
+
+@dataclass
+class DiskANNQueryOptions(QueryOptions):
+    iterative_search: Literal["relaxed_order", "strict_order", "off"] = "relaxed_order"
+    l_value_is: int = 100
+
+    def to_parameter(self) -> list[str]:
+        """Convert index attributes to list of configurations."""
+        return [
+            f"diskann.iterative_search = {self.iterative_search}",
+            f"diskann.l_value_is = {self.l_value_is}",
+        ]
+
+    def to_string(self) -> str:
+        """Convert index attributes to string."""
+        warnings.warn(
+            "to_string is deprecated, use to_parameter instead.",
+            DeprecationWarning,
+        )
+        return ", ".join(self.to_parameter())
