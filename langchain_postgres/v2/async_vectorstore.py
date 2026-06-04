@@ -782,6 +782,10 @@ class AsyncPGVectorStore(VectorStore):
             "hybrid_search_config", self.hybrid_search_config
         )
         if hybrid_search_config and not hybrid_search_config.fts_query:
+            # Avoid mutating the caller-provided / instance config object —
+            # setting `fts_query` on the shared instance variable would leak
+            # the first query into every subsequent search.
+            hybrid_search_config = copy.copy(hybrid_search_config)
             hybrid_search_config.fts_query = query
             kwargs["hybrid_search_config"] = hybrid_search_config
 
@@ -821,6 +825,10 @@ class AsyncPGVectorStore(VectorStore):
             "hybrid_search_config", self.hybrid_search_config
         )
         if hybrid_search_config and not hybrid_search_config.fts_query:
+            # Avoid mutating the caller-provided / instance config object —
+            # setting `fts_query` on the shared instance variable would leak
+            # the first query into every subsequent search.
+            hybrid_search_config = copy.copy(hybrid_search_config)
             hybrid_search_config.fts_query = query
             kwargs["hybrid_search_config"] = hybrid_search_config
 
