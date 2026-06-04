@@ -234,6 +234,39 @@ def _results_to_docs(docs_and_scores: Any) -> List[Document]:
     return [doc for doc, _ in docs_and_scores]
 
 
+def _validate_lengths_match(
+    texts: Sequence[str],
+    embeddings: List[List[float]],
+    metadatas: Optional[List[dict]],
+    ids: Optional[List[str]],
+) -> None:
+    """Raise `ValueError` if `embeddings`/`metadatas`/`ids` lengths disagree
+    with `texts`.
+
+    `PGVector.add_embeddings`/`aadd_embeddings` previously built the insert
+    payload via `zip(texts, metadatas, embeddings, ids_)` which silently
+    truncates to the shortest argument and then returns the full `ids_`
+    list — so a caller passing N texts but receiving only M embeddings
+    saw N IDs returned but only M rows persisted, with no error.
+    """
+    n = len(texts)
+    if len(embeddings) != n:
+        msg = (
+            f"Got {n} texts but {len(embeddings)} embeddings; "
+            "every text must have a matching embedding."
+        )
+        raise ValueError(msg)
+    if metadatas is not None and len(metadatas) != n:
+        msg = (
+            f"Got {n} texts but {len(metadatas)} metadatas; "
+            "every text must have a matching metadata entry."
+        )
+        raise ValueError(msg)
+    if ids is not None and len(ids) != n:
+        msg = f"Got {n} texts but {len(ids)} ids; every text must have a matching id."
+        raise ValueError(msg)
+
+
 def _create_vector_extension(conn: Connection) -> None:
     statement = sqlalchemy.text(
         "SELECT pg_advisory_xact_lock(1573678846307946496);"
@@ -763,6 +796,7 @@ class PGVector(VectorStore):
             kwargs: vectorstore specific parameters
         """
         assert not self._async_engine, "This method must be called with sync_mode"
+        _validate_lengths_match(texts, embeddings, metadatas, ids)
         if ids is None:
             ids_ = [str(uuid.uuid4()) for _ in texts]
         else:
@@ -784,7 +818,7 @@ class PGVector(VectorStore):
                     "cmetadata": metadata or {},
                 }
                 for text, metadata, embedding, id in zip(
-                    texts, metadatas, embeddings, ids_
+                    texts, metadatas, embeddings, ids_, strict=True
                 )
             ]
             stmt = insert(self.EmbeddingStore).values(data)
@@ -821,6 +855,7 @@ class PGVector(VectorStore):
             kwargs: vectorstore specific parameters
         """
         await self.__apost_init__()  # Lazy async init
+        _validate_lengths_match(texts, embeddings, metadatas, ids)
 
         if ids is None:
             ids_ = [str(uuid.uuid4()) for _ in texts]
@@ -843,7 +878,7 @@ class PGVector(VectorStore):
                     "cmetadata": metadata or {},
                 }
                 for text, metadata, embedding, id in zip(
-                    texts, metadatas, embeddings, ids_
+                    texts, metadatas, embeddings, ids_, strict=True
                 )
             ]
             stmt = insert(self.EmbeddingStore).values(data)
