@@ -242,6 +242,18 @@ TYPE_4_FILTERING_TEST_CASES = [
         {"id": {"$in": [1, 2]}},
         [1, 2],
     ),
+    (
+        {"tags": {"$in": ["c", "d"]}},
+        [2, 3],
+    ),
+    (
+        {"tags": {"$in": ["b", "d"]}},
+        [1, 2, 3],
+    ),
+    (
+        {"location": {"$in": [1, 2.0]}},
+        [1, 2],
+    ),
     # Test nin
     (
         {"name": {"$nin": ["adam", "bob"]}},
@@ -250,6 +262,22 @@ TYPE_4_FILTERING_TEST_CASES = [
     ## with numeric fields
     (
         {"id": {"$nin": [1, 2]}},
+        [3],
+    ),
+    (
+        {"tags": {"$nin": ["c", "d"]}},
+        [1],
+    ),
+    (
+        {"tags": {"$nin": ["d"]}},
+        [1, 2],
+    ),
+    (
+        {"tags": {"$nin": ["e", "f"]}},
+        [1, 2, 3],
+    ),
+    (
+        {"location": {"$nin": [1.0, 2]}},
         [3],
     ),
 ]
