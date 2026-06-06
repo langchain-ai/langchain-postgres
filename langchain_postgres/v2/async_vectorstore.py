@@ -936,8 +936,7 @@ class AsyncPGVectorStore(VectorStore):
         )
 
         k = k if k else self.k
-        fetch_k = fetch_k if fetch_k else self.fetch_k
-        lambda_mult = lambda_mult if lambda_mult else self.lambda_mult
+        lambda_mult = lambda_mult if lambda_mult is not None else self.lambda_mult
         embedding_list = [json.loads(row[self.embedding_column]) for row in results]
         mmr_selected = utils.maximal_marginal_relevance(
             np.array(embedding, dtype=np.float32),
