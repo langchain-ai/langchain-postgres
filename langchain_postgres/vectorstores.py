@@ -416,6 +416,11 @@ class PGVector(VectorStore):
                 doesn't exist. disabling creation is useful when using ReadOnly
                 Databases.
         """
+        warnings.warn(
+            "PGVector is deprecated. Please use PGVectorStore instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         self.async_mode = async_mode
         self.embedding_function = embeddings
         self._embedding_length = embedding_length
