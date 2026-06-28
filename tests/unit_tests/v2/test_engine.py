@@ -12,7 +12,16 @@ from sqlalchemy.pool import NullPool
 
 from langchain_postgres import Column, PGEngine
 from langchain_postgres.v2.hybrid_search_config import HybridSearchConfig
-from tests.utils import VECTORSTORE_CONNECTION_STRING as CONNECTION_STRING
+from tests.utils import (
+    POSTGRES_DB,
+    POSTGRES_HOST,
+    POSTGRES_PASSWORD,
+    POSTGRES_PORT,
+    POSTGRES_USER,
+)
+from tests.utils import (
+    VECTORSTORE_CONNECTION_STRING as CONNECTION_STRING,
+)
 
 DEFAULT_TABLE = "default" + str(uuid.uuid4()).replace("-", "_")
 CUSTOM_TABLE = "custom" + str(uuid.uuid4()).replace("-", "_")
@@ -24,6 +33,7 @@ CUSTOM_TABLE_SYNC = "custom_sync" + str(uuid.uuid4()).replace("-", "_")
 HYBRID_SEARCH_TABLE_SYNC = "hybrid_sync" + str(uuid.uuid4()).replace("-", "_")
 CUSTOM_TYPEDDICT_TABLE_SYNC = "custom_td_sync" + str(uuid.uuid4()).replace("-", "_")
 INT_ID_CUSTOM_TABLE_SYNC = "custom_int_id_sync" + str(uuid.uuid4()).replace("-", "_")
+MULTI_HOST_TABLE = "multi_host" + str(uuid.uuid4()).replace("-", "_")
 VECTOR_SIZE = 768
 
 embeddings_service = DeterministicFakeEmbedding(size=VECTOR_SIZE)
@@ -410,3 +420,185 @@ class TestEngineSync:
         key = object()
         with pytest.raises(Exception):
             PGEngine(key, engine._pool, None, None)
+
+
+class TestBuildMultiHostConnectionString:
+    """Unit tests for multi-host connection string building."""
+
+    def test_basic_two_hosts(self) -> None:
+        url = PGEngine._build_multi_host_connection_string(
+            hosts=["host1", "host2"],
+            user="myuser",
+            password="mypass",
+            database="mydb",
+            ports=[5432, 5433],
+            target_session_attrs="primary",
+        )
+        assert "postgresql+psycopg://" in url
+        assert "host=host1,host2" in url
+        assert "port=5432,5433" in url
+        assert "target_session_attrs=primary" in url
+        assert "myuser" in url
+        assert "/mydb" in url
+
+    def test_single_port_broadcast(self) -> None:
+        url = PGEngine._build_multi_host_connection_string(
+            hosts=["h1", "h2", "h3"],
+            user="u",
+            password="p",
+            database="db",
+            ports=[5432],
+        )
+        assert "port=5432,5432,5432" in url
+
+    def test_default_ports(self) -> None:
+        url = PGEngine._build_multi_host_connection_string(
+            hosts=["h1", "h2"],
+            user="u",
+            password="p",
+            database="db",
+        )
+        assert "port=5432,5432" in url
+
+    def test_default_target_session_attrs(self) -> None:
+        url = PGEngine._build_multi_host_connection_string(
+            hosts=["h1"],
+            user="u",
+            password="p",
+            database="db",
+        )
+        assert "target_session_attrs=any" in url
+
+    def test_special_characters_in_password(self) -> None:
+        url = PGEngine._build_multi_host_connection_string(
+            hosts=["h1"],
+            user="user",
+            password="p@ss:word/special",
+            database="db",
+        )
+        assert "p%40ss" in url
+
+    def test_empty_hosts_raises(self) -> None:
+        with pytest.raises(ValueError, match="At least one host"):
+            PGEngine._build_multi_host_connection_string(
+                hosts=[],
+                user="u",
+                password="p",
+                database="db",
+            )
+
+    def test_empty_host_string_raises(self) -> None:
+        with pytest.raises(ValueError, match="must not be empty"):
+            PGEngine._build_multi_host_connection_string(
+                hosts=["h1", ""],
+                user="u",
+                password="p",
+                database="db",
+            )
+
+    def test_host_with_comma_raises(self) -> None:
+        with pytest.raises(ValueError, match="cannot contain comma"):
+            PGEngine._build_multi_host_connection_string(
+                hosts=["host1,host2"],
+                user="u",
+                password="p",
+                database="db",
+            )
+
+    def test_whitespace_in_hosts_stripped(self) -> None:
+        url = PGEngine._build_multi_host_connection_string(
+            hosts=["  host1  ", " host2"],
+            user="u",
+            password="p",
+            database="db",
+        )
+        assert "host=host1,host2" in url
+
+    def test_ports_length_mismatch_raises(self) -> None:
+        with pytest.raises(ValueError, match="must match length of hosts"):
+            PGEngine._build_multi_host_connection_string(
+                hosts=["h1", "h2", "h3"],
+                user="u",
+                password="p",
+                database="db",
+                ports=[5432, 5433],
+            )
+
+    def test_invalid_port_zero_raises(self) -> None:
+        with pytest.raises(ValueError, match="positive integer"):
+            PGEngine._build_multi_host_connection_string(
+                hosts=["h1"],
+                user="u",
+                password="p",
+                database="db",
+                ports=[0],
+            )
+
+    def test_port_out_of_range_raises(self) -> None:
+        with pytest.raises(ValueError, match="positive integer"):
+            PGEngine._build_multi_host_connection_string(
+                hosts=["h1"],
+                user="u",
+                password="p",
+                database="db",
+                ports=[99999],
+            )
+
+    def test_all_target_session_attrs_values(self) -> None:
+        for attr in [
+            "any",
+            "read-write",
+            "read-only",
+            "primary",
+            "standby",
+            "prefer-standby",
+        ]:
+            url = PGEngine._build_multi_host_connection_string(
+                hosts=["h1"],
+                user="u",
+                password="p",
+                database="db",
+                target_session_attrs=attr,  # type: ignore[arg-type]
+            )
+            assert f"target_session_attrs={attr}" in url
+
+
+@pytest.mark.enable_socket
+@pytest.mark.asyncio
+class TestEngineMultiHost:
+    @pytest_asyncio.fixture(scope="class")
+    async def engine(self) -> AsyncIterator[PGEngine]:
+        engine = PGEngine.from_hosts(
+            hosts=[POSTGRES_HOST],
+            user=POSTGRES_USER,
+            password=POSTGRES_PASSWORD,
+            database=POSTGRES_DB,
+            ports=[int(POSTGRES_PORT)],
+            target_session_attrs="any",
+        )
+        yield engine
+        await aexecute(engine, f'DROP TABLE IF EXISTS "{MULTI_HOST_TABLE}"')
+        await engine.close()
+
+    async def test_from_hosts_single_host(self, engine: PGEngine) -> None:
+        await aexecute(engine, "SELECT 1")
+
+    async def test_from_hosts_creates_table(self, engine: PGEngine) -> None:
+        await engine.ainit_vectorstore_table(MULTI_HOST_TABLE, VECTOR_SIZE)
+        stmt = f"SELECT column_name FROM information_schema.columns WHERE table_name = '{MULTI_HOST_TABLE}';"
+        results = await afetch(engine, stmt)
+        assert len(results) > 0
+
+    async def test_from_hosts_with_engine_kwargs(self) -> None:
+        engine = PGEngine.from_hosts(
+            hosts=[POSTGRES_HOST],
+            user=POSTGRES_USER,
+            password=POSTGRES_PASSWORD,
+            database=POSTGRES_DB,
+            ports=[int(POSTGRES_PORT)],
+            target_session_attrs="any",
+            pool_size=3,
+            max_overflow=2,
+        )
+        assert "Pool size: 3" in engine._pool.pool.status()
+        await engine.close()
