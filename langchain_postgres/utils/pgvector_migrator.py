@@ -57,6 +57,7 @@ async def __aextract_pgvector_collection(
     Yields:
         The data present in the collection.
     """
+    uuid: Optional[str] = None
     try:
         uuid_task = asyncio.create_task(__aget_collection_uuid(engine, collection_name))
         query = f"SELECT * FROM {EMBEDDINGS_TABLE} WHERE collection_id = :id"
