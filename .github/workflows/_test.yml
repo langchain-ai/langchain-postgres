@@ -7,6 +7,10 @@ on:
         required: true
         type: string
         description: "From which folder this pipeline executes"
+      python-version:
+        required: true
+        type: string
+        description: "Python version to use"
 
 permissions:
   contents: read
@@ -45,14 +49,7 @@ jobs:
           --health-interval 3s
           --health-timeout 5s
           --health-retries 10
-    strategy:
-      matrix:
-        python-version:
-#          - "3.9"
-#          - "3.10"
-#          - "3.11"
-          - "3.12"
-    name: Python ${{ matrix.python-version }}
+    name: Python ${{ inputs.python-version }}
     steps:
       - uses: actions/checkout@v4
       - name: Install postgresql-client
