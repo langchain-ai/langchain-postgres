@@ -768,7 +768,41 @@ class AsyncPGVectorStore(VectorStore):
         filter: Optional[dict] = None,
         **kwargs: Any,
     ) -> list[Document]:
-        """Return docs selected by similarity search on query."""
+        """Return docs selected by similarity search on query.
+
+        Args:
+            query: Text query to embed and compare against stored vectors.
+            k: Number of documents to return. Defaults to the vector store's
+                configured ``k`` when not provided.
+            filter: Optional metadata filter applied before the similarity
+                search. Provided as a dict and translated to a SQL ``WHERE``
+                clause against the metadata column(s). Supported forms:
+
+                - Equality: ``{"code": "WH001"}`` (implicit ``$eq``). Several
+                  keys in one dict are combined with logical AND.
+                - Comparison: ``$eq``, ``$ne``, ``$gt``, ``$gte``, ``$lt``,
+                  ``$lte``, e.g. ``{"price": {"$gte": 100}}``.
+                - Membership: ``$in`` and ``$nin``, e.g.
+                  ``{"code": {"$in": ["WH001", "EC002"]}}``.
+                - Range: ``$between``, e.g.
+                  ``{"quantity": {"$between": (10, 20)}}``.
+                - Existence: ``$exists``, e.g. ``{"tags": {"$exists": True}}``.
+                - Text patterns: ``$like`` and ``$ilike`` (SQL ``LIKE`` /
+                  ``ILIKE``), e.g. ``{"name": {"$like": "Wireless%"}}``.
+                - Logical: ``$and``, ``$or`` (each taking a list of
+                  sub-filters) and ``$not`` (taking a sub-filter or a list),
+                  e.g. ``{"$or": [{"code": "WH001"}, {"code": "EC002"}]}``.
+                - Nested metadata keys use dot notation, e.g.
+                  ``{"specs.screen": "OLED"}``.
+
+                Comparison and membership operators expect the stored metadata
+                value to be a scalar of a matching type, not a JSON array.
+            **kwargs: Additional keyword arguments passed to the underlying
+                search, such as ``hybrid_search_config``.
+
+        Returns:
+            List of Documents most similar to the query.
+        """
         inline_embed_func = getattr(self.embedding_service, "embed_query_inline", None)
         embedding = (
             []
@@ -807,7 +841,21 @@ class AsyncPGVectorStore(VectorStore):
         filter: Optional[dict] = None,
         **kwargs: Any,
     ) -> list[tuple[Document, float]]:
-        """Return docs and distance scores selected by similarity search on query."""
+        """Return docs and distance scores selected by similarity search on query.
+
+        Args:
+            query: Text query to embed and compare against stored vectors.
+            k: Number of documents to return. Defaults to the vector store's
+                configured ``k`` when not provided.
+            filter: Optional metadata filter. See :meth:`asimilarity_search` for
+                the supported operators and syntax.
+            **kwargs: Additional keyword arguments passed to the underlying
+                search, such as ``hybrid_search_config``.
+
+        Returns:
+            List of ``(Document, score)`` tuples, where ``score`` is the
+            distance under the configured distance strategy.
+        """
         inline_embed_func = getattr(self.embedding_service, "embed_query_inline", None)
         embedding = (
             []
