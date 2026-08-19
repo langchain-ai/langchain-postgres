@@ -326,10 +326,11 @@ class AsyncPGVectorStore(VectorStore):
                 values["tsv_content"] = content
             # Add metadata
             extra = copy.deepcopy(metadata)
-            for metadata_column in self.metadata_columns:
+            for i, metadata_column in enumerate(self.metadata_columns):
                 if metadata_column in metadata:
-                    values_stmt += f", :{metadata_column}"
-                    values[metadata_column] = (
+                    safe_name = f"metadata_{i}"
+                    values_stmt += f", :{safe_name}"
+                    values[safe_name] = (
                         json.dumps(metadata[metadata_column])
                         if isinstance(metadata[metadata_column], dict)
                         else metadata[metadata_column]

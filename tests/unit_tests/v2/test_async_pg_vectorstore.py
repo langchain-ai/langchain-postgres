@@ -8,7 +8,7 @@ from langchain_core.embeddings import DeterministicFakeEmbedding
 from sqlalchemy import text
 from sqlalchemy.engine.row import RowMapping
 
-from langchain_postgres import Column, PGEngine
+from langchain_postgres import Column, ColumnDict, PGEngine
 from langchain_postgres.v2.async_vectorstore import AsyncPGVectorStore
 from tests.utils import VECTORSTORE_CONNECTION_STRING as CONNECTION_STRING
 
@@ -135,6 +135,36 @@ class TestVectorStore:
         results = await afetch(engine, f'SELECT * FROM "{DEFAULT_TABLE}"')
         assert len(results) == 3
         await aexecute(engine, f'TRUNCATE TABLE "{DEFAULT_TABLE}"')
+
+    async def test_aadd_texts_metadata_columns_with_special_chars(
+        self, engine: PGEngine
+    ) -> None:
+        metadata_column_names = ["meta data", "metadata%", "meta-data"]
+        metadata_column_schema: list[Column | ColumnDict] = [
+            Column(k, "TEXT") for k in metadata_column_names
+        ]
+        metadata = {k: f"{k}_value" for k in metadata_column_names}
+        test_table = "metadata_column_with_space" + str(uuid.uuid4())
+        await engine._ainit_vectorstore_table(
+            test_table,
+            VECTOR_SIZE,
+            metadata_columns=metadata_column_schema,
+            store_metadata=False,
+        )
+        try:
+            vs = await AsyncPGVectorStore.create(
+                engine,
+                embedding_service=embeddings_service,
+                table_name=test_table,
+                metadata_columns=metadata_column_names,
+            )
+            await vs.aadd_texts(["foo"], metadatas=[metadata])
+
+            results = await afetch(engine, f'SELECT * FROM "{test_table}"')
+            for column in metadata_column_names:
+                assert results[0][column] == metadata[column]
+        finally:
+            await engine.adrop_table(test_table)
 
     async def test_aadd_docs(self, engine: PGEngine, vs: AsyncPGVectorStore) -> None:
         ids = [str(uuid.uuid4()) for i in range(len(texts))]
