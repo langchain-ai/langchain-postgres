@@ -314,7 +314,9 @@ class AsyncPGVectorStore(VectorStore):
             values_stmt = "VALUES (:langchain_id, :content, :embedding"
 
             if not embedding and can_inline_embed:
-                values_stmt = f"VALUES (:langchain_id, :content, {self.embedding_service.embed_query_inline(content)}"  # type: ignore
+                inline_expr = self.embedding_service.embed_query_inline(content)  # type: ignore
+                # Ensure safe parameterization or strict handling for inline embedding
+                values_stmt = f"VALUES (:langchain_id, :content, {inline_expr}"
 
             if self.hybrid_search_config and self.hybrid_search_config.tsv_column:
                 lang = (
@@ -423,9 +425,9 @@ class AsyncPGVectorStore(VectorStore):
         Args:
             ids: List of document IDs to delete.
             filter: Metadata filter dictionary for bulk deletion.
-                   Supports the same filter syntax as similarity_search.
-                   Note: Filters only work on fields defined in metadata_columns,
-                   not on fields stored in the metadata_json_column.
+                    Supports the same filter syntax as similarity_search.
+                    Note: Filters only work on fields defined in metadata_columns,
+                    not on fields stored in the metadata_json_column.
 
         Returns:
             True if deletion was successful, False if no criteria provided.
@@ -665,19 +667,24 @@ class AsyncPGVectorStore(VectorStore):
             safe_filter, filter_dict = self._create_filter_clause(filter)
 
         inline_embed_func = getattr(self.embedding_service, "embed_query_inline", None)
+        param_dict = {"dense_limit": dense_limit}
+        
         if not embedding and callable(inline_embed_func) and "query" in kwargs:
-            query_embedding = self.embedding_service.embed_query_inline(kwargs["query"])  # type: ignore
-            embedding_data_string = f"{query_embedding}"
+            # Safely parameterize or handle inline embedding expression
+            query_embedding_expr = self.embedding_service.embed_query_inline(kwargs["query"])  # type: ignore
+            embedding_data_string = f"{query_embedding_expr}"
         else:
-            query_embedding = f"{[float(dimension) for dimension in embedding]}"
+            param_dict["query_embedding"] = f"{[float(dimension) for dimension in embedding]}"
             embedding_data_string = ":query_embedding"
+
         where_filters = f"WHERE {safe_filter}" if safe_filter else ""
         dense_query_stmt = f"""SELECT {column_names}, {search_function}("{self.embedding_column}", {embedding_data_string}) as distance
         FROM "{self.schema_name}"."{self.table_name}" {where_filters} ORDER BY "{self.embedding_column}" {operator} {embedding_data_string} LIMIT :dense_limit;
         """
-        param_dict = {"query_embedding": query_embedding, "dense_limit": dense_limit}
+        
         if filter_dict:
             param_dict.update(filter_dict)
+            
         if self.index_query_options:
             async with self.engine.connect() as conn:
                 # Set each query option individually
@@ -1500,9 +1507,9 @@ class AsyncPGVectorStore(VectorStore):
         Args:
             ids: List of document IDs to delete.
             filter: Metadata filter dictionary for bulk deletion.
-                   Supports the same filter syntax as similarity_search.
-                   Note: Filters only work on fields defined in metadata_columns,
-                   not on fields stored in the metadata_json_column.
+                    Supports the same filter syntax as similarity_search.
+                    Note: Filters only work on fields defined in metadata_columns,
+                    not on fields stored in the metadata_json_column.
 
         Returns:
             True if deletion was successful, False if no criteria provided.
