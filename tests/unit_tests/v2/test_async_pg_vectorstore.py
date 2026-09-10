@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 import pytest_asyncio
 from langchain_core.documents import Document
-from langchain_core.embeddings import DeterministicFakeEmbedding
+from langchain_core.embeddings import DeterministicFakeEmbedding, Embeddings
 from sqlalchemy import text
 from sqlalchemy.engine.row import RowMapping
 
@@ -543,7 +543,13 @@ class TestVectorStore:
             )
 
     async def test_aadd_embeddings_with_inline_template(self) -> None:
-        class TemplateEmbeddings:
+        class TemplateEmbeddings(Embeddings):
+            def embed_documents(self, texts: list[str]) -> list[list[float]]:
+                return []
+
+            def embed_query(self, text: str) -> list[float]:
+                return []
+
             def embed_query_inline_template(self, param_name: str) -> str:
                 return f"embedding('model_id', {param_name})::vector"
 
@@ -552,8 +558,9 @@ class TestVectorStore:
         mock_engine.connect.return_value.__aenter__.return_value = mock_conn
         mock_engine.connect.return_value.__aexit__.return_value = None
 
+        create_key = getattr(AsyncPGVectorStore, "_AsyncPGVectorStore__create_key")
         vs = AsyncPGVectorStore(
-            AsyncPGVectorStore._AsyncPGVectorStore__create_key,
+            create_key,
             engine=mock_engine,
             embedding_service=TemplateEmbeddings(),
             table_name="test_table",
@@ -566,7 +573,13 @@ class TestVectorStore:
         assert params["content"] == "hello world"
 
     async def test_aadd_embeddings_with_legacy_inline(self) -> None:
-        class LegacyEmbeddings:
+        class LegacyEmbeddings(Embeddings):
+            def embed_documents(self, texts: list[str]) -> list[list[float]]:
+                return []
+
+            def embed_query(self, text: str) -> list[float]:
+                return []
+
             def embed_query_inline(self, query: str) -> str:
                 return f"embedding('model_id', '{query}')::vector"
 
@@ -575,8 +588,9 @@ class TestVectorStore:
         mock_engine.connect.return_value.__aenter__.return_value = mock_conn
         mock_engine.connect.return_value.__aexit__.return_value = None
 
+        create_key = getattr(AsyncPGVectorStore, "_AsyncPGVectorStore__create_key")
         vs = AsyncPGVectorStore(
-            AsyncPGVectorStore._AsyncPGVectorStore__create_key,
+            create_key,
             engine=mock_engine,
             embedding_service=LegacyEmbeddings(),
             table_name="test_table",
@@ -589,7 +603,13 @@ class TestVectorStore:
         assert params["content"] == "hello world"
 
     async def test_asimilarity_search_with_inline_template(self) -> None:
-        class TemplateEmbeddings:
+        class TemplateEmbeddings(Embeddings):
+            def embed_documents(self, texts: list[str]) -> list[list[float]]:
+                return []
+
+            def embed_query(self, text: str) -> list[float]:
+                return []
+
             def embed_query_inline_template(self, param_name: str) -> str:
                 return f"embedding('model_id', {param_name})::vector"
 
@@ -602,8 +622,9 @@ class TestVectorStore:
         mock_engine.connect.return_value.__aenter__.return_value = mock_conn
         mock_engine.connect.return_value.__aexit__.return_value = None
 
+        create_key = getattr(AsyncPGVectorStore, "_AsyncPGVectorStore__create_key")
         vs = AsyncPGVectorStore(
-            AsyncPGVectorStore._AsyncPGVectorStore__create_key,
+            create_key,
             engine=mock_engine,
             embedding_service=TemplateEmbeddings(),
             table_name="test_table",
@@ -618,7 +639,13 @@ class TestVectorStore:
         assert params["query_text"] == "search query"
 
     async def test_asimilarity_search_with_legacy_inline(self) -> None:
-        class LegacyEmbeddings:
+        class LegacyEmbeddings(Embeddings):
+            def embed_documents(self, texts: list[str]) -> list[list[float]]:
+                return []
+
+            def embed_query(self, text: str) -> list[float]:
+                return []
+
             def embed_query_inline(self, query: str) -> str:
                 return f"embedding('model_id', '{query}')::vector"
 
@@ -631,8 +658,9 @@ class TestVectorStore:
         mock_engine.connect.return_value.__aenter__.return_value = mock_conn
         mock_engine.connect.return_value.__aexit__.return_value = None
 
+        create_key = getattr(AsyncPGVectorStore, "_AsyncPGVectorStore__create_key")
         vs = AsyncPGVectorStore(
-            AsyncPGVectorStore._AsyncPGVectorStore__create_key,
+            create_key,
             engine=mock_engine,
             embedding_service=LegacyEmbeddings(),
             table_name="test_table",

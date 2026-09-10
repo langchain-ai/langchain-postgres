@@ -677,7 +677,7 @@ class AsyncPGVectorStore(VectorStore):
             self.embedding_service, "embed_query_inline_template", None
         )
         inline_embed_func = getattr(self.embedding_service, "embed_query_inline", None)
-        param_dict = {"dense_limit": dense_limit}
+        param_dict: dict[str, Any] = {"dense_limit": dense_limit}
         if not embedding and callable(inline_template_func) and "query" in kwargs:
             embedding_data_string = inline_template_func(":query_text")
             param_dict["query_text"] = kwargs["query"]
