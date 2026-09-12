@@ -61,6 +61,7 @@ class PGVectorStore(VectorStore):
         lambda_mult: float = 0.5,
         index_query_options: Optional[QueryOptions] = None,
         hybrid_search_config: Optional[HybridSearchConfig] = None,
+        validate_schema: bool = True,
     ) -> PGVectorStore:
         """Create an PGVectorStore instance.
 
@@ -81,6 +82,9 @@ class PGVectorStore(VectorStore):
             lambda_mult (float): Number between 0 and 1 that determines the degree of diversity among the results with 0 corresponding to maximum diversity and 1 to minimum diversity. Defaults to 0.5.
             index_query_options (QueryOptions): Index query option.
             hybrid_search_config (HybridSearchConfig): Hybrid search configuration. Defaults to None.
+            validate_schema (bool): Whether to query `information_schema.columns` to validate
+                the configured columns. Defaults to True. See
+                `AsyncPGVectorStore.create` for details on when to disable it.
 
         Returns:
             PGVectorStore
@@ -102,6 +106,7 @@ class PGVectorStore(VectorStore):
             lambda_mult=lambda_mult,
             index_query_options=index_query_options,
             hybrid_search_config=hybrid_search_config,
+            validate_schema=validate_schema,
         )
         vs = await engine._run_as_async(coro)
         return cls(cls.__create_key, engine, vs)
@@ -125,6 +130,7 @@ class PGVectorStore(VectorStore):
         lambda_mult: float = 0.5,
         index_query_options: Optional[QueryOptions] = None,
         hybrid_search_config: Optional[HybridSearchConfig] = None,
+        validate_schema: bool = True,
     ) -> PGVectorStore:
         """Create an PGVectorStore instance.
 
@@ -146,6 +152,9 @@ class PGVectorStore(VectorStore):
             lambda_mult (float, optional): Number between 0 and 1 that determines the degree of diversity among the results with 0 corresponding to maximum diversity and 1 to minimum diversity. Defaults to 0.5.
             index_query_options (Optional[QueryOptions], optional): Index query option. Defaults to None.
             hybrid_search_config (HybridSearchConfig): Hybrid search configuration. Defaults to None.
+            validate_schema (bool): Whether to query `information_schema.columns` to validate
+                the configured columns. Defaults to True. See
+                `AsyncPGVectorStore.create` for details on when to disable it.
 
         Returns:
             PGVectorStore
@@ -167,6 +176,7 @@ class PGVectorStore(VectorStore):
             lambda_mult=lambda_mult,
             index_query_options=index_query_options,
             hybrid_search_config=hybrid_search_config,
+            validate_schema=validate_schema,
         )
         vs = engine._run_as_sync(coro)
         return cls(cls.__create_key, engine, vs)

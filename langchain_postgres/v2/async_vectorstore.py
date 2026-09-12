@@ -155,6 +155,7 @@ class AsyncPGVectorStore(VectorStore):
         lambda_mult: float = 0.5,
         index_query_options: Optional[QueryOptions] = None,
         hybrid_search_config: Optional[HybridSearchConfig] = None,
+        validate_schema: bool = True,
     ) -> AsyncPGVectorStore:
         """Create an AsyncPGVectorStore instance.
 
@@ -175,6 +176,14 @@ class AsyncPGVectorStore(VectorStore):
             lambda_mult (float): Number between 0 and 1 that determines the degree of diversity among the results with 0 corresponding to maximum diversity and 1 to minimum diversity. Defaults to 0.5.
             index_query_options (QueryOptions): Index query option.
             hybrid_search_config (HybridSearchConfig): Hybrid search configuration. Defaults to None.
+            validate_schema (bool): Whether to query `information_schema.columns` to validate
+                that the configured columns exist and have compatible types. Defaults to True.
+                Set to False to skip that round trip (e.g. when constructing a short-lived store
+                per request, such as in a serverless/edge function, against a table whose schema
+                is already known to be valid). Can not be used together with
+                `ignore_metadata_columns`, since resolving it requires knowing the full column
+                list. When False, `metadata_json_column` and `hybrid_search_config.tsv_column`
+                are trusted as given instead of being probed for existence.
 
         Returns:
             AsyncPGVectorStore
@@ -187,64 +196,77 @@ class AsyncPGVectorStore(VectorStore):
             raise ValueError(
                 "Can not use both metadata_columns and ignore_metadata_columns."
             )
-        # Get field type information
-        stmt = "SELECT column_name, data_type FROM information_schema.columns WHERE table_name = :table_name AND table_schema = :schema_name"
-        async with engine._pool.connect() as conn:
-            result = await conn.execute(
-                text(stmt),
-                {"table_name": table_name, "schema_name": schema_name},
-            )
-            result_map = result.mappings()
-            results = result_map.fetchall()
-        columns = {}
-        for field in results:
-            columns[field["column_name"]] = field["data_type"]
-
-        # Check columns
-        if id_column not in columns:
-            raise ValueError(f"Id column, {id_column}, does not exist.")
-        if content_column not in columns:
-            raise ValueError(f"Content column, {content_column}, does not exist.")
-        content_type = columns[content_column]
-        if content_type != "text" and "char" not in content_type:
+        if not validate_schema and ignore_metadata_columns:
             raise ValueError(
-                f"Content column, {content_column}, is type, {content_type}. It must be a type of character string."
-            )
-        if hybrid_search_config:
-            tsv_column_name = (
-                hybrid_search_config.tsv_column
-                if hybrid_search_config.tsv_column
-                else content_column + "_tsv"
-            )
-            if tsv_column_name not in columns or columns[tsv_column_name] != "tsvector":
-                # mark tsv_column as empty because there is no TSV column in table
-                hybrid_search_config.tsv_column = ""
-        if embedding_column not in columns:
-            raise ValueError(f"Embedding column, {embedding_column}, does not exist.")
-        if columns[embedding_column] not in ["USER-DEFINED", "vector"]:
-            raise ValueError(
-                f"Embedding column, {embedding_column}, is not type Vector."
+                "Can not use both validate_schema=False and ignore_metadata_columns, "
+                "since resolving ignore_metadata_columns requires querying the full "
+                "column list. Pass metadata_columns explicitly instead."
             )
 
-        metadata_json_column = (
-            None if metadata_json_column not in columns else metadata_json_column
-        )
+        if validate_schema:
+            # Get field type information
+            stmt = "SELECT column_name, data_type FROM information_schema.columns WHERE table_name = :table_name AND table_schema = :schema_name"
+            async with engine._pool.connect() as conn:
+                result = await conn.execute(
+                    text(stmt),
+                    {"table_name": table_name, "schema_name": schema_name},
+                )
+                result_map = result.mappings()
+                results = result_map.fetchall()
+            columns = {}
+            for field in results:
+                columns[field["column_name"]] = field["data_type"]
 
-        # If using metadata_columns check to make sure column exists
-        for column in metadata_columns:
-            if column not in columns:
-                raise ValueError(f"Metadata column, {column}, does not exist.")
+            # Check columns
+            if id_column not in columns:
+                raise ValueError(f"Id column, {id_column}, does not exist.")
+            if content_column not in columns:
+                raise ValueError(f"Content column, {content_column}, does not exist.")
+            content_type = columns[content_column]
+            if content_type != "text" and "char" not in content_type:
+                raise ValueError(
+                    f"Content column, {content_column}, is type, {content_type}. It must be a type of character string."
+                )
+            if hybrid_search_config:
+                tsv_column_name = (
+                    hybrid_search_config.tsv_column
+                    if hybrid_search_config.tsv_column
+                    else content_column + "_tsv"
+                )
+                if (
+                    tsv_column_name not in columns
+                    or columns[tsv_column_name] != "tsvector"
+                ):
+                    # mark tsv_column as empty because there is no TSV column in table
+                    hybrid_search_config.tsv_column = ""
+            if embedding_column not in columns:
+                raise ValueError(
+                    f"Embedding column, {embedding_column}, does not exist."
+                )
+            if columns[embedding_column] not in ["USER-DEFINED", "vector"]:
+                raise ValueError(
+                    f"Embedding column, {embedding_column}, is not type Vector."
+                )
 
-        # If using ignore_metadata_columns, filter out known columns and set known metadata columns
-        all_columns = columns
-        if ignore_metadata_columns:
-            for column in ignore_metadata_columns:
-                del all_columns[column]
+            metadata_json_column = (
+                None if metadata_json_column not in columns else metadata_json_column
+            )
 
-            del all_columns[id_column]
-            del all_columns[content_column]
-            del all_columns[embedding_column]
-            metadata_columns = [k for k in all_columns.keys()]
+            # If using metadata_columns check to make sure column exists
+            for column in metadata_columns:
+                if column not in columns:
+                    raise ValueError(f"Metadata column, {column}, does not exist.")
+
+            # If using ignore_metadata_columns, filter out known columns and set known metadata columns
+            all_columns = columns
+            if ignore_metadata_columns:
+                for column in ignore_metadata_columns:
+                    del all_columns[column]
+
+                del all_columns[id_column]
+                del all_columns[content_column]
+                del all_columns[embedding_column]
+                metadata_columns = [k for k in all_columns.keys()]
 
         return cls(
             cls.__create_key,
@@ -649,11 +671,15 @@ class AsyncPGVectorStore(VectorStore):
         operator = self.distance_strategy.operator
         search_function = self.distance_strategy.search_function
 
-        columns = [
-            self.id_column,
-            self.content_column,
-            self.embedding_column,
-        ] + self.metadata_columns
+        # The embedding column itself is only read back by callers that need the
+        # matched rows' raw vectors (e.g. MMR); plain similarity search only needs
+        # `distance`, which is computed via `search_function` below regardless of
+        # whether the column is also included in the SELECT list.
+        include_embedding = kwargs.get("include_embedding", True)
+        columns = [self.id_column, self.content_column]
+        if include_embedding:
+            columns.append(self.embedding_column)
+        columns += self.metadata_columns
         if self.metadata_json_column:
             columns.append(self.metadata_json_column)
 
@@ -851,6 +877,9 @@ class AsyncPGVectorStore(VectorStore):
         **kwargs: Any,
     ) -> list[tuple[Document, float]]:
         """Return docs and distance scores selected by vector similarity search."""
+        # The embedding vector of each matched row is never read below, so skip
+        # selecting it (a caller can still opt back in via include_embedding=True).
+        kwargs.setdefault("include_embedding", False)
         results = await self.__query_collection(
             embedding=embedding, k=k, filter=filter, **kwargs
         )

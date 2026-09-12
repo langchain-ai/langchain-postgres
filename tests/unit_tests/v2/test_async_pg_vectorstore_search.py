@@ -253,6 +253,35 @@ class TestVectorStoreSearch:
         assert result[0][0] == Document(page_content="foo", id=ids[0])
         assert result[0][1] == 0
 
+    async def test_query_collection_include_embedding(
+        self, vs: AsyncPGVectorStore
+    ) -> None:
+        """`__query_collection` defaults to including the embedding column
+        (matching prior behavior), but plain similarity search opts out of it
+        since only MMR ever reads the embedding value back from the row."""
+        embedding = embeddings_service.embed_query("foo")
+
+        rows_with_embedding = await vs._AsyncPGVectorStore__query_collection(  # type: ignore[attr-defined]
+            embedding, k=4
+        )
+        assert vs.embedding_column in rows_with_embedding[0]
+
+        rows_without_embedding = await vs._AsyncPGVectorStore__query_collection(  # type: ignore[attr-defined]
+            embedding, k=4, include_embedding=False
+        )
+        assert vs.embedding_column not in rows_without_embedding[0]
+
+        # asimilarity_search_with_score_by_vector never reads the embedding
+        # column back, so it opts out of selecting it by default.
+        result = await vs.asimilarity_search_with_score_by_vector(embedding)
+        assert result[0][0] == Document(page_content="foo", id=ids[0])
+
+        # ...but a caller can still opt back in via include_embedding=True.
+        result_with_embedding = await vs.asimilarity_search_with_score_by_vector(
+            embedding, include_embedding=True
+        )
+        assert result_with_embedding[0][0] == Document(page_content="foo", id=ids[0])
+
     async def test_similarity_search_with_relevance_scores_threshold_cosine(
         self, vs: AsyncPGVectorStore
     ) -> None:

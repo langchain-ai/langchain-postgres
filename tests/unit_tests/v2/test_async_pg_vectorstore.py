@@ -528,6 +528,43 @@ class TestVectorStore:
                 ],  # invalid use of metadata_columns and ignore columns
             )
 
+    async def test_create_with_validate_schema_false(self, engine: PGEngine) -> None:
+        # Skips the information_schema round trip entirely; the store must
+        # still be fully functional against a table whose schema is valid.
+        vs = await AsyncPGVectorStore.create(
+            engine,
+            embedding_service=embeddings_service,
+            table_name=CUSTOM_TABLE,
+            id_column="myid",
+            content_column="mycontent",
+            embedding_column="myembedding",
+            metadata_columns=["page", "source"],
+            metadata_json_column="mymeta",
+            validate_schema=False,
+        )
+        await vs.aadd_texts(
+            ["hello validate_schema=False"],
+            metadatas=[{"page": "9", "source": "test"}],
+        )
+        docs = await vs.asimilarity_search("hello validate_schema=False")
+        assert docs[0].page_content == "hello validate_schema=False"
+        await aexecute(engine, f'TRUNCATE TABLE "{CUSTOM_TABLE}"')
+
+    async def test_create_with_validate_schema_false_and_ignore_metadata_columns(
+        self, engine: PGEngine
+    ) -> None:
+        with pytest.raises(ValueError):
+            await AsyncPGVectorStore.create(
+                engine,
+                embedding_service=embeddings_service,
+                table_name=CUSTOM_TABLE,
+                id_column="myid",
+                content_column="mycontent",
+                embedding_column="myembedding",
+                ignore_metadata_columns=["source"],
+                validate_schema=False,  # can not be combined with ignore_metadata_columns
+            )
+
     async def test_create_vectorstore_with_init(self, engine: PGEngine) -> None:
         with pytest.raises(Exception):
             AsyncPGVectorStore(
