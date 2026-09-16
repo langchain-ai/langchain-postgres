@@ -1002,16 +1002,19 @@ class AsyncPGVectorStore(VectorStore):
             # no index needs to be created
             raise ValueError("Hybrid Search Config cannot create index.")
 
-        lang = (
-            f"'{self.hybrid_search_config.tsv_lang}',"
-            if self.hybrid_search_config.tsv_lang
-            else ""
-        )
-        tsv_column_name = (
-            self.hybrid_search_config.tsv_column
-            if self.hybrid_search_config.tsv_column
-            else f"to_tsvector({lang} {self.content_column})"
-        )
+        tsv_column_name = self.hybrid_search_config.tsv_column
+        if not tsv_column_name:
+            lang = ""
+            if self.hybrid_search_config.tsv_lang:
+                # Index expressions require a literal, so resolve the language
+                # against the catalog as a parameter and splice the result.
+                async with self.engine.connect() as conn:
+                    result = await conn.execute(
+                        text("SELECT quote_literal((:tsv_lang)::regconfig::text)"),
+                        {"tsv_lang": self.hybrid_search_config.tsv_lang},
+                    )
+                    lang = f"{result.scalar_one()},"
+            tsv_column_name = f"to_tsvector({lang} {self.content_column})"
         tsv_index_query = f'CREATE INDEX {"CONCURRENTLY" if concurrently else ""} {self.hybrid_search_config.index_name} ON "{self.schema_name}"."{self.table_name}" USING {self.hybrid_search_config.index_type}({tsv_column_name});'
         if concurrently:
             async with self.engine.connect() as conn:

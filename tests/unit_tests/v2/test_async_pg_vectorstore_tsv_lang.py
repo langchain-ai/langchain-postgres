@@ -107,3 +107,20 @@ class TestTSVLangParameterBinding:
         # a syntax error from spliced SQL (SQLSTATE 42601).
         assert cause is not None
         assert getattr(cause, "sqlstate", None) == "42602", cause
+
+    async def test_apply_hybrid_search_index_language_rejected(
+        self, tsv_lang_store: AsyncPGVectorStore
+    ) -> None:
+        config = HybridSearchConfig(
+            tsv_column="",
+            tsv_lang=LANGUAGE_PAYLOAD,
+        )
+        tsv_lang_store.hybrid_search_config = config
+        with pytest.raises(ProgrammingError) as exc_info:
+            await tsv_lang_store.aapply_hybrid_search_index()
+        cause = exc_info.value.__cause__
+        # DDL cannot take a bound parameter, so the language must be
+        # validated through the catalog before being spliced into the
+        # index expression; a PostgresSyntaxError here would mean the
+        # payload reached the CREATE INDEX statement.
+        assert getattr(cause, "sqlstate", None) == "42602", cause
