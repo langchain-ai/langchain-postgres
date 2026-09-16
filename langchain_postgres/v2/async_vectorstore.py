@@ -323,11 +323,10 @@ class AsyncPGVectorStore(VectorStore):
                 values_stmt = f"VALUES (:langchain_id, :content, {self.embedding_service.embed_query_inline(content)}"  # type: ignore
 
             if self.hybrid_search_config and self.hybrid_search_config.tsv_column:
-                lang = (
-                    f"'{self.hybrid_search_config.tsv_lang}',"
-                    if self.hybrid_search_config.tsv_lang
-                    else ""
-                )
+                lang = ""
+                if self.hybrid_search_config.tsv_lang:
+                    lang = "(:tsv_lang)::regconfig,"
+                    values["tsv_lang"] = self.hybrid_search_config.tsv_lang
                 values_stmt += f", to_tsvector({lang} :tsv_content)"
                 values["tsv_content"] = content
             # Add metadata
@@ -718,11 +717,10 @@ class AsyncPGVectorStore(VectorStore):
         if hybrid_search_config and fts_query:
             hybrid_search_config.fusion_function_parameters["fetch_top_k"] = final_k
             # do the sparse query
-            lang = (
-                f"'{hybrid_search_config.tsv_lang}',"
-                if hybrid_search_config.tsv_lang
-                else ""
-            )
+            lang = ""
+            if hybrid_search_config.tsv_lang:
+                lang = "(:tsv_lang)::regconfig,"
+                param_dict["tsv_lang"] = hybrid_search_config.tsv_lang
             query_tsv = f"plainto_tsquery({lang} :fts_query)"
             param_dict["fts_query"] = fts_query
             if hybrid_search_config.tsv_column:
