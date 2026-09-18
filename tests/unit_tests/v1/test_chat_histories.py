@@ -1,9 +1,22 @@
 import uuid
 
+import pytest
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
 from langchain_postgres.chat_message_histories import PostgresChatMessageHistory
 from tests.utils import asyncpg_client, syncpg_client
+
+
+def test_table_name_rejects_trailing_newline() -> None:
+    # `__init__` validates table_name before ever touching the connection,
+    # so a dummy object is enough to reach the check.
+    session_id = str(uuid.UUID(int=123))
+    with pytest.raises(ValueError, match="Invalid table name"):
+        PostgresChatMessageHistory(
+            "chat_history\n",
+            session_id,
+            sync_connection=object(),  # type: ignore[arg-type]
+        )
 
 
 def test_sync_chat_history() -> None:

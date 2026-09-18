@@ -198,7 +198,7 @@ class PostgresChatMessageHistory(BaseChatMessageHistory):
 
         self._session_id = session_id
 
-        if not re.match(r"^\w+$", table_name):
+        if not re.fullmatch(r"\w+", table_name):
             raise ValueError(
                 "Invalid table name. Table name must contain only alphanumeric "
                 "characters and underscores."
