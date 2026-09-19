@@ -166,3 +166,12 @@ Using the Google Cloud integrations provides the following benefits:
 | Google AlloyDB           |          ✓         |        ✓       |         ✓          |             ✓              |       ✗       |
 | Google Cloud SQL Postgres|          ✓         |        ✓       |         ✓          |             ✓              |       ✗       |
 
+## Neon Integration
+
+[Neon](https://neon.com/) provides serverless PostgreSQL with the [`pgvector`](https://github.com/pgvector/pgvector) extension built in, so the `PGVectorStore` and `PostgresChatMessageHistory` abstractions above work directly. See the [Neon and LangChain guide](https://neon.com/docs/ai/langchain) for a full walkthrough.
+
+Using the Neon integration provides the following benefits:
+
+- **Faster hybrid search**: [Lakebase Search](https://neon.com/docs/ai/lakebase-search) combines vector and BM25 ranking in one query, with RaBitQ quantization building indexes 50-100x faster than HNSW.
+- **Instant database branching**: Branch a full copy of your vectors to test new embedding models or indexes, then discard it without duplicating storage.
+- **Serverless and autoscaling**: Compute scales with your vector query load and to zero when idle, so bursty retrieval workloads only pay for what they use.
