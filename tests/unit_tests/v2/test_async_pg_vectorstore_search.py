@@ -1,12 +1,12 @@
 import os
 import uuid
-from typing import AsyncIterator
+from typing import Any, AsyncIterator, Callable, Sequence
 
 import pytest
 import pytest_asyncio
 from langchain_core.documents import Document
 from langchain_core.embeddings import DeterministicFakeEmbedding
-from sqlalchemy import text
+from sqlalchemy import RowMapping, text
 
 from langchain_postgres import Column, PGEngine
 from langchain_postgres.v2.async_vectorstore import AsyncPGVectorStore
@@ -63,6 +63,27 @@ hybrid_docs = [
     Document(page_content=content, metadata={"doc_id_key": key})
     for key, content in hybrid_docs_content.items()
 ]
+
+
+def _recording_fusion(
+    keyword_matches: list[list[str]],
+) -> Callable[..., Sequence[Any]]:
+    """Wrap weighted_sum_ranking and record the doc_id_key of each keyword match."""
+
+    def recording_fusion(
+        primary_search_results: Sequence[RowMapping],
+        secondary_search_results: Sequence[RowMapping],
+        *args: Any,
+        **kwargs: Any,
+    ) -> Sequence[Any]:
+        keyword_matches.append(
+            sorted(row["doc_id_key"] for row in secondary_search_results)
+        )
+        return weighted_sum_ranking(
+            primary_search_results, secondary_search_results, *args, **kwargs
+        )
+
+    return recording_fusion
 
 
 def get_env_var(key: str, desc: str) -> str:
@@ -806,3 +827,109 @@ class TestVectorStoreSearch:
         assert len(result_ids_without_tsv_column) == 1
         assert result_ids_with_tsv_column[0] == "hs_doc_apple_tech"
         assert result_ids_without_tsv_column[0] == "hs_doc_apple_tech"
+
+    async def _create_hybrid_store(
+        self, engine: PGEngine, hybrid_search_config: HybridSearchConfig
+    ) -> AsyncPGVectorStore:
+        """Create a store over HYBRID_SEARCH_TABLE1 with its own hybrid config."""
+        return await AsyncPGVectorStore.create(
+            engine,
+            embedding_service=embeddings_service,
+            table_name=HYBRID_SEARCH_TABLE1,
+            id_column="myid",
+            content_column="mycontent",
+            embedding_column="myembedding",
+            metadata_json_column="mymetadata",
+            metadata_columns=["doc_id_key"],
+            hybrid_search_config=hybrid_search_config,
+        )
+
+    @pytest.mark.parametrize("config_source", ["store", "per_call"])
+    @pytest.mark.parametrize(
+        "search_method", ["asimilarity_search", "asimilarity_search_with_score"]
+    )
+    async def test_hybrid_search_does_not_mutate_config(
+        self,
+        engine: PGEngine,
+        vs_hybrid_search_with_tsv_column: AsyncPGVectorStore,
+        search_method: str,
+        config_source: str,
+    ) -> None:
+        """Test that a search does not write fts_query or fetch_top_k into the config."""
+        config = HybridSearchConfig(
+            tsv_column="mycontent_tsv",
+            fusion_function_parameters={
+                "primary_results_weight": 0.5,
+                "secondary_results_weight": 0.5,
+                "fetch_top_k": 10,
+            },
+        )
+        original_parameters = dict(config.fusion_function_parameters)
+        if config_source == "store":
+            vs = await self._create_hybrid_store(engine, config)
+            kwargs = {}
+        else:
+            vs = vs_hybrid_search_with_tsv_column
+            kwargs = {"hybrid_search_config": config}
+
+        results = await getattr(vs, search_method)("apple", k=2, **kwargs)
+
+        assert len(results) == 2
+        assert (config.fts_query, config.fusion_function_parameters) == (
+            "",
+            original_parameters,
+        )
+
+    @pytest.mark.parametrize(
+        "search_method", ["asimilarity_search", "asimilarity_search_with_score"]
+    )
+    async def test_hybrid_search_consecutive_queries_use_own_fts_query(
+        self,
+        engine: PGEngine,
+        vs_hybrid_search_with_tsv_column: AsyncPGVectorStore,
+        search_method: str,
+    ) -> None:
+        """Test that each search on the same store uses its own query for keyword search."""
+        keyword_matches: list[list[str]] = []
+        recording_fusion = _recording_fusion(keyword_matches)
+
+        vs = await self._create_hybrid_store(
+            engine,
+            HybridSearchConfig(
+                tsv_column="mycontent_tsv", fusion_function=recording_fusion
+            ),
+        )
+
+        await getattr(vs, search_method)("apple", k=2)
+        await getattr(vs, search_method)("orange", k=2)
+
+        assert keyword_matches == [
+            ["hs_doc_apple_fruit", "hs_doc_apple_tech"],
+            ["hs_doc_orange_fruit"],
+        ]
+
+    @pytest.mark.parametrize(
+        "search_method", ["asimilarity_search", "asimilarity_search_with_score"]
+    )
+    async def test_hybrid_search_explicit_fts_query_takes_precedence(
+        self,
+        engine: PGEngine,
+        vs_hybrid_search_with_tsv_column: AsyncPGVectorStore,
+        search_method: str,
+    ) -> None:
+        """Test that an fts_query set in the store config is used instead of the search query."""
+        keyword_matches: list[list[str]] = []
+        recording_fusion = _recording_fusion(keyword_matches)
+
+        config = HybridSearchConfig(
+            tsv_column="mycontent_tsv",
+            fts_query="orange",
+            fusion_function=recording_fusion,
+        )
+        vs = await self._create_hybrid_store(engine, config)
+
+        await getattr(vs, search_method)("apple", k=2)
+        await getattr(vs, search_method)("cat", k=2)
+
+        assert keyword_matches == [["hs_doc_orange_fruit"], ["hs_doc_orange_fruit"]]
+        assert config.fts_query == "orange"
