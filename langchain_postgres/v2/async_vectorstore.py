@@ -716,7 +716,11 @@ class AsyncPGVectorStore(VectorStore):
             else kwargs.get("fts_query", "")
         )
         if hybrid_search_config and fts_query:
-            hybrid_search_config.fusion_function_parameters["fetch_top_k"] = final_k
+            # copy so the caller's fusion_function_parameters are not modified
+            fusion_function_parameters = {
+                **hybrid_search_config.fusion_function_parameters,
+                "fetch_top_k": final_k,
+            }
             # do the sparse query
             lang = (
                 f"'{hybrid_search_config.tsv_lang}',"
@@ -739,7 +743,7 @@ class AsyncPGVectorStore(VectorStore):
             combined_results = hybrid_search_config.fusion_function(
                 dense_results,
                 sparse_results,
-                **hybrid_search_config.fusion_function_parameters,
+                **fusion_function_parameters,
                 distance_strategy=self.distance_strategy,
             )
             return combined_results
@@ -797,13 +801,12 @@ class AsyncPGVectorStore(VectorStore):
         )
         kwargs["query"] = query
 
-        # add fts_query to hybrid_search_config
+        # use the query for keyword search unless the config sets its own fts_query
         hybrid_search_config = kwargs.get(
             "hybrid_search_config", self.hybrid_search_config
         )
         if hybrid_search_config and not hybrid_search_config.fts_query:
-            hybrid_search_config.fts_query = query
-            kwargs["hybrid_search_config"] = hybrid_search_config
+            kwargs["fts_query"] = query
 
         return await self.asimilarity_search_by_vector(
             embedding=embedding, k=k, filter=filter, **kwargs
@@ -839,13 +842,12 @@ class AsyncPGVectorStore(VectorStore):
         )
         kwargs["query"] = query
 
-        # add fts_query to hybrid_search_config
+        # use the query for keyword search unless the config sets its own fts_query
         hybrid_search_config = kwargs.get(
             "hybrid_search_config", self.hybrid_search_config
         )
         if hybrid_search_config and not hybrid_search_config.fts_query:
-            hybrid_search_config.fts_query = query
-            kwargs["hybrid_search_config"] = hybrid_search_config
+            kwargs["fts_query"] = query
 
         docs = await self.asimilarity_search_with_score_by_vector(
             embedding=embedding, k=k, filter=filter, **kwargs
