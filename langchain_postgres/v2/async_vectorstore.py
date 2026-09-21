@@ -323,11 +323,10 @@ class AsyncPGVectorStore(VectorStore):
                 values_stmt = f"VALUES (:langchain_id, :content, {self.embedding_service.embed_query_inline(content)}"  # type: ignore
 
             if self.hybrid_search_config and self.hybrid_search_config.tsv_column:
-                lang = (
-                    f"'{self.hybrid_search_config.tsv_lang}',"
-                    if self.hybrid_search_config.tsv_lang
-                    else ""
-                )
+                lang = ""
+                if self.hybrid_search_config.tsv_lang:
+                    lang = "(:tsv_lang)::regconfig,"
+                    values["tsv_lang"] = self.hybrid_search_config.tsv_lang
                 values_stmt += f", to_tsvector({lang} :tsv_content)"
                 values["tsv_content"] = content
             # Add metadata
@@ -718,11 +717,10 @@ class AsyncPGVectorStore(VectorStore):
         if hybrid_search_config and fts_query:
             hybrid_search_config.fusion_function_parameters["fetch_top_k"] = final_k
             # do the sparse query
-            lang = (
-                f"'{hybrid_search_config.tsv_lang}',"
-                if hybrid_search_config.tsv_lang
-                else ""
-            )
+            lang = ""
+            if hybrid_search_config.tsv_lang:
+                lang = "(:tsv_lang)::regconfig,"
+                param_dict["tsv_lang"] = hybrid_search_config.tsv_lang
             query_tsv = f"plainto_tsquery({lang} :fts_query)"
             param_dict["fts_query"] = fts_query
             if hybrid_search_config.tsv_column:
@@ -1004,16 +1002,19 @@ class AsyncPGVectorStore(VectorStore):
             # no index needs to be created
             raise ValueError("Hybrid Search Config cannot create index.")
 
-        lang = (
-            f"'{self.hybrid_search_config.tsv_lang}',"
-            if self.hybrid_search_config.tsv_lang
-            else ""
-        )
-        tsv_column_name = (
-            self.hybrid_search_config.tsv_column
-            if self.hybrid_search_config.tsv_column
-            else f"to_tsvector({lang} {self.content_column})"
-        )
+        tsv_column_name = self.hybrid_search_config.tsv_column
+        if not tsv_column_name:
+            lang = ""
+            if self.hybrid_search_config.tsv_lang:
+                # Index expressions require a literal, so resolve the language
+                # against the catalog as a parameter and splice the result.
+                async with self.engine.connect() as conn:
+                    result = await conn.execute(
+                        text("SELECT quote_literal((:tsv_lang)::regconfig::text)"),
+                        {"tsv_lang": self.hybrid_search_config.tsv_lang},
+                    )
+                    lang = f"{result.scalar_one()},"
+            tsv_column_name = f"to_tsvector({lang} {self.content_column})"
         tsv_index_query = f'CREATE INDEX {"CONCURRENTLY" if concurrently else ""} {self.hybrid_search_config.index_name} ON "{self.schema_name}"."{self.table_name}" USING {self.hybrid_search_config.index_type}({tsv_column_name});'
         if concurrently:
             async with self.engine.connect() as conn:
