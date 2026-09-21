@@ -1,6 +1,6 @@
 import os
 import uuid
-from typing import AsyncIterator
+from typing import Any, AsyncIterator
 
 import pytest
 import pytest_asyncio
@@ -26,6 +26,7 @@ DEFAULT_TABLE = "default" + str(uuid.uuid4()).replace("-", "_")
 CUSTOM_TABLE = "custom" + str(uuid.uuid4()).replace("-", "_")
 HYBRID_SEARCH_TABLE1 = "test_table_hybrid1" + str(uuid.uuid4()).replace("-", "_")
 HYBRID_SEARCH_TABLE2 = "test_table_hybrid2" + str(uuid.uuid4()).replace("-", "_")
+TEXT_MATCH_TABLE = "test_table_text_match" + str(uuid.uuid4()).replace("-", "_")
 CUSTOM_FILTER_TABLE = "custom_filter" + str(uuid.uuid4()).replace("-", "_")
 CUSTOM_METADATA_JSON_TABLE = "custom_metadata_json" + str(uuid.uuid4()).replace(
     "-", "_"
@@ -62,6 +63,16 @@ hybrid_docs_content = {
 hybrid_docs = [
     Document(page_content=content, metadata={"doc_id_key": key})
     for key, content in hybrid_docs_content.items()
+]
+# Documents for keyword-only checks of HybridSearchConfig.text_match
+text_match_docs_content = {
+    "tm_doc_vendor": "We onboarded a third-party vendor last year.",
+    "tm_doc_orange": "The orange is the fruit of various citrus species.",
+    "tm_doc_cat": "A fluffy cat sat on a mat.",
+}
+text_match_docs = [
+    Document(page_content=content, metadata={"doc_id_key": key})
+    for key, content in text_match_docs_content.items()
 ]
 
 
@@ -507,6 +518,133 @@ class TestVectorStoreSearch:
             ),
         )
         assert results == [Document(page_content="bar", id=ids[1])]
+
+    @pytest_asyncio.fixture(scope="class")
+    async def vs_text_match(
+        self, engine: PGEngine
+    ) -> AsyncIterator[AsyncPGVectorStore]:
+        hybrid_search_config = HybridSearchConfig(tsv_column="mycontent_tsv")
+        await engine._ainit_vectorstore_table(
+            TEXT_MATCH_TABLE,
+            VECTOR_SIZE,
+            id_column=Column("myid", "TEXT"),
+            content_column="mycontent",
+            embedding_column="myembedding",
+            metadata_columns=[Column("doc_id_key", "TEXT")],
+            store_metadata=False,
+            hybrid_search_config=hybrid_search_config,
+        )
+        vs = await AsyncPGVectorStore.create(
+            engine,
+            embedding_service=embeddings_service,
+            table_name=TEXT_MATCH_TABLE,
+            id_column="myid",
+            content_column="mycontent",
+            embedding_column="myembedding",
+            metadata_columns=["doc_id_key"],
+            hybrid_search_config=hybrid_search_config,
+        )
+        await vs.aadd_documents(text_match_docs)
+        yield vs
+        await engine.adrop_table(TEXT_MATCH_TABLE)
+
+    async def _keyword_matches(
+        self, vs: AsyncPGVectorStore, query: str, **config_kwargs: Any
+    ) -> list[str]:
+        """Return the doc_id_key of every keyword match, with vector search disabled."""
+        config = HybridSearchConfig(
+            fts_query=query, primary_top_k=0, secondary_top_k=10, **config_kwargs
+        )
+        results = await vs.asimilarity_search(query, k=10, hybrid_search_config=config)
+        return sorted(doc.metadata["doc_id_key"] for doc in results)
+
+    @pytest.mark.parametrize("tsv_column", ["mycontent_tsv", ""])
+    async def test_hybrid_search_text_match_any_matches_single_term(
+        self, vs_text_match: AsyncPGVectorStore, tsv_column: str
+    ) -> None:
+        """Test that "any" matches a document containing only one query term."""
+        query = "which citrus grove"  # only "citrus" appears in a document
+
+        assert (
+            await self._keyword_matches(
+                vs_text_match, query, tsv_column=tsv_column, text_match="all"
+            )
+            == []
+        )
+        assert await self._keyword_matches(
+            vs_text_match, query, tsv_column=tsv_column, text_match="any"
+        ) == ["tm_doc_orange"]
+
+    @pytest.mark.parametrize("text_match", ["all", "any"])
+    async def test_hybrid_search_text_match_stopwords_only(
+        self, vs_text_match: AsyncPGVectorStore, text_match: str
+    ) -> None:
+        """Test that a query made only of stopwords returns no keyword matches."""
+        assert (
+            await self._keyword_matches(
+                vs_text_match,
+                "how is the",
+                tsv_column="mycontent_tsv",
+                text_match=text_match,
+            )
+            == []
+        )
+
+    @pytest.mark.parametrize("text_match", ["all", "any"])
+    async def test_hybrid_search_text_match_hyphen_and_apostrophe(
+        self, vs_text_match: AsyncPGVectorStore, text_match: str
+    ) -> None:
+        """Test that hyphens and apostrophes in the query still match."""
+        assert await self._keyword_matches(
+            vs_text_match,
+            "third-party vendor's",
+            tsv_column="mycontent_tsv",
+            text_match=text_match,
+        ) == ["tm_doc_vendor"]
+
+    async def test_hybrid_search_text_match_any_tsquery_syntax_characters(
+        self, vs_text_match: AsyncPGVectorStore
+    ) -> None:
+        """Test that "any" handles terms containing tsquery operators, like URLs."""
+        # The URL produces the term "/a:b?x=1", which is a tsquery syntax error
+        # if it is not quoted.
+        assert await self._keyword_matches(
+            vs_text_match,
+            "vendor at http://example.com/a:b?x=1 (c) & !d | 'e'",
+            tsv_column="mycontent_tsv",
+            text_match="any",
+        ) == ["tm_doc_vendor"]
+
+    async def test_hybrid_search_text_match_default_is_all(
+        self, engine: PGEngine, vs_text_match: AsyncPGVectorStore
+    ) -> None:
+        """Test that the default config matches exactly what plainto_tsquery matches."""
+        assert HybridSearchConfig().text_match == "all"
+
+        for query in [
+            "orange fruit",
+            "which citrus grove",
+            "third-party vendor's",
+            "how is the",
+            "fluffy cat",
+        ]:
+            async with engine._pool.connect() as conn:
+                result = await conn.execute(
+                    text(
+                        f'SELECT doc_id_key FROM "{TEXT_MATCH_TABLE}" '
+                        "WHERE mycontent_tsv @@ "
+                        "plainto_tsquery('pg_catalog.english', :query)"
+                    ),
+                    {"query": query},
+                )
+                expected = sorted(row[0] for row in result.fetchall())
+
+            assert (
+                await self._keyword_matches(
+                    vs_text_match, query, tsv_column="mycontent_tsv"
+                )
+                == expected
+            ), query
 
     async def test_hybrid_search_weighted_sum_default(
         self,

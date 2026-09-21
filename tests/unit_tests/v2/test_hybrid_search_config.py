@@ -4,6 +4,7 @@ import pytest
 from sqlalchemy import RowMapping
 
 from langchain_postgres.v2.hybrid_search_config import (
+    HybridSearchConfig,
     reciprocal_rank_fusion,
     weighted_sum_ranking,
 )
@@ -312,3 +313,16 @@ class TestReciprocalRankFusion:
         assert results[0]["distance"] == pytest.approx(1 / 60)
         assert results[1]["id_val"] == "p2"
         assert results[1]["distance"] == pytest.approx(1 / 61)
+
+
+class TestHybridSearchConfig:
+    @pytest.mark.parametrize("text_match", ["all", "any"])
+    def test_text_match_valid(self, text_match: str) -> None:
+        config = HybridSearchConfig(text_match=text_match)  # type: ignore[arg-type]
+        assert config.text_match == text_match
+
+    @pytest.mark.parametrize("text_match", ["ANY", "or", "", None])
+    def test_text_match_invalid(self, text_match: object) -> None:
+        """Tests that an unsupported text_match value is rejected."""
+        with pytest.raises(ValueError, match="text_match must be"):
+            HybridSearchConfig(text_match=text_match)  # type: ignore[arg-type]
