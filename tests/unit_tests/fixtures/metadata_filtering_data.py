@@ -260,3 +260,49 @@ NEGATIVE_TEST_CASES = [
     {"$and": []},
     {"$not": True},
 ]
+
+LTREE_METADATAS = [
+    {"code": "DOC001", "category": "Top"},
+    {"code": "DOC002", "category": "Top.Science"},
+    {"code": "DOC003", "category": "Top.Science.Astronomy"},
+    {"code": "DOC004", "category": "Top.Technology"},
+    {"code": "DOC005", "category": "Top.Technology.AI"},
+]
+
+LTREE_FILTERING_TEST_CASES = [
+    # $ancestor: field @> value — field is ancestor-of-or-equal-to value
+    ({"category": {"$ancestor": "Top.Science"}}, ["DOC001", "DOC002"]),
+    (
+        {"category": {"$ancestor": "Top.Technology.AI"}},
+        ["DOC001", "DOC004", "DOC005"],
+    ),
+    # $descendant: field <@ value — field is descendant-of-or-equal-to value
+    ({"category": {"$descendant": "Top.Science"}}, ["DOC002", "DOC003"]),
+    (
+        {"category": {"$descendant": "Top"}},
+        ["DOC001", "DOC002", "DOC003", "DOC004", "DOC005"],
+    ),
+    # $lquery: field ~ pattern
+    ({"category": {"$lquery": "Top.*{1}"}}, ["DOC002", "DOC004"]),  # direct children
+    ({"category": {"$lquery": "Top.*{2}"}}, ["DOC003", "DOC005"]),  # grandchildren
+    ({"category": {"$lquery": "Top.Technology"}}, ["DOC004"]),  # exact match
+    # $lquery_any: field ? ARRAY[patterns]
+    (
+        {"category": {"$lquery_any": ["Top.Science", "Top.Technology"]}},
+        ["DOC002", "DOC004"],
+    ),
+    ({"category": {"$lquery_any": ["Top.*{2}"]}}, ["DOC003", "DOC005"]),
+    # $ltxtquery: field @ query — matches by label words
+    ({"category": {"$ltxtquery": "Science"}}, ["DOC002", "DOC003"]),
+    ({"category": {"$ltxtquery": "Technology"}}, ["DOC004", "DOC005"]),
+    ({"category": {"$ltxtquery": "AI"}}, ["DOC005"]),
+]
+
+LTREE_NEGATIVE_TEST_CASES = [
+    {"category": {"$ancestor": 42}},  # non-string value
+    {"category": {"$descendant": ["Top.Science"]}},  # non-string value
+    {"category": {"$lquery": True}},  # non-string value
+    {"category": {"$lquery_any": "Top.*"}},  # non-list value
+    {"category": {"$lquery_any": [123, "Top.*"]}},  # non-string item in list
+    {"category": {"$ltxtquery": 3.14}},  # non-string value
+]
