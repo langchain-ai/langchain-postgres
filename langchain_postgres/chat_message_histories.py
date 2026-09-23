@@ -377,3 +377,12 @@ class PostgresChatMessageHistory(BaseChatMessageHistory):
         async with self._aconnection.cursor() as cursor:
             await cursor.execute(query, {"session_id": self._session_id})
         await self._aconnection.commit()
+
+    def update_session_id(self, new_session_id: str) -> None:
+        """Update the session ID for the current instance and in the database"""
+        update_query = (
+            f"UPDATE {self._table_name} SET session_id = %s WHERE session_id = %s;"
+        )
+        with self._connection.cursor() as cursor:
+            cursor.execute(update_query, (new_session_id, self._session_id))
+            self._connection.commit()
