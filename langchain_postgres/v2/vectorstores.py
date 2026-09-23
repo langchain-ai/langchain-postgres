@@ -1,4 +1,3 @@
-# TODO: Remove below import when minimum supported Python version is 3.10
 from __future__ import annotations
 
 from typing import Any, Callable, Iterable, Optional, Sequence
