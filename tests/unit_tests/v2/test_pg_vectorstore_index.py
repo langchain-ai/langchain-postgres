@@ -104,6 +104,7 @@ class TestIndex:
         assert not result
 
     async def test_aapply_vector_index_ivfflat(self, vs: PGVectorStore) -> None:
+        vs.drop_vector_index(DEFAULT_INDEX_NAME)
         index = IVFFlatIndex(
             name=DEFAULT_INDEX_NAME, distance_strategy=DistanceStrategy.EUCLIDEAN
         )
@@ -221,6 +222,7 @@ class TestAsyncIndex:
         assert not result
 
     async def test_aapply_vector_index_ivfflat(self, vs: PGVectorStore) -> None:
+        await vs.adrop_vector_index(DEFAULT_INDEX_NAME_ASYNC)
         index = IVFFlatIndex(
             name=DEFAULT_INDEX_NAME_ASYNC, distance_strategy=DistanceStrategy.EUCLIDEAN
         )
