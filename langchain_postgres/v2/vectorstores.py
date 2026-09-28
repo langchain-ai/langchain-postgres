@@ -129,7 +129,6 @@ class PGVectorStore(VectorStore):
         """Create an PGVectorStore instance.
 
         Args:
-            key (object): Prevent direct constructor usage.
             engine (PGEngine): Connection pool engine for managing connections to postgres database.
             embedding_service (Embeddings): Text embedding model to use.
             table_name (str): Name of an existing table.
