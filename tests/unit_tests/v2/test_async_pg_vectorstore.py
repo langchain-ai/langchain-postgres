@@ -572,7 +572,6 @@ class TestVectorStore:
         assert ":content, embedding('model_id', :content)::vector" in sql_text
         assert params["content"] == "hello world"
 
-
     async def test_asimilarity_search_with_inline_template(self) -> None:
         class TemplateEmbeddings(Embeddings):
             def embed_documents(self, texts: list[str]) -> list[list[float]]:
@@ -609,19 +608,22 @@ class TestVectorStore:
         assert "embedding('model_id', :query_text)::vector" in sql_text
         assert params["query_text"] == "search query"
 
-
     async def test_init_raises_for_outdated_inline_embedding(self) -> None:
         class OutdatedAlloyDBEmbeddings(Embeddings):
             def embed_documents(self, texts: list[str]) -> list[list[float]]:
                 return []
+
             def embed_query(self, text: str) -> list[float]:
                 return []
+
             def embed_query_inline(self, query: str) -> str:
                 return f"embedding('model_id', '{query}')::vector"
 
         create_key = getattr(AsyncPGVectorStore, "_AsyncPGVectorStore__create_key")
-        
-        with pytest.raises(ValueError, match="outdated inline embedding implementation"):
+
+        with pytest.raises(
+            ValueError, match="outdated inline embedding implementation"
+        ):
             AsyncPGVectorStore(
                 create_key,
                 engine=None,  # type: ignore

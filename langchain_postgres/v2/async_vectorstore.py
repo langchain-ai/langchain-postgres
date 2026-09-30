@@ -128,7 +128,6 @@ class AsyncPGVectorStore(VectorStore):
                 "to a version that supports 'embed_query_inline_template'."
             )
 
-
         self.engine = engine
         self.embedding_service = embedding_service
         self.table_name = table_name
@@ -328,7 +327,6 @@ class AsyncPGVectorStore(VectorStore):
 
             if not embedding and can_inline_embed_template:
                 values_stmt = f"VALUES (:langchain_id, :content, {inline_template_func(':content')}"  # type: ignore
-
 
             if self.hybrid_search_config and self.hybrid_search_config.tsv_column:
                 lang = (
