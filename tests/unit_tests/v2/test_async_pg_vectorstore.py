@@ -627,3 +627,4 @@ class TestVectorStore:
                 engine=None,  # type: ignore
                 embedding_service=OutdatedAlloyDBEmbeddings(),
                 table_name="test_table",
+            )
