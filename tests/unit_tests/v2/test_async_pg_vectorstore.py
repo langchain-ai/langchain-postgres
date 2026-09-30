@@ -572,35 +572,6 @@ class TestVectorStore:
         assert ":content, embedding('model_id', :content)::vector" in sql_text
         assert params["content"] == "hello world"
 
-    async def test_aadd_embeddings_with_legacy_inline(self) -> None:
-        class LegacyEmbeddings(Embeddings):
-            def embed_documents(self, texts: list[str]) -> list[list[float]]:
-                return []
-
-            def embed_query(self, text: str) -> list[float]:
-                return []
-
-            def embed_query_inline(self, query: str) -> str:
-                return f"embedding('model_id', '{query}')::vector"
-
-        mock_conn = AsyncMock()
-        mock_engine = MagicMock()
-        mock_engine.connect.return_value.__aenter__.return_value = mock_conn
-        mock_engine.connect.return_value.__aexit__.return_value = None
-
-        create_key = getattr(AsyncPGVectorStore, "_AsyncPGVectorStore__create_key")
-        vs = AsyncPGVectorStore(
-            create_key,
-            engine=mock_engine,
-            embedding_service=LegacyEmbeddings(),
-            table_name="test_table",
-        )
-        await vs.aadd_embeddings(texts=["hello world"], embeddings=[[]])
-        call_args = mock_conn.execute.call_args
-        sql_text = str(call_args[0][0])
-        params = call_args[0][1]
-        assert "embedding('model_id', 'hello world')::vector" in sql_text
-        assert params["content"] == "hello world"
 
     async def test_asimilarity_search_with_inline_template(self) -> None:
         class TemplateEmbeddings(Embeddings):
@@ -638,41 +609,36 @@ class TestVectorStore:
         assert "embedding('model_id', :query_text)::vector" in sql_text
         assert params["query_text"] == "search query"
 
-    async def test_asimilarity_search_with_legacy_inline(self) -> None:
-        class LegacyEmbeddings(Embeddings):
+
+    async def test_init_raises_for_outdated_inline_embedding(self) -> None:
+        class OutdatedAlloyDBEmbeddings(Embeddings):
             def embed_documents(self, texts: list[str]) -> list[list[float]]:
                 return []
-
             def embed_query(self, text: str) -> list[float]:
                 return []
-
             def embed_query_inline(self, query: str) -> str:
                 return f"embedding('model_id', '{query}')::vector"
 
-        mock_conn = AsyncMock()
-        mock_result = MagicMock()
-        mock_result.mappings.return_value.fetchall.return_value = []
-        mock_conn.execute.return_value = mock_result
-
-        mock_engine = MagicMock()
-        mock_engine.connect.return_value.__aenter__.return_value = mock_conn
-        mock_engine.connect.return_value.__aexit__.return_value = None
-
         create_key = getattr(AsyncPGVectorStore, "_AsyncPGVectorStore__create_key")
+        
+        with pytest.raises(ValueError, match="outdated inline embedding implementation"):
+            AsyncPGVectorStore(
+                create_key,
+                engine=None,  # type: ignore
+                embedding_service=OutdatedAlloyDBEmbeddings(),
+                table_name="test_table",
+            )
+
+    async def test_init_does_not_raise_for_standard_embeddings(self) -> None:
+        from langchain_core.embeddings import DeterministicFakeEmbedding
+        create_key = getattr(AsyncPGVectorStore, "_AsyncPGVectorStore__create_key")
+        
+        # Should not raise ValueError because DeterministicFakeEmbedding 
+        # doesn't implement embed_query_inline at all
         vs = AsyncPGVectorStore(
             create_key,
-            engine=mock_engine,
-            embedding_service=LegacyEmbeddings(),
+            engine=None,  # type: ignore
+            embedding_service=DeterministicFakeEmbedding(size=2),
             table_name="test_table",
         )
-        await vs.asimilarity_search_with_score_by_vector(
-            embedding=[], query="legacy search"
-        )
-        call_args = mock_conn.execute.call_args
-        sql_text = str(call_args[0][0])
-        params = call_args[0][1]
-        assert "embedding('model_id', 'legacy search')::vector" in sql_text
-        assert (
-            params["query_embedding"]
-            == "embedding('model_id', 'legacy search')::vector"
-        )
+        assert vs.embedding_service is not None
