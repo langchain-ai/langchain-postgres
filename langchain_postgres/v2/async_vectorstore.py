@@ -464,7 +464,7 @@ class AsyncPGVectorStore(VectorStore):
             placeholders = ", ".join(f":id_{i}" for i in range(len(ids)))
             id_params = {f"id_{i}": id for i, id in enumerate(ids)}
             param_dict.update(id_params)
-            where_clauses.append(f"{self.id_column} in ({placeholders})")
+            where_clauses.append(f'"{self.id_column}" in ({placeholders})')
 
         # Handle filter-based deletion
         if filter:
@@ -1288,8 +1288,12 @@ class AsyncPGVectorStore(VectorStore):
             field_selector = f"{self.metadata_json_column}.{field_selector}"
 
         if "." in field_selector:
+            # The leading segment is a column name, the rest are JSON keys.
+            # Quote the column so a mixed-case identifier is not folded to
+            # lowercase by Postgres, matching how every other statement in this
+            # module emits column names.
             field_selector = "->".join(
-                field_split
+                f'"{field_split}"'
                 if ind == 0
                 else f"{'>' if ind == field_selector.count('.') else ''}'{field_split}'"
                 for ind, field_split in enumerate(field_selector.split("."))
@@ -1304,6 +1308,9 @@ class AsyncPGVectorStore(VectorStore):
                 raise ValueError(f"Unsupported type: {filter_value_type}")
             if postgres_type != "TEXT" and operator != "$exists":
                 field_selector = f"({field_selector})::{postgres_type}"
+        else:
+            # A bare column reference needs the same quoting as the JSON path above.
+            field_selector = f'"{field_selector}"'
 
         suffix_id = str(uuid.uuid4()).split("-")[0]
         if operator in COMPARISONS_TO_NATIVE:
