@@ -86,6 +86,15 @@ class BaseIndex(ABC):
 class ExactNearestNeighbor(BaseIndex):
     index_type: str = "exactnearestneighbor"
 
+    def index_options(self) -> str:
+        """Exact (brute-force) search uses no index, so there are no options.
+
+        ``apply_vector_index`` short-circuits and drops the index for an
+        ``ExactNearestNeighbor``, so this value is never used to build DDL; it
+        exists only to make the class concrete/instantiable.
+        """
+        return ""
+
 
 @dataclass
 class QueryOptions(ABC):
