@@ -69,7 +69,7 @@ store = PGVectorStore.create_sync(
 docs = [
     Document(page_content="Apples and oranges"),
     Document(page_content="Cars and airplanes"),
-    Document(page_content="Train")
+    Document(page_content="Train"),
 ]
 
 store.add_documents(docs)
@@ -91,9 +91,7 @@ vs = PGVectorStore.create_sync(
     engine=engine,
     table_name=TABLE_NAME,
     embedding_service=embedding,
-    hybrid_search_config=HybridSearchConfig(
-      fusion_function=reciprocal_rank_fusion
-    ),
+    hybrid_search_config=HybridSearchConfig(fusion_function=reciprocal_rank_fusion),
 )
 hybrid_docs = vector_store.similarity_search("products", k=5)
 ```
@@ -122,7 +120,7 @@ import psycopg
 
 # Establish a synchronous connection to the database
 # (or use psycopg.AsyncConnection for async)
-conn_info = ... # Fill in with your connection info
+conn_info = ...  # Fill in with your connection info
 sync_connection = psycopg.connect(conn_info)
 
 # Create the table schema (only needs to be done once)
@@ -133,17 +131,17 @@ session_id = str(uuid.uuid4())
 
 # Initialize the chat history manager
 chat_history = PostgresChatMessageHistory(
-    table_name,
-    session_id,
-    sync_connection=sync_connection
+    table_name, session_id, sync_connection=sync_connection
 )
 
 # Add messages to the chat history
-chat_history.add_messages([
-    SystemMessage(content="Meow"),
-    AIMessage(content="woof"),
-    HumanMessage(content="bark"),
-])
+chat_history.add_messages(
+    [
+        SystemMessage(content="Meow"),
+        AIMessage(content="woof"),
+        HumanMessage(content="bark"),
+    ]
+)
 
 print(chat_history.messages)
 ```
