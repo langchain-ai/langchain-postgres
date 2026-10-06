@@ -722,7 +722,7 @@ class PGVector(VectorStore):
         **kwargs: Any,
     ) -> PGVector:
         if ids is None:
-            ids = [str(uuid.uuid1()) for _ in texts]
+            ids = [str(uuid.uuid4()) for _ in texts]
 
         if not metadatas:
             metadatas = [{} for _ in texts]
