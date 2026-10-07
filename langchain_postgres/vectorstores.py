@@ -744,6 +744,36 @@ class PGVector(VectorStore):
 
         return store
 
+    @staticmethod
+    def _validate_parallel_lengths(
+        texts: Sequence[str],
+        embeddings: List[List[float]],
+        metadatas: List[dict],
+        ids_: List[str],
+    ) -> None:
+        """Reject inputs that would be silently truncated when zipped together.
+
+        The insert payload is built by zipping these four sequences, which stops
+        at the shortest one. Without this check a short ``embeddings`` list (for
+        example an embedding provider that quietly returned fewer vectors than
+        texts) writes only part of the batch while the full ``ids`` list is still
+        returned, so the caller is told every document landed.
+        """
+        expected = len(texts)
+        for name, sequence in (
+            ("embeddings", embeddings),
+            ("metadatas", metadatas),
+            ("ids", ids_),
+        ):
+            if len(sequence) != expected:
+                msg = (
+                    f"Got {len(sequence)} {name} for {expected} texts. "
+                    f"`texts`, `embeddings`, `metadatas` and `ids` must all be "
+                    f"the same length, otherwise part of the batch would be "
+                    f"dropped without an error."
+                )
+                raise ValueError(msg)
+
     def add_embeddings(
         self,
         texts: Sequence[str],
@@ -770,6 +800,8 @@ class PGVector(VectorStore):
 
         if not metadatas:
             metadatas = [{} for _ in texts]
+
+        self._validate_parallel_lengths(texts, embeddings, metadatas, ids_)
 
         with self._make_sync_session() as session:  # type: ignore[arg-type]
             collection = self.get_collection(session)
@@ -829,6 +861,8 @@ class PGVector(VectorStore):
 
         if not metadatas:
             metadatas = [{} for _ in texts]
+
+        self._validate_parallel_lengths(texts, embeddings, metadatas, ids_)
 
         async with self._make_async_session() as session:  # type: ignore[arg-type]
             collection = await self.aget_collection(session)
