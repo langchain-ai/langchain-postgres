@@ -357,7 +357,7 @@ class PostgresChatMessageHistory(BaseChatMessageHistory):
         if self._connection is None:
             raise ValueError(
                 "Please initialize the PostgresChatMessageHistory "
-                "with a sync connection or use the async clear method instead."
+                "with a sync connection or use the async aclear method instead."
             )
 
         query = _delete_by_session_id_query(self._table_name)
