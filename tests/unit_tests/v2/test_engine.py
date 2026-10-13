@@ -19,11 +19,13 @@ CUSTOM_TABLE = "custom" + str(uuid.uuid4()).replace("-", "_")
 HYBRID_SEARCH_TABLE = "hybrid" + str(uuid.uuid4()).replace("-", "_")
 CUSTOM_TYPEDDICT_TABLE = "custom_td" + str(uuid.uuid4()).replace("-", "_")
 INT_ID_CUSTOM_TABLE = "custom_int_id" + str(uuid.uuid4()).replace("-", "_")
+NO_CREATE_EXT_TABLE = "no_ext" + str(uuid.uuid4()).replace("-", "_")
 DEFAULT_TABLE_SYNC = "default_sync" + str(uuid.uuid4()).replace("-", "_")
 CUSTOM_TABLE_SYNC = "custom_sync" + str(uuid.uuid4()).replace("-", "_")
 HYBRID_SEARCH_TABLE_SYNC = "hybrid_sync" + str(uuid.uuid4()).replace("-", "_")
 CUSTOM_TYPEDDICT_TABLE_SYNC = "custom_td_sync" + str(uuid.uuid4()).replace("-", "_")
 INT_ID_CUSTOM_TABLE_SYNC = "custom_int_id_sync" + str(uuid.uuid4()).replace("-", "_")
+NO_CREATE_EXT_TABLE_SYNC = "no_ext_sync" + str(uuid.uuid4()).replace("-", "_")
 VECTOR_SIZE = 768
 
 embeddings_service = DeterministicFakeEmbedding(size=VECTOR_SIZE)
@@ -76,6 +78,7 @@ class TestEngineAsync:
         await aexecute(engine, f'DROP TABLE IF EXISTS "{CUSTOM_TYPEDDICT_TABLE}"')
         await aexecute(engine, f'DROP TABLE IF EXISTS "{DEFAULT_TABLE}"')
         await aexecute(engine, f'DROP TABLE IF EXISTS "{INT_ID_CUSTOM_TABLE}"')
+        await aexecute(engine, f'DROP TABLE IF EXISTS "{NO_CREATE_EXT_TABLE}"')
         await engine.close()
 
     async def test_init_table(self, engine: PGEngine) -> None:
@@ -251,6 +254,15 @@ class TestEngineAsync:
         with pytest.raises(ValueError):
             Column(1, "INTEGER")  # type: ignore
 
+    async def test_init_table_no_create_extension(self, engine: PGEngine) -> None:
+        """create_extension=False should not attempt CREATE EXTENSION but still create the table."""
+        await engine.ainit_vectorstore_table(
+            NO_CREATE_EXT_TABLE, VECTOR_SIZE, create_extension=False
+        )
+        stmt = f"SELECT column_name FROM information_schema.columns WHERE table_name = '{NO_CREATE_EXT_TABLE}';"
+        results = await afetch(engine, stmt)
+        assert len(results) > 0
+
 
 @pytest.mark.enable_socket
 @pytest.mark.asyncio
@@ -264,6 +276,7 @@ class TestEngineSync:
         await aexecute(engine, f'DROP TABLE IF EXISTS "{DEFAULT_TABLE_SYNC}"')
         await aexecute(engine, f'DROP TABLE IF EXISTS "{INT_ID_CUSTOM_TABLE_SYNC}"')
         await aexecute(engine, f'DROP TABLE IF EXISTS "{CUSTOM_TYPEDDICT_TABLE_SYNC}"')
+        await aexecute(engine, f'DROP TABLE IF EXISTS "{NO_CREATE_EXT_TABLE_SYNC}"')
         await engine.close()
 
     async def test_init_table(self, engine: PGEngine) -> None:
@@ -410,3 +423,12 @@ class TestEngineSync:
         key = object()
         with pytest.raises(Exception):
             PGEngine(key, engine._pool, None, None)
+
+    async def test_init_table_no_create_extension(self, engine: PGEngine) -> None:
+        """create_extension=False should not attempt CREATE EXTENSION but still create the table."""
+        engine.init_vectorstore_table(
+            NO_CREATE_EXT_TABLE_SYNC, VECTOR_SIZE, create_extension=False
+        )
+        stmt = f"SELECT column_name FROM information_schema.columns WHERE table_name = '{NO_CREATE_EXT_TABLE_SYNC}';"
+        results = await afetch(engine, stmt)
+        assert len(results) > 0
