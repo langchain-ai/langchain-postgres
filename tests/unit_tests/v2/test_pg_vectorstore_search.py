@@ -17,6 +17,9 @@ from langchain_postgres.v2.hybrid_search_config import (
 from langchain_postgres.v2.indexes import DistanceStrategy, HNSWQueryOptions
 from tests.unit_tests.fixtures.metadata_filtering_data import (
     FILTERING_TEST_CASES,
+    LTREE_FILTERING_TEST_CASES,
+    LTREE_METADATAS,
+    LTREE_NEGATIVE_TEST_CASES,
     METADATAS,
     NEGATIVE_TEST_CASES,
 )
@@ -33,6 +36,8 @@ CUSTOM_METADATA_JSON_TABLE = "custom_metadata_json" + str(uuid.uuid4()).replace(
 CUSTOM_METADATA_JSON_TABLE_SYNC = "custom_metadata_json_sync" + str(
     uuid.uuid4()
 ).replace("-", "_")
+LTREE_FILTER_TABLE = "ltree_filter" + str(uuid.uuid4()).replace("-", "_")
+LTREE_METADATA_JSON_TABLE = "ltree_json" + str(uuid.uuid4()).replace("-", "_")
 VECTOR_SIZE = 768
 
 embeddings_service = DeterministicFakeEmbedding(size=VECTOR_SIZE)
@@ -52,6 +57,12 @@ filter_docs = [
 ]
 
 embeddings = [embeddings_service.embed_query("foo") for i in range(len(texts))]
+
+ltree_docs = [
+    Document(page_content=f"doc {i}", metadata=LTREE_METADATAS[i])
+    for i in range(len(LTREE_METADATAS))
+]
+ltree_ids = [str(uuid.uuid4()) for _ in range(len(LTREE_METADATAS))]
 
 
 def get_env_var(key: str, desc: str) -> str:
@@ -547,7 +558,7 @@ class TestVectorStoreSearchSync:
         self, vs_custom_filter_sync: PGVectorStore, test_filter: dict
     ) -> None:
         with pytest.raises((ValueError, NotImplementedError)):
-            docs = vs_custom_filter_sync.similarity_search(
+            vs_custom_filter_sync.similarity_search(
                 "meow", k=5, filter=test_filter
             )
 
@@ -574,3 +585,83 @@ class TestVectorStoreSearchSync:
             ),
         )
         assert results == [Document(page_content="foo", id=ids[0])]
+
+
+@pytest.mark.enable_socket
+@pytest.mark.asyncio(scope="class")
+class TestLtreeFiltering:
+    @pytest_asyncio.fixture(scope="class")
+    async def engine(self) -> AsyncIterator[PGEngine]:
+        engine = PGEngine.from_connection_string(url=CONNECTION_STRING)
+        yield engine
+        await aexecute(engine, f"DROP TABLE IF EXISTS {LTREE_FILTER_TABLE}")
+        await aexecute(engine, f"DROP TABLE IF EXISTS {LTREE_METADATA_JSON_TABLE}")
+        await engine.close()
+
+    @pytest_asyncio.fixture(scope="class")
+    async def vs_ltree(self, engine: PGEngine) -> AsyncIterator[PGVectorStore]:
+        await aexecute(engine, "CREATE EXTENSION IF NOT EXISTS ltree")
+        await engine.ainit_vectorstore_table(
+            LTREE_FILTER_TABLE,
+            VECTOR_SIZE,
+            metadata_columns=[Column("code", "TEXT"), Column("category", "ltree")],
+            id_column="langchain_id",
+            store_metadata=False,
+            overwrite_existing=True,
+        )
+        vs = await PGVectorStore.create(
+            engine,
+            embedding_service=embeddings_service,
+            table_name=LTREE_FILTER_TABLE,
+            metadata_columns=["code", "category"],
+            id_column="langchain_id",
+        )
+        await vs.aadd_documents(ltree_docs, ids=ltree_ids)
+        yield vs
+
+    @pytest_asyncio.fixture(scope="class")
+    async def vs_ltree_json(self, engine: PGEngine) -> AsyncIterator[PGVectorStore]:
+        """Tests the (json_col->>'field')::ltree cast path."""
+        await aexecute(engine, "CREATE EXTENSION IF NOT EXISTS ltree")
+        await engine.ainit_vectorstore_table(
+            LTREE_METADATA_JSON_TABLE,
+            VECTOR_SIZE,
+            store_metadata=True,
+            overwrite_existing=True,
+        )
+        vs = await PGVectorStore.create(
+            engine,
+            embedding_service=embeddings_service,
+            table_name=LTREE_METADATA_JSON_TABLE,
+        )
+        await vs.aadd_documents(ltree_docs, ids=ltree_ids)
+        yield vs
+
+    @pytest.mark.parametrize("test_filter, expected_codes", LTREE_FILTERING_TEST_CASES)
+    async def test_ltree_dedicated_column(
+        self,
+        vs_ltree: PGVectorStore,
+        test_filter: dict,
+        expected_codes: list[str],
+    ) -> None:
+        docs = await vs_ltree.asimilarity_search("doc", k=10, filter=test_filter)
+        assert sorted(doc.metadata["code"] for doc in docs) == sorted(expected_codes)
+
+    @pytest.mark.parametrize("test_filter, expected_codes", LTREE_FILTERING_TEST_CASES)
+    async def test_ltree_json_metadata(
+        self,
+        vs_ltree_json: PGVectorStore,
+        test_filter: dict,
+        expected_codes: list[str],
+    ) -> None:
+        docs = await vs_ltree_json.asimilarity_search("doc", k=10, filter=test_filter)
+        assert sorted(doc.metadata["code"] for doc in docs) == sorted(expected_codes)
+
+    @pytest.mark.parametrize("test_filter", LTREE_NEGATIVE_TEST_CASES)
+    async def test_ltree_negative(
+        self,
+        vs_ltree: PGVectorStore,
+        test_filter: dict,
+    ) -> None:
+        with pytest.raises((ValueError, NotImplementedError)):
+            await vs_ltree.asimilarity_search("doc", k=10, filter=test_filter)
