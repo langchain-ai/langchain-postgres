@@ -1,4 +1,3 @@
-# TODO: Remove below import when minimum supported Python version is 3.10
 from __future__ import annotations
 
 import copy
