@@ -285,7 +285,7 @@ class TestVectorStoreSearch:
         assert len(results) == 1
 
     async def test_similarity_search_with_relevance_scores_threshold_euclidean(
-        self, engine: PGEngine
+        self, engine: PGEngine, vs: AsyncPGVectorStore
     ) -> None:
         vs = await AsyncPGVectorStore.create(
             engine,

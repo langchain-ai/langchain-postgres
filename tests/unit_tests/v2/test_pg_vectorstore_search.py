@@ -227,7 +227,7 @@ class TestVectorStoreSearch:
         assert results[0][0] == Document(page_content="foo", id=ids[0])
 
     async def test_similarity_search_with_relevance_scores_threshold_euclidean(
-        self, engine: PGEngine
+        self, engine: PGEngine, vs: PGVectorStore
     ) -> None:
         vs = await PGVectorStore.create(
             engine,
