@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 5
 requires-python = ">=3.10"
 resolution-markers = [
     "python_full_version >= '3.13'",
@@ -599,12 +599,12 @@ test = [
 [package.metadata]
 requires-dist = [
     { name = "asyncpg", specifier = ">=0.30.0" },
-    { name = "langchain-core", specifier = ">=1.2.11,<2.0" },
-    { name = "numpy", specifier = ">=1.21,<3" },
-    { name = "pgvector", specifier = ">=0.2.5,<0.4" },
-    { name = "psycopg", extras = ["binary"], specifier = ">=3,<4" },
-    { name = "psycopg-pool", specifier = ">=3.2.1,<4" },
-    { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2,<3" },
+    { name = "langchain-core", specifier = ">=1.2.11" },
+    { name = "numpy", specifier = ">=1.21" },
+    { name = "pgvector", specifier = ">=0.2.5" },
+    { name = "psycopg", extras = ["binary"], specifier = ">=3" },
+    { name = "psycopg-pool", specifier = ">=3.2.1" },
+    { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2" },
 ]
 
 [package.metadata.requires-dev]
