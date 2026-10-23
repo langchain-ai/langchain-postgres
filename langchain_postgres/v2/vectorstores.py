@@ -552,7 +552,6 @@ class PGVectorStore(VectorStore):
             lambda_mult=lambda_mult,
             index_query_options=index_query_options,
             hybrid_search_config=hybrid_search_config,
-            **kwargs,
         )
         vs.add_texts(texts, metadatas=metadatas, ids=ids)
         return vs
@@ -625,7 +624,6 @@ class PGVectorStore(VectorStore):
             lambda_mult=lambda_mult,
             index_query_options=index_query_options,
             hybrid_search_config=hybrid_search_config,
-            **kwargs,
         )
         vs.add_documents(documents, ids=ids)
         return vs
