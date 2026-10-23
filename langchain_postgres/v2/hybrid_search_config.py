@@ -1,6 +1,6 @@
 from abc import ABC
 from dataclasses import dataclass, field
-from typing import Any, Callable, Optional, Sequence
+from typing import Any, Callable, Literal, Optional, Sequence
 
 from sqlalchemy import RowMapping
 
@@ -210,3 +210,12 @@ class HybridSearchConfig(ABC):
     secondary_top_k: int = 4
     index_name: str = "langchain_tsv_index"
     index_type: str = "GIN"
+    # "all": keyword search matches documents containing every query term.
+    # "any": keyword search matches documents containing at least one term.
+    text_match: Literal["all", "any"] = "all"
+
+    def __post_init__(self) -> None:
+        if self.text_match not in ("all", "any"):
+            raise ValueError(
+                f'text_match must be "all" or "any", got {self.text_match!r}.'
+            )

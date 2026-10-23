@@ -723,7 +723,17 @@ class AsyncPGVectorStore(VectorStore):
                 if hybrid_search_config.tsv_lang
                 else ""
             )
-            query_tsv = f"plainto_tsquery({lang} :fts_query)"
+            if hybrid_search_config.text_match == "any":
+                # OR together the lexemes of the query. Each lexeme is quoted and
+                # cast directly to tsquery so it is never parsed as tsquery syntax.
+                query_tsv = (
+                    r"CAST(array_to_string(ARRAY(SELECT '''' || replace(replace("
+                    r"lexeme, E'\\', E'\\\\'), '''', '''''') || '''' FROM unnest("
+                    f"tsvector_to_array(to_tsvector({lang} :fts_query))) AS lexeme"
+                    r"), ' | ') AS tsquery)"
+                )
+            else:
+                query_tsv = f"plainto_tsquery({lang} :fts_query)"
             param_dict["fts_query"] = fts_query
             if hybrid_search_config.tsv_column:
                 content_tsv = f'"{hybrid_search_config.tsv_column}"'
