@@ -119,6 +119,15 @@ class AsyncPGVectorStore(VectorStore):
                 "Only create class through 'create' or 'create_sync' methods!"
             )
 
+        if hasattr(embedding_service, "embed_query_inline") and not hasattr(
+            embedding_service, "embed_query_inline_template"
+        ):
+            raise ValueError(
+                "The provided embedding_service is using an outdated inline embedding implementation "
+                "that is susceptible to SQL injection. Please update your package "
+                "to a version that supports 'embed_query_inline_template'."
+            )
+
         self.engine = engine
         self.embedding_service = embedding_service
         self.table_name = table_name
@@ -291,8 +300,11 @@ class AsyncPGVectorStore(VectorStore):
             metadatas = [{} for _ in texts]
 
         # Check for inline embedding capability
-        inline_embed_func = getattr(self.embedding_service, "embed_query_inline", None)
-        can_inline_embed = callable(inline_embed_func)
+        inline_template_func = getattr(
+            self.embedding_service, "embed_query_inline_template", None
+        )
+        can_inline_embed_template = callable(inline_template_func)
+
         # Insert embeddings
         for id, content, embedding, metadata in zip(ids, texts, embeddings, metadatas):
             metadata_col_names = (
@@ -313,8 +325,8 @@ class AsyncPGVectorStore(VectorStore):
             }
             values_stmt = "VALUES (:langchain_id, :content, :embedding"
 
-            if not embedding and can_inline_embed:
-                values_stmt = f"VALUES (:langchain_id, :content, {self.embedding_service.embed_query_inline(content)}"  # type: ignore
+            if not embedding and can_inline_embed_template:
+                values_stmt = f"VALUES (:langchain_id, :content, {inline_template_func(':content')}"  # type: ignore
 
             if self.hybrid_search_config and self.hybrid_search_config.tsv_column:
                 lang = (
@@ -384,8 +396,10 @@ class AsyncPGVectorStore(VectorStore):
             :class:`InvalidTextRepresentationError <asyncpg.exceptions.InvalidTextRepresentationError>`: if the `ids` data type does not match that of the `id_column`.
         """
         # Check for inline embedding query
-        inline_embed_func = getattr(self.embedding_service, "embed_query_inline", None)
-        if callable(inline_embed_func):
+        inline_template_func = getattr(
+            self.embedding_service, "embed_query_inline_template", None
+        )
+        if callable(inline_template_func):
             embeddings: list[list[float]] = [[] for _ in list(texts)]
         else:
             embeddings = await self.embedding_service.aembed_documents(list(texts))
@@ -665,18 +679,21 @@ class AsyncPGVectorStore(VectorStore):
         if filter and isinstance(filter, dict):
             safe_filter, filter_dict = self._create_filter_clause(filter)
 
-        inline_embed_func = getattr(self.embedding_service, "embed_query_inline", None)
-        if not embedding and callable(inline_embed_func) and "query" in kwargs:
-            query_embedding = self.embedding_service.embed_query_inline(kwargs["query"])  # type: ignore
-            embedding_data_string = f"{query_embedding}"
+        inline_template_func = getattr(
+            self.embedding_service, "embed_query_inline_template", None
+        )
+        param_dict: dict[str, Any] = {"dense_limit": dense_limit}
+        if not embedding and callable(inline_template_func) and "query" in kwargs:
+            embedding_data_string = inline_template_func(":query_text")
+            param_dict["query_text"] = kwargs["query"]
         else:
             query_embedding = f"{[float(dimension) for dimension in embedding]}"
             embedding_data_string = ":query_embedding"
+            param_dict["query_embedding"] = query_embedding
         where_filters = f"WHERE {safe_filter}" if safe_filter else ""
         dense_query_stmt = f"""SELECT {column_names}, {search_function}("{self.embedding_column}", {embedding_data_string}) as distance
         FROM "{self.schema_name}"."{self.table_name}" {where_filters} ORDER BY "{self.embedding_column}" {operator} {embedding_data_string} LIMIT :dense_limit;
         """
-        param_dict = {"query_embedding": query_embedding, "dense_limit": dense_limit}
         if filter_dict:
             param_dict.update(filter_dict)
         if self.index_query_options:
@@ -770,10 +787,12 @@ class AsyncPGVectorStore(VectorStore):
         **kwargs: Any,
     ) -> list[Document]:
         """Return docs selected by similarity search on query."""
-        inline_embed_func = getattr(self.embedding_service, "embed_query_inline", None)
+        inline_template_func = getattr(
+            self.embedding_service, "embed_query_inline_template", None
+        )
         embedding = (
             []
-            if callable(inline_embed_func)
+            if callable(inline_template_func)
             else await self.embedding_service.aembed_query(text=query)
         )
         kwargs["query"] = query
@@ -809,10 +828,12 @@ class AsyncPGVectorStore(VectorStore):
         **kwargs: Any,
     ) -> list[tuple[Document, float]]:
         """Return docs and distance scores selected by similarity search on query."""
-        inline_embed_func = getattr(self.embedding_service, "embed_query_inline", None)
+        inline_template_func = getattr(
+            self.embedding_service, "embed_query_inline_template", None
+        )
         embedding = (
             []
-            if callable(inline_embed_func)
+            if callable(inline_template_func)
             else await self.embedding_service.aembed_query(text=query)
         )
         kwargs["query"] = query

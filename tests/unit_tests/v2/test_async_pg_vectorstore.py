@@ -1,10 +1,11 @@
 import uuid
 from typing import AsyncIterator, Sequence
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 import pytest_asyncio
 from langchain_core.documents import Document
-from langchain_core.embeddings import DeterministicFakeEmbedding
+from langchain_core.embeddings import DeterministicFakeEmbedding, Embeddings
 from sqlalchemy import text
 from sqlalchemy.engine.row import RowMapping
 
@@ -569,4 +570,93 @@ class TestVectorStore:
                 content_column="mycontent",
                 embedding_column="myembedding",
                 metadata_columns=["random_column"],  # invalid metadata column
+            )
+
+    async def test_aadd_embeddings_with_inline_template(self) -> None:
+        class TemplateEmbeddings(Embeddings):
+            def embed_documents(self, texts: list[str]) -> list[list[float]]:
+                return []
+
+            def embed_query(self, text: str) -> list[float]:
+                return []
+
+            def embed_query_inline_template(self, param_name: str) -> str:
+                return f"embedding('model_id', {param_name})::vector"
+
+        mock_conn = AsyncMock()
+        mock_engine = MagicMock()
+        mock_engine.connect.return_value.__aenter__.return_value = mock_conn
+        mock_engine.connect.return_value.__aexit__.return_value = None
+
+        create_key = getattr(AsyncPGVectorStore, "_AsyncPGVectorStore__create_key")
+        vs = AsyncPGVectorStore(
+            create_key,
+            engine=mock_engine,
+            embedding_service=TemplateEmbeddings(),
+            table_name="test_table",
+        )
+        await vs.aadd_embeddings(texts=["hello world"], embeddings=[[]])
+        call_args = mock_conn.execute.call_args
+        sql_text = str(call_args[0][0])
+        params = call_args[0][1]
+        assert ":content, embedding('model_id', :content)::vector" in sql_text
+        assert params["content"] == "hello world"
+
+    async def test_asimilarity_search_with_inline_template(self) -> None:
+        class TemplateEmbeddings(Embeddings):
+            def embed_documents(self, texts: list[str]) -> list[list[float]]:
+                return []
+
+            def embed_query(self, text: str) -> list[float]:
+                return []
+
+            def embed_query_inline_template(self, param_name: str) -> str:
+                return f"embedding('model_id', {param_name})::vector"
+
+        mock_conn = AsyncMock()
+        mock_result = MagicMock()
+        mock_result.mappings.return_value.fetchall.return_value = []
+        mock_conn.execute.return_value = mock_result
+
+        mock_engine = MagicMock()
+        mock_engine.connect.return_value.__aenter__.return_value = mock_conn
+        mock_engine.connect.return_value.__aexit__.return_value = None
+
+        create_key = getattr(AsyncPGVectorStore, "_AsyncPGVectorStore__create_key")
+        vs = AsyncPGVectorStore(
+            create_key,
+            engine=mock_engine,
+            embedding_service=TemplateEmbeddings(),
+            table_name="test_table",
+        )
+        await vs.asimilarity_search_with_score_by_vector(
+            embedding=[], query="search query"
+        )
+        call_args = mock_conn.execute.call_args
+        sql_text = str(call_args[0][0])
+        params = call_args[0][1]
+        assert "embedding('model_id', :query_text)::vector" in sql_text
+        assert params["query_text"] == "search query"
+
+    async def test_init_raises_for_outdated_inline_embedding(self) -> None:
+        class OutdatedAlloyDBEmbeddings(Embeddings):
+            def embed_documents(self, texts: list[str]) -> list[list[float]]:
+                return []
+
+            def embed_query(self, text: str) -> list[float]:
+                return []
+
+            def embed_query_inline(self, query: str) -> str:
+                return f"embedding('model_id', '{query}')::vector"
+
+        create_key = getattr(AsyncPGVectorStore, "_AsyncPGVectorStore__create_key")
+
+        with pytest.raises(
+            ValueError, match="outdated inline embedding implementation"
+        ):
+            AsyncPGVectorStore(
+                create_key,
+                engine=None,  # type: ignore
+                embedding_service=OutdatedAlloyDBEmbeddings(),
+                table_name="test_table",
             )
