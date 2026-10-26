@@ -1,0 +1,64 @@
+name: "CodeQL"
+
+on:
+  push:
+    branches: ["main"]
+    tags: ["*"]
+  pull_request:
+  workflow_call:
+    inputs:
+      ref:
+        required: true
+        type: string
+  schedule:
+    - cron: "17 10 * * 2"
+
+jobs:
+  analyze:
+    name: Analyze (${{ matrix.language }})
+    runs-on: "ubuntu-latest"
+    timeout-minutes: 360
+    permissions:
+      # required for all workflows
+      security-events: write
+
+      # required to fetch internal or private CodeQL packs
+      packages: read
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - language: python
+            build-mode: none
+          - language: actions
+            build-mode: none
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+
+      # Initializes the CodeQL tools for scanning.
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@9e0d7b8d25671d64c341c19c0152d693099fb5ba # v4
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: ${{ matrix.build-mode }}
+          queries: security-extended
+          config: |
+            paths-ignore:
+              - "docs/**"
+              - "scripts/**"
+              - "**/tests/**"
+
+      - if: matrix.build-mode == 'manual'
+        run: |
+          pip install -e .
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@9e0d7b8d25671d64c341c19c0152d693099fb5ba # v4
+        with:
+          category: "/language:${{ matrix.language }}"

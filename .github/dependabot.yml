@@ -1,0 +1,24 @@
+version: 2
+updates:
+  # GitHub Actions
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    cooldown:
+      default-days: 7
+    groups:
+      actions:
+        patterns:
+          - "*"
+
+  # Python / uv
+  - package-ecosystem: "uv"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    versioning-strategy: increase
+    ignore:
+      # Coordinated-release packages are managed together by LangChain.
+      - dependency-name: "langchain-core"
+      - dependency-name: "langchain-tests"
