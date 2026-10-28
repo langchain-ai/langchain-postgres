@@ -4,6 +4,7 @@ import pytest
 
 from langchain_postgres.v2.indexes import (
     DistanceStrategy,
+    ExactNearestNeighbor,
     HNSWIndex,
     HNSWQueryOptions,
     IVFFlatIndex,
@@ -44,6 +45,16 @@ class TestPGIndex:
             assert "to_string is deprecated, use to_parameter instead." in str(
                 w[-1].message
             )
+
+    def test_exact_nearest_neighbor_index(self) -> None:
+        # ExactNearestNeighbor is the documented way to switch to brute-force
+        # search (apply_vector_index drops the index for it). It must be
+        # instantiable; previously it inherited BaseIndex's abstract
+        # index_options without implementing it, so construction raised
+        # TypeError and the feature was unreachable.
+        index = ExactNearestNeighbor()
+        assert index.index_type == "exactnearestneighbor"
+        assert index.index_options() == ""
 
     def test_ivfflat_index(self) -> None:
         index = IVFFlatIndex(name="test_index", lists=200)
