@@ -873,7 +873,11 @@ async def async_pgvector() -> AsyncGenerator[PGVector, None]:
         yield store
     # Do clean up
     finally:
-        await store.adrop_tables()
+        try:
+            await store.adrop_tables()
+        finally:
+            if store._async_engine is not None:
+                await store._async_engine.dispose()
 
 
 @contextlib.contextmanager
@@ -893,7 +897,11 @@ def get_vectorstore(
     try:
         yield store
     finally:
-        store.drop_tables()
+        try:
+            store.drop_tables()
+        finally:
+            if store._engine is not None:
+                store._engine.dispose()
 
 
 @contextlib.asynccontextmanager
@@ -913,7 +921,11 @@ async def aget_vectorstore(
     try:
         yield store
     finally:
-        await store.adrop_tables()
+        try:
+            await store.adrop_tables()
+        finally:
+            if store._async_engine is not None:
+                await store._async_engine.dispose()
 
 
 @pytest.mark.parametrize("test_filter, expected_ids", TYPE_1_FILTERING_TEST_CASES)
