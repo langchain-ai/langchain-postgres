@@ -1,3 +1,4 @@
+import asyncio
 import os
 import uuid
 from typing import AsyncIterator, Sequence
@@ -24,6 +25,7 @@ CUSTOM_TABLE_SYNC = "custom_sync" + str(uuid.uuid4()).replace("-", "_")
 HYBRID_SEARCH_TABLE_SYNC = "hybrid_sync" + str(uuid.uuid4()).replace("-", "_")
 CUSTOM_TYPEDDICT_TABLE_SYNC = "custom_td_sync" + str(uuid.uuid4()).replace("-", "_")
 INT_ID_CUSTOM_TABLE_SYNC = "custom_int_id_sync" + str(uuid.uuid4()).replace("-", "_")
+LOCK_TABLE = "lock" + str(uuid.uuid4()).replace("-", "_")
 VECTOR_SIZE = 768
 
 embeddings_service = DeterministicFakeEmbedding(size=VECTOR_SIZE)
@@ -87,6 +89,47 @@ class TestEngineAsync:
         embedding_string = [float(dimension) for dimension in embedding]
         stmt = f"INSERT INTO {DEFAULT_TABLE} (langchain_id, content, embedding) VALUES ('{id}', '{content}','{embedding_string}');"
         await aexecute(engine, stmt)
+
+    async def test_init_table_waits_for_vector_extension_lock(
+        self, engine: PGEngine
+    ) -> None:
+        """Creating the table must serialize on the vector-extension lock.
+
+        Postgres can let two concurrent sessions both pass the
+        `IF NOT EXISTS` existence check for `vector` and then collide on
+        `pg_extension_name_index`. A concurrent initializer that already holds
+        the advisory lock therefore has to block this call until it commits;
+        without the lock the call would run straight through.
+        """
+        # Same key as the advisory lock taken by the legacy
+        # `_create_vector_extension` path in `langchain_postgres/vectorstores.py`,
+        # so the two code paths serialize against each other.
+        lock_key = 1573678846307946496
+
+        async with engine._pool.connect() as concurrent_init:
+            await concurrent_init.execute(
+                text(f"SELECT pg_advisory_xact_lock({lock_key})")
+            )
+            init_task = asyncio.create_task(
+                engine.ainit_vectorstore_table(LOCK_TABLE, VECTOR_SIZE)
+            )
+            # The lock is held, so the table init cannot get past CREATE EXTENSION.
+            # `shield` keeps the task alive when `wait_for` times out.
+            with pytest.raises(asyncio.TimeoutError):
+                await asyncio.wait_for(asyncio.shield(init_task), timeout=1.0)
+            # Releasing the lock lets the blocked init proceed.
+            await concurrent_init.rollback()
+
+        await asyncio.wait_for(init_task, timeout=20.0)
+        try:
+            result = await afetch(
+                engine,
+                "SELECT count(*) AS count FROM information_schema.tables"
+                f" WHERE table_name = '{LOCK_TABLE}';",
+            )
+            assert result[0]["count"] == 1
+        finally:
+            await aexecute(engine, f'DROP TABLE IF EXISTS "{LOCK_TABLE}"')
 
     async def test_engine_args(self, engine: PGEngine) -> None:
         assert "Pool size: 3" in engine._pool.pool.status()
