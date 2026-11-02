@@ -3,7 +3,8 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass
 from threading import Thread
-from typing import Any, Awaitable, Optional, TypedDict, TypeVar, Union
+from typing import Any, Awaitable, Literal, Optional, TypedDict, TypeVar, Union
+from urllib.parse import quote_plus
 
 from sqlalchemy import text
 from sqlalchemy.engine import URL
@@ -12,6 +13,15 @@ from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 from .hybrid_search_config import HybridSearchConfig
 
 T = TypeVar("T")
+
+TargetSessionAttrs = Literal[
+    "any",
+    "read-write",
+    "read-only",
+    "primary",
+    "standby",
+    "prefer-standby",
+]
 
 
 class ColumnDict(TypedDict):
@@ -68,7 +78,7 @@ class PGEngine:
 
         if key != PGEngine.__create_key:
             raise Exception(
-                "Only create class through 'from_connection_string' or 'from_engine' methods!"
+                "Only create class through 'from_connection_string', 'from_engine', or 'from_hosts' methods!"
             )
         self._pool = pool
         self._loop = loop
@@ -111,6 +121,126 @@ class PGEngine:
 
         engine = create_async_engine(url, **kwargs)
         return cls(cls.__create_key, engine, cls._default_loop, cls._default_thread)
+
+    @staticmethod
+    def _build_multi_host_connection_string(
+        hosts: list[str],
+        user: str,
+        password: str,
+        database: str,
+        ports: Optional[list[int]] = None,
+        target_session_attrs: TargetSessionAttrs = "any",
+    ) -> str:
+        """Build a multi-host psycopg connection string for HA PostgreSQL clusters.
+
+        Args:
+            hosts: List of PostgreSQL host addresses.
+            user: Database user name.
+            password: Database password.
+            database: Database name.
+            ports: List of ports corresponding to each host.
+                If a single-element list is provided, that port is used for all hosts.
+                Defaults to [5432] for all hosts.
+            target_session_attrs: Session attribute requirement for connection routing.
+                Defaults to "any".
+
+        Returns:
+            A SQLAlchemy-compatible connection string with postgresql+psycopg:// scheme.
+
+        Raises:
+            ValueError: If hosts is empty, any host is empty, or ports length is invalid.
+        """
+        if not hosts:
+            raise ValueError("At least one host must be specified.")
+        for h in hosts:
+            if not h or not h.strip():
+                raise ValueError("Host strings must not be empty.")
+            if "," in h:
+                raise ValueError(f"Host cannot contain comma: {h}")
+
+        if ports is None:
+            ports = [5432] * len(hosts)
+        elif len(ports) == 1:
+            ports = ports * len(hosts)
+        elif len(ports) != len(hosts):
+            raise ValueError(
+                f"Length of ports ({len(ports)}) must match length of hosts "
+                f"({len(hosts)}) or be a single port."
+            )
+        for p in ports:
+            if not isinstance(p, int) or p <= 0 or p > 65535:
+                raise ValueError(
+                    f"Port must be a positive integer between 1 and 65535, got {p}."
+                )
+
+        host_param = ",".join(h.strip() for h in hosts)
+        port_param = ",".join(str(p) for p in ports)
+
+        url = (
+            f"postgresql+psycopg://{quote_plus(user)}:{quote_plus(password)}"
+            f"@/{quote_plus(database)}"
+            f"?host={host_param}&port={port_param}"
+            f"&target_session_attrs={target_session_attrs}"
+        )
+        return url
+
+    @classmethod
+    def from_hosts(
+        cls,
+        hosts: list[str],
+        user: str,
+        password: str,
+        database: str,
+        ports: Optional[list[int]] = None,
+        target_session_attrs: TargetSessionAttrs = "any",
+        **kwargs: Any,
+    ) -> PGEngine:
+        """Create a PGEngine instance for HA PostgreSQL clusters with multiple hosts.
+
+        Uses psycopg3's native multi-host support with target_session_attrs for
+        connection routing (e.g., always connect to primary, prefer standby, etc.).
+
+        Args:
+            hosts: List of PostgreSQL host addresses.
+            user: Database user name.
+            password: Database password.
+            database: Database name.
+            ports: List of ports corresponding to each host.
+                If a single-element list, that port is used for all hosts.
+                Defaults to [5432] for all hosts.
+            target_session_attrs: Session attribute requirement for connection routing.
+                Options: "any", "read-write", "read-only", "primary", "standby",
+                "prefer-standby". Defaults to "any".
+            **kwargs: Additional keyword arguments passed to SQLAlchemy's
+                create_async_engine (e.g., pool_size, max_overflow, echo).
+
+        Returns:
+            PGEngine
+
+        Raises:
+            ValueError: If hosts is empty or ports/hosts length mismatch.
+
+        Example::
+
+            engine = PGEngine.from_hosts(
+                hosts=["primary.db.example.com", "replica1.db.example.com"],
+                user="myuser",
+                password="mypassword",
+                database="mydb",
+                ports=[5432, 5432],
+                target_session_attrs="primary",
+                pool_size=5,
+            )
+        """
+        url = cls._build_multi_host_connection_string(
+            hosts=hosts,
+            user=user,
+            password=password,
+            database=database,
+            ports=ports,
+            target_session_attrs=target_session_attrs,
+        )
+        return cls.from_connection_string(url=url, **kwargs)
 
     async def _run_as_async(self, coro: Awaitable[T]) -> T:
         """Run an async coroutine asynchronously"""
