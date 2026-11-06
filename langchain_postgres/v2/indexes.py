@@ -15,19 +15,28 @@ from typing import Optional
 class StrategyMixin:
     operator: str
     search_function: str
-    index_function: str
+    operator_class_suffix: str
 
 
 class DistanceStrategy(StrategyMixin, enum.Enum):
     """Enumerator of the Distance strategies."""
 
-    EUCLIDEAN = "<->", "l2_distance", "vector_l2_ops"
-    COSINE_DISTANCE = "<=>", "cosine_distance", "vector_cosine_ops"
-    INNER_PRODUCT = "<#>", "inner_product", "vector_ip_ops"
+    EUCLIDEAN = "<->", "l2_distance", "l2_ops"
+    COSINE_DISTANCE = "<=>", "cosine_distance", "cosine_ops"
+    INNER_PRODUCT = "<#>", "inner_product", "ip_ops"
 
 
 DEFAULT_DISTANCE_STRATEGY: DistanceStrategy = DistanceStrategy.COSINE_DISTANCE
 DEFAULT_INDEX_NAME_SUFFIX: str = "langchainvectorindex"
+
+
+class VectorType(enum.Enum):
+    VECTOR = "vector"
+    HALFVEC = "halfvec"
+    SPARSEVEC = "sparsevec"
+
+
+DEFAULT_VECTOR_TYPE: VectorType = VectorType.VECTOR
 
 
 def validate_identifier(identifier: str) -> None:
@@ -47,6 +56,8 @@ class BaseIndex(ABC):
         index_type (str): A string identifying the type of index. Defaults to "base".
         distance_strategy (DistanceStrategy): The strategy used to calculate distances
             between vectors in the index. Defaults to DistanceStrategy.COSINE_DISTANCE.
+        vector_type (VectorType): The type of vector column,
+            on which the index will be created. Defaults to VectorType.VECTOR
         partial_indexes (Optional[list[str]]): A list of names of partial indexes. Defaults to None.
         extension_name (Optional[str]): The name of the extension to be created for the index, if any. Defaults to None.
     """
@@ -56,6 +67,7 @@ class BaseIndex(ABC):
     distance_strategy: DistanceStrategy = field(
         default_factory=lambda: DistanceStrategy.COSINE_DISTANCE
     )
+    vector_type: VectorType = DEFAULT_VECTOR_TYPE
     partial_indexes: Optional[list[str]] = None
     extension_name: Optional[str] = None
 
@@ -66,8 +78,11 @@ class BaseIndex(ABC):
             "index_options method must be implemented by subclass"
         )
 
-    def get_index_function(self) -> str:
-        return self.distance_strategy.index_function
+    def operator_class(self) -> str:
+        """Returns index operator class, based on vector type and distance strategy."""
+        return (
+            f"{self.vector_type.value}_{self.distance_strategy.operator_class_suffix}"
+        )
 
     def __post_init__(self) -> None:
         """Check if initialization parameters are valid.
@@ -132,6 +147,19 @@ class HNSWQueryOptions(QueryOptions):
 class IVFFlatIndex(BaseIndex):
     index_type: str = "ivfflat"
     lists: int = 100
+
+    def __post_init__(self) -> None:
+        """Check if vector_type is valid.
+
+        Raises:
+            ValueError: if vector_type is SPARSEVEC
+        """
+        super().__post_init__()
+
+        if self.vector_type is VectorType.SPARSEVEC:
+            raise ValueError(
+                "IVFFlatIndex does not support sparsevec, use VECTOR or HALFVEC instead"
+            )
 
     def index_options(self) -> str:
         """Set index query options for vector store initialization."""

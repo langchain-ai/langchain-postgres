@@ -11,15 +11,22 @@ from sqlalchemy import text
 from langchain_postgres import PGEngine
 from langchain_postgres.v2.async_vectorstore import AsyncPGVectorStore
 from langchain_postgres.v2.hybrid_search_config import HybridSearchConfig
-from langchain_postgres.v2.indexes import DistanceStrategy, HNSWIndex, IVFFlatIndex
+from langchain_postgres.v2.indexes import (
+    DistanceStrategy,
+    HNSWIndex,
+    IVFFlatIndex,
+    VectorType,
+)
 from tests.utils import VECTORSTORE_CONNECTION_STRING as CONNECTION_STRING
 
 uuid_str = str(uuid.uuid4()).replace("-", "_")
 DEFAULT_TABLE = "default" + uuid_str
 DEFAULT_HYBRID_TABLE = "hybrid" + uuid_str
+SIMPLE_TABLE = "simple" + uuid_str
+HALFVEC_TABLE = "halfvec" + uuid_str
+
 DEFAULT_INDEX_NAME = "index" + uuid_str
 VECTOR_SIZE = 768
-SIMPLE_TABLE = "default_table"
 
 embeddings_service = DeterministicFakeEmbedding(size=VECTOR_SIZE)
 
@@ -57,6 +64,7 @@ class TestIndex:
         await engine._adrop_table(DEFAULT_TABLE)
         await engine._adrop_table(DEFAULT_HYBRID_TABLE)
         await engine._adrop_table(SIMPLE_TABLE)
+        await engine._adrop_table(HALFVEC_TABLE)
         await engine.close()
 
     @pytest_asyncio.fixture(scope="class")
@@ -90,6 +98,25 @@ class TestIndex:
 
     async def test_aapply_vector_index(self, vs: AsyncPGVectorStore) -> None:
         index = HNSWIndex(name=DEFAULT_INDEX_NAME)
+        await vs.aapply_vector_index(index)
+        assert await vs.is_valid_index(DEFAULT_INDEX_NAME)
+        await vs.adrop_vector_index(DEFAULT_INDEX_NAME)
+
+    async def test_aapply_vector_index_halfvec(self, engine: PGEngine) -> None:
+        await engine._ainit_vectorstore_table(
+            HALFVEC_TABLE,
+            VECTOR_SIZE,
+            vector_type=VectorType.HALFVEC,
+            overwrite_existing=True,
+        )
+        vs = await AsyncPGVectorStore.create(
+            engine,
+            embedding_service=embeddings_service,
+            table_name=HALFVEC_TABLE,
+        )
+        await vs.aadd_texts(texts, ids=ids)
+        await vs.adrop_vector_index()
+        index = HNSWIndex(name=DEFAULT_INDEX_NAME, vector_type=VectorType.HALFVEC)
         await vs.aapply_vector_index(index)
         assert await vs.is_valid_index(DEFAULT_INDEX_NAME)
         await vs.adrop_vector_index(DEFAULT_INDEX_NAME)

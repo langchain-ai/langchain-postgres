@@ -12,6 +12,7 @@ from sqlalchemy.pool import NullPool
 
 from langchain_postgres import Column, PGEngine
 from langchain_postgres.v2.hybrid_search_config import HybridSearchConfig
+from langchain_postgres.v2.indexes import VectorType
 from tests.utils import VECTORSTORE_CONNECTION_STRING as CONNECTION_STRING
 
 DEFAULT_TABLE = "default" + str(uuid.uuid4()).replace("-", "_")
@@ -19,11 +20,13 @@ CUSTOM_TABLE = "custom" + str(uuid.uuid4()).replace("-", "_")
 HYBRID_SEARCH_TABLE = "hybrid" + str(uuid.uuid4()).replace("-", "_")
 CUSTOM_TYPEDDICT_TABLE = "custom_td" + str(uuid.uuid4()).replace("-", "_")
 INT_ID_CUSTOM_TABLE = "custom_int_id" + str(uuid.uuid4()).replace("-", "_")
+CUSTOM_VECTOR_TYPE_TABLE = "custom_vt" + str(uuid.uuid4()).replace("-", "_")
 DEFAULT_TABLE_SYNC = "default_sync" + str(uuid.uuid4()).replace("-", "_")
 CUSTOM_TABLE_SYNC = "custom_sync" + str(uuid.uuid4()).replace("-", "_")
 HYBRID_SEARCH_TABLE_SYNC = "hybrid_sync" + str(uuid.uuid4()).replace("-", "_")
 CUSTOM_TYPEDDICT_TABLE_SYNC = "custom_td_sync" + str(uuid.uuid4()).replace("-", "_")
 INT_ID_CUSTOM_TABLE_SYNC = "custom_int_id_sync" + str(uuid.uuid4()).replace("-", "_")
+CUSTOM_VECTOR_TYPE_TABLE_SYNC = "custom_vt_sync" + str(uuid.uuid4()).replace("-", "_")
 VECTOR_SIZE = 768
 
 embeddings_service = DeterministicFakeEmbedding(size=VECTOR_SIZE)
@@ -76,6 +79,7 @@ class TestEngineAsync:
         await aexecute(engine, f'DROP TABLE IF EXISTS "{CUSTOM_TYPEDDICT_TABLE}"')
         await aexecute(engine, f'DROP TABLE IF EXISTS "{DEFAULT_TABLE}"')
         await aexecute(engine, f'DROP TABLE IF EXISTS "{INT_ID_CUSTOM_TABLE}"')
+        await aexecute(engine, f'DROP TABLE IF EXISTS "{CUSTOM_VECTOR_TYPE_TABLE}"')
         await engine.close()
 
     async def test_init_table(self, engine: PGEngine) -> None:
@@ -219,6 +223,22 @@ class TestEngineAsync:
         for row in results:
             assert row in expected
 
+    async def test_init_table_custom_vector_type(self, engine: PGEngine) -> None:
+        await engine.ainit_vectorstore_table(
+            CUSTOM_VECTOR_TYPE_TABLE,
+            VECTOR_SIZE,
+            vector_type=VectorType.HALFVEC,
+            embedding_column="my_embedding",
+        )
+        stmt = (
+            "SELECT column_name, udt_name "
+            f"FROM information_schema.columns "
+            f"WHERE table_name = '{CUSTOM_VECTOR_TYPE_TABLE}' AND column_name = 'my_embedding';"
+        )
+
+        results = await afetch(engine, stmt)
+        assert results == [{"column_name": "my_embedding", "udt_name": "halfvec"}]
+
     async def test_from_engine(self) -> None:
         engine = create_async_engine(
             CONNECTION_STRING,
@@ -264,6 +284,9 @@ class TestEngineSync:
         await aexecute(engine, f'DROP TABLE IF EXISTS "{DEFAULT_TABLE_SYNC}"')
         await aexecute(engine, f'DROP TABLE IF EXISTS "{INT_ID_CUSTOM_TABLE_SYNC}"')
         await aexecute(engine, f'DROP TABLE IF EXISTS "{CUSTOM_TYPEDDICT_TABLE_SYNC}"')
+        await aexecute(
+            engine, f'DROP TABLE IF EXISTS "{CUSTOM_VECTOR_TYPE_TABLE_SYNC}"'
+        )
         await engine.close()
 
     async def test_init_table(self, engine: PGEngine) -> None:
@@ -402,6 +425,22 @@ class TestEngineSync:
         ]
         for row in results:
             assert row in expected
+
+    async def test_init_table_custom_vector_type(self, engine: PGEngine) -> None:
+        engine.init_vectorstore_table(
+            CUSTOM_VECTOR_TYPE_TABLE_SYNC,
+            VECTOR_SIZE,
+            vector_type=VectorType.HALFVEC,
+            embedding_column="my_embedding",
+        )
+        stmt = (
+            "SELECT column_name, udt_name "
+            f"FROM information_schema.columns "
+            f"WHERE table_name = '{CUSTOM_VECTOR_TYPE_TABLE_SYNC}' AND column_name = 'my_embedding';"
+        )
+
+        results = await afetch(engine, stmt)
+        assert results == [{"column_name": "my_embedding", "udt_name": "halfvec"}]
 
     async def test_engine_constructor_key(
         self,
