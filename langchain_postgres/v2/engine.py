@@ -159,6 +159,7 @@ class PGEngine:
         overwrite_existing: bool = False,
         store_metadata: bool = True,
         hybrid_search_config: Optional[HybridSearchConfig] = None,
+        create_extension: bool = True,
     ) -> None:
         """
         Create a table for saving of vectors to be used with PGVectorStore.
@@ -183,6 +184,9 @@ class PGEngine:
                 Default: True.
             hybrid_search_config (HybridSearchConfig): Hybrid search configuration.
                 Default: None.
+            create_extension (bool): Whether to create the pgvector extension if it
+                does not exist. Default: True. Disable if the extension is already
+                installed or if the database user lacks the required permissions.
 
         Raises:
             :class:`DuplicateTableError <asyncpg.exceptions.DuplicateTableError>`: if table already exists.
@@ -211,9 +215,10 @@ class PGEngine:
             self._validate_column_dict(id_column)
             id_column["name"] = self._escape_postgres_identifier(id_column["name"])
 
-        async with self._pool.connect() as conn:
-            await conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
-            await conn.commit()
+        if create_extension:
+            async with self._pool.connect() as conn:
+                await conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
+                await conn.commit()
 
         if overwrite_existing:
             async with self._pool.connect() as conn:
@@ -277,6 +282,7 @@ class PGEngine:
         overwrite_existing: bool = False,
         store_metadata: bool = True,
         hybrid_search_config: Optional[HybridSearchConfig] = None,
+        create_extension: bool = True,
     ) -> None:
         """
         Create a table for saving of vectors to be used with PGVectorStore.
@@ -303,6 +309,9 @@ class PGEngine:
                 Note that queries might be slow if the hybrid search column does not exist.
                 For best hybrid search performance, consider creating a TSV column and adding GIN index.
                 Default: None.
+            create_extension (bool): Whether to create the pgvector extension if it
+                does not exist. Default: True. Disable if the extension is already
+                installed or if the database user lacks the required permissions.
         """
         await self._run_as_async(
             self._ainit_vectorstore_table(
@@ -317,6 +326,7 @@ class PGEngine:
                 overwrite_existing=overwrite_existing,
                 store_metadata=store_metadata,
                 hybrid_search_config=hybrid_search_config,
+                create_extension=create_extension,
             )
         )
 
@@ -334,6 +344,7 @@ class PGEngine:
         overwrite_existing: bool = False,
         store_metadata: bool = True,
         hybrid_search_config: Optional[HybridSearchConfig] = None,
+        create_extension: bool = True,
     ) -> None:
         """
         Create a table for saving of vectors to be used with PGVectorStore.
@@ -360,6 +371,9 @@ class PGEngine:
                 Note that queries might be slow if the hybrid search column does not exist.
                 For best hybrid search performance, consider creating a TSV column and adding GIN index.
                 Default: None.
+            create_extension (bool): Whether to create the pgvector extension if it
+                does not exist. Default: True. Disable if the extension is already
+                installed or if the database user lacks the required permissions.
         """
         self._run_as_sync(
             self._ainit_vectorstore_table(
@@ -374,6 +388,7 @@ class PGEngine:
                 overwrite_existing=overwrite_existing,
                 store_metadata=store_metadata,
                 hybrid_search_config=hybrid_search_config,
+                create_extension=create_extension,
             )
         )
 
