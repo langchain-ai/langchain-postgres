@@ -241,7 +241,7 @@ async def amigrate_pgvector_collection(
         engine (PGEngine): The PG engine corresponding to the Database.
         collection_name (str): The collection to migrate.
         vector_store (PGVectorStore): The PGVectorStore object corresponding to the new collection table.
-        use_json_metadata (bool): An option to keep the PGVector metadata as json in the new table.
+        delete_pg_collection (bool): An option to delete the original data upon migration.
             Default: False. Optional.
         delete_pg_collection (bool): An option to delete the original data upon migration.
             Default: False. Optional.
