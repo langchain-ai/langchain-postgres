@@ -13,6 +13,15 @@ from .hybrid_search_config import HybridSearchConfig
 
 T = TypeVar("T")
 
+# Advisory lock key guarding `CREATE EXTENSION IF NOT EXISTS vector`.
+# Postgres has no `IF NOT EXISTS` protection against concurrent sessions: two
+# sessions can both pass the existence check and then collide on
+# `pg_extension_name_index` with a duplicate key error. This key is
+# intentionally the same one used by the legacy `_create_vector_extension`
+# path in `langchain_postgres/vectorstores.py`, so the legacy and v2 code
+# paths serialize against each other instead of only within themselves.
+VECTOR_EXTENSION_ADVISORY_LOCK_KEY = 1573678846307946496
+
 
 class ColumnDict(TypedDict):
     name: str
@@ -212,6 +221,17 @@ class PGEngine:
             id_column["name"] = self._escape_postgres_identifier(id_column["name"])
 
         async with self._pool.connect() as conn:
+            # Take the same transaction-level advisory lock as the legacy
+            # `_create_vector_extension` path before creating the extension, so
+            # concurrent initializations (including one here racing a legacy
+            # `PGVector` init) are serialized. `pg_advisory_xact_lock` is held
+            # until the surrounding transaction ends, i.e. across the
+            # `CREATE EXTENSION` below and the `commit()` that follows it.
+            await conn.execute(
+                text(
+                    f"SELECT pg_advisory_xact_lock({VECTOR_EXTENSION_ADVISORY_LOCK_KEY})"
+                )
+            )
             await conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
             await conn.commit()
 
