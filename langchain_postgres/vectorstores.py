@@ -101,7 +101,7 @@ SUPPORTED_OPERATORS = (
 )
 
 
-def _get_embedding_collection_store(vector_dimension: Optional[int] = None) -> Any:
+def _get_embedding_collection_store(vector_dimension: Optional[int] = None, table_schema: Optional[str] = "public") -> Any:
     global _classes
     if _classes is not None:
         return _classes
@@ -112,6 +112,7 @@ def _get_embedding_collection_store(vector_dimension: Optional[int] = None) -> A
         """Collection store."""
 
         __tablename__ = "langchain_pg_collection"
+        __table_args__ = {"schema":table_schema}
 
         uuid = sqlalchemy.Column(
             UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
@@ -205,7 +206,7 @@ def _get_embedding_collection_store(vector_dimension: Optional[int] = None) -> A
         collection_id = sqlalchemy.Column(
             UUID(as_uuid=True),
             sqlalchemy.ForeignKey(
-                f"{CollectionStore.__tablename__}.uuid",
+                f"{table_schema}.{CollectionStore.__tablename__}.uuid",
                 ondelete="CASCADE",
             ),
         )
@@ -221,7 +222,8 @@ def _get_embedding_collection_store(vector_dimension: Optional[int] = None) -> A
                 "cmetadata",
                 postgresql_using="gin",
                 postgresql_ops={"cmetadata": "jsonb_path_ops"},
-            ),
+            )
+            , {"schema": table_schema}
         )
 
     _classes = (EmbeddingStore, CollectionStore)
@@ -387,6 +389,7 @@ class PGVector(VectorStore):
         use_jsonb: bool = True,
         create_extension: bool = True,
         async_mode: bool = False,
+        table_schema: str = 'public'
     ) -> None:
         """Initialize the PGVector store.
         For an async version, use `PGVector.acreate()` instead.
@@ -423,6 +426,7 @@ class PGVector(VectorStore):
         self.collection_metadata = collection_metadata
         self._distance_strategy = distance_strategy
         self.pre_delete_collection = pre_delete_collection
+        self.table_schema = table_schema
         self.logger = logger or logging.getLogger(__name__)
         self.override_relevance_score_fn = relevance_score_fn
         self._engine: Optional[Engine] = None
@@ -470,7 +474,8 @@ class PGVector(VectorStore):
             self.create_vector_extension()
 
         EmbeddingStore, CollectionStore = _get_embedding_collection_store(
-            self._embedding_length
+            self._embedding_length,
+            table_schema = self.table_schema
         )
         self.CollectionStore = CollectionStore
         self.EmbeddingStore = EmbeddingStore
@@ -486,7 +491,8 @@ class PGVector(VectorStore):
         self._async_init = True
 
         EmbeddingStore, CollectionStore = _get_embedding_collection_store(
-            self._embedding_length
+            self._embedding_length,
+            table_schema = self.table_schema
         )
         self.CollectionStore = CollectionStore
         self.EmbeddingStore = EmbeddingStore
