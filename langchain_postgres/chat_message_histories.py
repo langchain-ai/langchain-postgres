@@ -321,6 +321,7 @@ class PostgresChatMessageHistory(BaseChatMessageHistory):
         with self._connection.cursor() as cursor:
             cursor.execute(query, {"session_id": self._session_id})
             items = [record[0] for record in cursor.fetchall()]
+        self._connection.commit()
 
         messages = messages_from_dict(items)
         return messages
@@ -337,6 +338,7 @@ class PostgresChatMessageHistory(BaseChatMessageHistory):
         async with self._aconnection.cursor() as cursor:
             await cursor.execute(query, {"session_id": self._session_id})
             items = [record[0] for record in await cursor.fetchall()]
+        await self._aconnection.commit()
 
         messages = messages_from_dict(items)
         return messages
