@@ -155,6 +155,5 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           generateReleaseNotes: true
           tag: ${{needs.build.outputs.pkg-name}}==${{ needs.build.outputs.version }}
-          body: ${{ needs.release-notes.outputs.release-body }}
           commit: main
           makeLatest: true
