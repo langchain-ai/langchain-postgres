@@ -1128,12 +1128,13 @@ class PGVector(VectorStore):
         if operator in COMPARISONS_TO_NATIVE:
             # Then we implement an equality filter
             # native is trusted input
-            native = COMPARISONS_TO_NATIVE[operator]
-            return func.jsonb_path_match(
+            native = COMPARISONS_TO_NATIVE["$eq" if operator == "$ne" else operator]
+            condition = func.jsonb_path_match(
                 self.EmbeddingStore.cmetadata,
                 cast(f"$.{field} {native} $value", JSONPATH),
                 cast({"value": filter_value}, JSONB),
             )
+            return sqlalchemy.not_(condition) if operator == "$ne" else condition
         elif operator == "$between":
             # Use AND with two comparisons
             low, high = filter_value
@@ -1168,7 +1169,10 @@ class PGVector(VectorStore):
             if operator in {"$in"}:
                 return queried_field.in_([str(val) for val in filter_value])
             elif operator in {"$nin"}:
-                return ~queried_field.in_([str(val) for val in filter_value])
+                return sqlalchemy.or_(
+                    ~queried_field.in_([str(val) for val in filter_value]),
+                    queried_field.is_(None),
+                )
             elif operator in {"$like"}:
                 return queried_field.like(filter_value)
             elif operator in {"$ilike"}:

@@ -149,6 +149,14 @@ TYPE_2_FILTERING_TEST_CASES = [
         {"is_active": {"$ne": True}},
         [2],
     ),
+    (
+        {"happiness": {"$ne": 0.9}},
+        [2, 3],
+    ),
+    (
+        {"sadness": {"$ne": 0.1}},
+        [3],
+    ),
     # Test float column.
     (
         {"height": {"$gt": 5.0}},
@@ -219,6 +227,14 @@ TYPE_3_FILTERING_TEST_CASES = [
         {"$not": [{"height": {"$gt": 5.0}}]},
         [3],
     ),
+    (
+        {"$not": {"happiness": {"$eq": 0.9}}},
+        [2, 3],
+    ),
+    (
+        {"$not": {"sadness": {"$eq": 0.1}}},
+        [3],
+    ),
 ]
 
 TYPE_4_FILTERING_TEST_CASES = [
@@ -250,6 +266,14 @@ TYPE_4_FILTERING_TEST_CASES = [
     ## with numeric fields
     (
         {"id": {"$nin": [1, 2]}},
+        [3],
+    ),
+    (
+        {"happiness": {"$nin": [0.9]}},
+        [2, 3],
+    ),
+    (
+        {"sadness": {"$nin": [0.1]}},
         [3],
     ),
 ]
